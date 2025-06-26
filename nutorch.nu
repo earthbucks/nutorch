@@ -1,5 +1,3 @@
-# nutorch module for tensor operations
-
 export module nutorch {
   # Generate a 1D tensor with linearly spaced values (similar to torch.linspace)
   export def linspace [
@@ -14,6 +12,22 @@ export module nutorch {
     seq $start $step_size $end | take $steps
   }
 
+  # Repeat a 1D tensor N times to form a 2D tensor (similar to torch.repeat)
+  export def repeat [
+    n: int                 # Number of times to repeat the 1D tensor
+  ] {
+    let input = $in        # Get input tensor from pipeline
+    if ($input | describe | str contains "list") {
+      if $n < 1 {
+        error make {msg: "Number of repetitions must be at least 1"}
+      }
+      # Create a list by repeating the input vector n times
+      0..($n - 1) | each { $input }
+    } else {
+      error make {msg: "Input must be a tensor (list)"}
+    }
+  }
+
   export def pi [] {
     let PI = 3.14159265358979323846
     $PI
@@ -24,9 +38,9 @@ export module nutorch {
     $E
   }
 
-  # apply sine function element-wise to a tensor
+  # Apply sine function element-wise to a tensor
   export def sin [] {
-    let input = $in # get input from pipeline
+    let input = $in # Get input from pipeline
     if ($input | describe | str contains "list") {
       $input | each {|elem|
         if ($elem | describe | str contains "list") {
@@ -42,7 +56,7 @@ export module nutorch {
         }
       }
     } else {
-      error make {msg: "input must be a tensor (list)"}
+      error make {msg: "Input must be a tensor (list)"}
     }
   }
 }
