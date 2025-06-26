@@ -14,9 +14,9 @@ export module nutorch {
 
   # Repeat a 1D tensor N times to form a 2D tensor (similar to torch.repeat)
   export def repeat [
-    n: int                 # Number of times to repeat the 1D tensor
+    n: int # Number of times to repeat the 1D tensor
   ] {
-    let input = $in        # Get input tensor from pipeline
+    let input = $in # Get input tensor from pipeline
     if ($input | describe | str contains "list") {
       if $n < 1 {
         error make {msg: "Number of repetitions must be at least 1"}
@@ -25,6 +25,18 @@ export module nutorch {
       0..($n - 1) | each { $input }
     } else {
       error make {msg: "Input must be a tensor (list)"}
+    }
+  }
+
+  export def display_matrix [] {
+    let input = $in
+    if ($input | describe | str contains "list") {
+      $input | each {|row|
+        $row | str join "  "
+      }
+      # $input # Return the original input for further piping
+    } else {
+      error make {msg: "Input must be a tensor (list of lists)"}
     }
   }
 
