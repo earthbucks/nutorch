@@ -1,4 +1,6 @@
 # nutorch module for tensor operations
+
+
 export module nutorch {
     # Generate a 1D tensor with linearly spaced values (similar to torch.linspace)
     export def linspace [
@@ -13,46 +15,35 @@ export module nutorch {
         seq $start $step_size $end | take $steps
     }
 
-    # Generate a tensor (1D or multi-dimensional) - kept for flexibility
-    export def generate_tensor [
-        --start: float = 0.0,  # Start value for linear data (1D only)
-        --end: float = 1.0,    # End value for linear data (1D only)
-        --step: float = 0.1,   # Step increment for linear data (1D only)
-        ...dims: int           # Dimensions of the tensor (e.g., 3 for 1D, 2 2 for 2D)
-    ] {
-        if ($dims | length) == 0 {
-            error make {msg: "At least one dimension must be specified"}
-        }
-
-        if ($dims | length) == 1 {
-            # 1D tensor: generate linear data from start to end with step
-            let size = ($end - $start) / $step | math ceil
-            seq $start $step $end | take ($size + 1)
-        } else {
-            # Multi-dimensional tensor: generate nested lists with linear data
-            let total_size = $dims | reduce -f 1 { |it, acc| $acc * $it }
-            let flat_data = seq $start $step ($start + $step * ($total_size - 1)) | take $total_size
-            build_nd_tensor $flat_data $dims
-        }
+    export def pi [] {
+        let PI = 3.14159265358979323846
+        $PI
     }
 
-    # Helper function to build a multi-dimensional tensor from flat data
-    def build_nd_tensor [flat_data: list, dims: list] {
-        if ($dims | length) == 1 {
-            return ($flat_data | take $dims.0)
-        }
+    export def e [] {
+        let E = 2.71828182845904523536
+        $E
+    }
 
-        let chunk_size = $dims | skip 1 | reduce -f 1 { |it, acc| $acc * $it }
-        let sub_dims = $dims | skip 1
-        mut result = []
-        mut idx = 0
-
-        for _ in 0..($dims.0 - 1) {
-            let sub_data = $flat_data | skip $idx | take $chunk_size
-            let sub_tensor = build_nd_tensor $sub_data $sub_dims
-            $result = ($result | append $sub_tensor)
-            $idx = $idx + $chunk_size
+    # apply sine function element-wise to a tensor
+    export def sin [] {
+        let input = $in  # get input from pipeline
+        if ($input | describe | str contains "list") {
+            $input | each { |elem|
+                if ($elem | describe | str contains "list") {
+                    $elem | each { |sub_elem|
+                        if ($sub_elem | describe | str contains "list") {
+                            $sub_elem | each { |val| $val | math sin }
+                        } else {
+                            $sub_elem | math sin
+                        }
+                    }
+                } else {
+                    $elem | math sin
+                }
+            }
+        } else {
+            error make {msg: "input must be a tensor (list)"}
         }
-        $result
     }
 }
