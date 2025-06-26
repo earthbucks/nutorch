@@ -1,7 +1,19 @@
-
 # nutorch module for tensor operations
 export module nutorch {
-    # Generate a tensor (1D or multi-dimensional)
+    # Generate a 1D tensor with linearly spaced values (similar to torch.linspace)
+    export def linspace [
+        start: float,          # Start value of the sequence
+        end: float,            # End value of the sequence
+        steps: int             # Number of points in the sequence
+    ] {
+        if $steps < 2 {
+            error make {msg: "Steps must be at least 2"}
+        }
+        let step_size = ($end - $start) / ($steps - 1)
+        seq $start $step_size $end | take $steps
+    }
+
+    # Generate a tensor (1D or multi-dimensional) - kept for flexibility
     export def generate_tensor [
         --start: float = 0.0,  # Start value for linear data (1D only)
         --end: float = 1.0,    # End value for linear data (1D only)
