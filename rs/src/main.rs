@@ -1,7 +1,7 @@
 use lazy_static::lazy_static;
 use nu_plugin::{serve_plugin, Plugin, PluginCommand};
 use nu_protocol::{
-    Category, Example, LabeledError, PipelineData, Signature, SyntaxShape, Value, Type
+    Category, Example, LabeledError, PipelineData, Signature, SyntaxShape, Type, Value,
 };
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -108,17 +108,17 @@ impl PluginCommand for Devices {
     ) -> Result<PipelineData, LabeledError> {
         let span = call.head;
         let mut devices = vec![Value::string("cpu", span)];
-        
+
         // Check for CUDA availability
         if tch::Cuda::is_available() {
             devices.push(Value::string("cuda", span));
         }
-        
+
         // // Check for MPS (Metal Performance Shaders) availability on macOS
         // if tch::Mps::is_available() {
         //     devices.push(Value::string("mps", span));
         // }
-        
+
         Ok(PipelineData::Value(Value::list(devices, span), None))
     }
 }
@@ -142,6 +142,11 @@ impl PluginCommand for Linspace {
             .required("start", SyntaxShape::Float, "Start value")
             .required("end", SyntaxShape::Float, "End value")
             .required("steps", SyntaxShape::Int, "Number of steps")
+            .optional(
+                "device",
+                SyntaxShape::String,
+                "Device to create the tensor on (default: cpu)",
+            )
             .category(Category::Custom("nutorch".into()))
     }
 
@@ -167,8 +172,30 @@ impl PluginCommand for Linspace {
             return Err(LabeledError::new("Invalid input")
                 .with_label("Steps must be at least 2", call.head));
         }
+        // Handle optional device argument
+        let device = match call.get_flag::<String>("device")? {
+            Some(device_str) => {
+                match device_str.as_str() {
+                    "cpu" => Device::Cpu,
+                    "cuda" => Device::Cuda(0), // Default to first CUDA device
+                    // "mps" => {
+                    //     if tch::Mps::is_available() {
+                    //         Device::Mps
+                    //     } else {
+                    //         return Err(LabeledError::new("Device not available")
+                    //             .with_label("MPS is not available on this system", call.head));
+                    //     }
+                    // }
+                    _ => {
+                        return Err(LabeledError::new("Invalid device")
+                            .with_label("Device must be 'cpu', 'cuda', or 'mps'", call.head))
+                    }
+                }
+            }
+            None => Device::Cpu, // Default to CPU if not specified
+        };
         // Create a PyTorch tensor using tch-rs
-        let tensor = Tensor::linspace(start, end, steps, (Kind::Float, Device::Cpu));
+        let tensor = Tensor::linspace(start, end, steps, (Kind::Float, device));
         // Generate a unique ID for the tensor
         let id = Uuid::new_v4().to_string();
         // Store in registry
