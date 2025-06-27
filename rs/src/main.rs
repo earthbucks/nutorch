@@ -17,11 +17,56 @@ struct NutorchPlugin;
 
 impl Plugin for NutorchPlugin {
     fn commands(&self) -> Vec<Box<dyn PluginCommand<Plugin = Self>>> {
-        vec![Box::new(Linspace), Box::new(Sin), Box::new(Display)]
+        vec![
+            Box::new(Nutorch), // New top-level command
+            Box::new(Linspace),
+            Box::new(Sin),
+            Box::new(Display),
+        ]
     }
 
     fn version(&self) -> std::string::String {
         "0.0.1".to_string()
+    }
+}
+
+// New top-level Nutorch command
+struct Nutorch;
+
+impl PluginCommand for Nutorch {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "nutorch"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("nutorch").category(Category::Custom("nutorch".into()))
+    }
+
+    fn description(&self) -> &str {
+        "A simple command to test the nutorch plugin"
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![Example {
+            description: "Run the nutorch command to test the plugin".into(),
+            example: "nutorch".into(),
+            result: Some(Value::string("Hello, World!", nu_protocol::Span::unknown())),
+        }]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        _input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        Ok(PipelineData::Value(
+            Value::string("Hello, World!", call.head),
+            None,
+        ))
     }
 }
 
