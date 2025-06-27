@@ -148,6 +148,12 @@ impl PluginCommand for Linspace {
                 "Device to create the tensor on ('cpu', 'cuda', 'mps', default: 'cpu')",
                 None,
             )
+            .named(
+                "dtype",
+                SyntaxShape::String,
+                "Data type of the tensor ('float32', 'float64', 'int32', 'int64', default: 'float32')",
+                None,
+            )
             .category(Category::Custom("nutorch".into()))
     }
 
@@ -169,9 +175,11 @@ impl PluginCommand for Linspace {
         let start: f64 = call.nth(0).unwrap().as_float()?;
         let end: f64 = call.nth(1).unwrap().as_float()?;
         let steps: i64 = call.nth(2).unwrap().as_int()?;
-        // Handle optional device argument
 
-        let device_str_opt = call.get_flag::<String>("device").unwrap_or_else(|_| Some("cpu".to_string()));
+        // Handle optional device argument
+        let device_str_opt = call
+            .get_flag::<String>("device")
+            .unwrap_or_else(|_| Some("cpu".to_string()));
         let device_str: String = match device_str_opt {
             Some(s) => s,
             None => "cpu".to_string(),
@@ -187,8 +195,27 @@ impl PluginCommand for Linspace {
             }
         };
 
+        // Handle optional dtype argument
+        let dtype_str_opt = call
+            .get_flag::<String>("dtype")
+            .unwrap_or_else(|_| Some("float32".to_string()));
+        let dtype_str: String = match dtype_str_opt {
+            Some(s) => s,
+            None => "float32".to_string(),
+        };
+        let kind = match dtype_str.as_str() {
+            "float32" => Kind::Float,
+            "float64" => Kind::Double,
+            "int32" => Kind::Int,
+            "int64" => Kind::Int64,
+            _ => {
+                return Err(LabeledError::new("Invalid dtype")
+                    .with_label("Dtype must be 'float32', 'float64', 'int32', or 'int64'", call.head));
+            }
+        };
+
         // Create a PyTorch tensor using tch-rs
-        let tensor = Tensor::linspace(start, end, steps, (Kind::Float, device));
+        let tensor = Tensor::linspace(start, end, steps, (kind, device));
         // Generate a unique ID for the tensor
         let id = Uuid::new_v4().to_string();
         // Store in registry
