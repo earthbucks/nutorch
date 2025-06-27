@@ -251,11 +251,11 @@ impl PluginCommand for Repeat {
 
     fn signature(&self) -> Signature {
         Signature::build("nutorch repeat")
-            .required("n", SyntaxShape::Int, "Number of times to repeat along the first dimension")
+            .required("n", SyntaxShape::Int, "Number of times to repeat")
             .named(
                 "dim",
                 SyntaxShape::Int,
-                "Dimension to repeat along (default: 0, first dimension)",
+                "Dimension to repeat along (default: adds a new dimension at 0)",
                 None,
             )
             .input_output_types(vec![(Type::String, Type::String)])
@@ -265,8 +265,13 @@ impl PluginCommand for Repeat {
     fn examples(&self) -> Vec<Example> {
         vec![
             Example {
-                description: "Repeat a tensor 3 times along the first dimension",
+                description: "Repeat a tensor 3 times to create a 2D tensor",
                 example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 3 | nutorch display",
+                result: None,
+            },
+            Example {
+                description: "Repeat a tensor 3 times along dimension 1 (if already 2D)",
+                example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 2 --dim 1 | nutorch display",
                 result: None,
             }
         ]
@@ -288,17 +293,6 @@ impl PluginCommand for Repeat {
             return Err(LabeledError::new("Invalid input")
                 .with_label("Number of repetitions must be at least 1", call.head));
         }
-        // Get optional dimension to repeat along (default to 0)
-        let dim: i64 = match call.get_flag::<i64>("dim")? {
-            Some(d) => {
-                if d < 0 {
-                    return Err(LabeledError::new("Invalid input")
-                        .with_label("Dimension must be non-negative", call.head));
-                }
-                d
-            },
-            None => 0,
-        };
         // Look up tensor in registry
         let mut registry = TENSOR_REGISTRY.lock().unwrap();
         let tensor = registry.get(tensor_id).ok_or_else(|| {
@@ -306,15 +300,34 @@ impl PluginCommand for Repeat {
         })?.shallow_clone();
         // Get tensor dimensions
         let dims = tensor.size();
-        if dim >= dims.len() as i64 {
-            return Err(LabeledError::new("Invalid dimension")
-                .with_label(format!("Dimension {} exceeds tensor dimensions {}", dim, dims.len()), call.head));
+        // Handle optional dimension to repeat along
+        let dim: i64 = match call.get_flag::<i64>("dim")? {
+            Some(d) => {
+                if d < 0 {
+                    return Err(LabeledError::new("Invalid input")
+                        .with_label("Dimension must be non-negative", call.head));
+                }
+                if d > dims.len() as i64 {
+                    return Err(LabeledError::new("Invalid dimension")
+                        .with_label(format!("Dimension {} exceeds tensor dimensions {}", d, dims.len()), call.head));
+                }
+                d
+            },
+            None => 0, // Default to repeating along a new dimension at 0
+        };
+        // If dim is equal to the number of dimensions, we need to unsqueeze to add a new dimension
+        let mut working_tensor = tensor;
+        let target_dim = dim as usize;
+        if dim as usize == dims.len() {
+            // Unsqueeze to add a new dimension at the end
+            working_tensor = working_tensor.unsqueeze(dim as i64);
         }
         // Create repeat vector with 1s for all dimensions except the specified one
-        let mut repeat_dims = vec![1; dims.len()];
-        repeat_dims[dim as usize] = n;
+        let current_dims = working_tensor.size();
+        let mut repeat_dims = vec![1; current_dims.len()];
+        repeat_dims[target_dim] = n;
         // Apply repeat operation
-        let result_tensor = tensor.repeat(&repeat_dims);
+        let result_tensor = working_tensor.repeat(&repeat_dims);
         // Store result in registry with new ID
         let new_id = Uuid::new_v4().to_string();
         registry.insert(new_id.clone(), result_tensor);
