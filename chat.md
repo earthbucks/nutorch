@@ -6886,4 +6886,173 @@ Let me know how this works, and I'll be happy to assist further!
 
 # === USER ===
 
+i'd like to take a different approach. i think the "download-libtorch" feature is a bit unusual. i'd like to assume the user has a build of libtorch already on their machine, as should be the case if they have pytorch installed. in fact, i have pytorch installed already, using pip3.11. i was able to test running a python script with torch and it works. the advantage of this approach is it must have a fixed location, so i can set the environment variables without having to worry about the hash changing.
+
+where can i find the libtorch binaries and whatever else i need to set if i have it working in pip3.11? bear in mind i instaled python with with homebrew.
+
+# === ASSISTANT ===
+
+I'm glad you're opting for a different approach by assuming the user has a local installation of LibTorch or PyTorch (via `pip`) on their machine, as this can indeed provide a fixed location for the libraries and avoid the dynamic hash issues associated with the `download-libtorch` feature of `tch-rs`. Since you've installed Python via Homebrew and PyTorch via `pip3.11`, and you've confirmed that a Python script using `torch` works, we can locate the LibTorch binaries bundled with your PyTorch installation and set the necessary environment variables for building and running your `nutorch` plugin. Let's walk through how to find the LibTorch components and configure your environment on macOS.
+
+### Understanding PyTorch and LibTorch Relationship
+When you install PyTorch via `pip` (e.g., `pip3.11 install torch`), it includes not only the Python bindings but also the underlying LibTorch C++ libraries and headers. These are bundled within the Python package in the `site-packages/torch/` directory of your Python installation. Specifically:
+- **Libraries:** The shared libraries like `libtorch_cpu.dylib` (and potentially `libtorch_cuda.dylib` if GPU support is installed) are typically in `site-packages/torch/lib/`.
+- **Headers:** The C++ header files (like `engine.h`) needed for compilation are typically in `site-packages/torch/include/`.
+- **Homebrew Python:** Since you installed Python via Homebrew, the `site-packages` directory will be under the Homebrew-managed Python installation path.
+
+Thus, the `LIBTORCH` environment variable for building your Rust project with `tch-rs` should point to the `site-packages/torch/` directory, which contains both `lib/` and `include/` subdirectories.
+
+### Step 1: Locate PyTorch Installation via pip and Homebrew Python
+Since you installed Python with Homebrew and PyTorch with `pip3.11`, let's find the exact location of the PyTorch installation.
+
+1. **Find Homebrew Python Prefix:**
+   Homebrew installs Python under its prefix directory (`/opt/homebrew/` for Apple Silicon or `/usr/local/` for Intel). Locate it with:
+   ```bash
+   brew --prefix python@3.11
+   # Output: e.g., /opt/homebrew/Cellar/python@3.11/3.11.6_1
+   ```
+   If you don't have `python@3.11` explicitly, try:
+   ```bash
+   brew --prefix python
+   ```
+
+2. **Locate PyTorch in site-packages:**
+   The `site-packages` directory for Homebrew Python is typically under `lib/pythonX.Y/site-packages/`. Find PyTorch with:
+   ```bash
+   find $(brew --prefix python@3.11)/lib -name "torch" -type d
+   # Example Output: /opt/homebrew/Cellar/python@3.11/3.11.6_1/lib/python3.11/site-packages/torch
+   ```
+
+   Or use `pip` to show the location:
+   ```bash
+   pip3.11 show torch
+   # Output includes:
+   # Location: /opt/homebrew/Cellar/python@3.11/3.11.6_1/lib/python3.11/site-packages
+   ```
+
+   Or in Python directly:
+   ```bash
+   python3.11 -c "import torch; print(torch.__path__[0])"
+   # Example Output: /opt/homebrew/Cellar/python@3.11/3.11.6_1/lib/python3.11/site-packages/torch
+   ```
+
+3. **Confirm LibTorch Libraries and Headers:**
+   Verify that the `lib/` and `include/` subdirectories exist with the necessary files:
+   ```bash
+   ls -l $(brew --prefix python@3.11)/lib/python3.11/site-packages/torch/lib/libtorch*
+   # Should list libtorch_cpu.dylib, etc.
+   ls -l $(brew --prefix python@3.11)/lib/python3.11/site-packages/torch/include/torch/csrc/autograd/engine.h
+   # Should show the header file
+   ```
+
+   If these files exist, the parent directory (e.g., `/opt/homebrew/Cellar/python@3.11/3.11.6_1/lib/python3.11/site-packages/torch`) is your `LIBTORCH` path.
+
+### Step 2: Set Environment Variables for Building
+Set the `LIBTORCH` environment variable to point to the PyTorch installation directory containing `lib/` and `include/`. In Nushell:
+```nu
+let-env LIBTORCH = ($"((brew --prefix python@3.11))/lib/python3.11/site-packages/torch")
+let-env LD_LIBRARY_PATH = ($env.LIBTORCH + "/lib" + if ($env.LD_LIBRARY_PATH? | is-empty) { "" } else { ":" + $env.LD_LIBRARY_PATH })
+let-env DYLD_LIBRARY_PATH = ($env.LIBTORCH + "/lib" + if ($env.DYLD_LIBRARY_PATH? | is-empty) { "" } else { ":" + $env.DYLD_LIBRARY_PATH })
+hide-env LIBTORCH_USE_PYTORCH
+```
+
+Replace `python@3.11` and `python3.11` with the appropriate version if different (check with `brew list python` or `python3.11 --version`).
+
+### Step 3: Update `Cargo.toml` to Disable `download-libtorch`
+Since you're assuming users have a local PyTorch/LibTorch installation, disable the `download-libtorch` feature in your `Cargo.toml` to prevent automatic downloads and ensure the build script uses the specified `LIBTORCH` path:
+```toml
+[package]
+name = "nu_plugin_torch"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nu-plugin = "0.94.2"  # Match your Nushell version
+nu-protocol = "0.94.2"
+tch = "0.16.0"  # Do not include features = ["download-libtorch"]
+uuid = { version = "1.8.0", features = ["v4"] }
+lazy_static = "1.4.0"
+```
+
+### Step 4: Clean and Rebuild the Plugin
+With the environment variables set and `download-libtorch` disabled, clean and rebuild your plugin to ensure it links against the local LibTorch:
+```nu
+cargo clean
+cargo build --release --verbose
+```
+
+Check if RPATH is embedded in the binary:
+```bash
+otool -l /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_torch | grep RPATH
+# Should show an RPATH entry like /path/to/site-packages/torch/lib
+```
+
+### Step 5: Add the Plugin to Nushell
+After rebuilding, try adding the plugin to Nushell:
+```nu
+plugin add /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_torch
+```
+
+Test if the commands work:
+```nu
+help nutorch
+nutorch linspace 0.0 1.57 5 | nutorch sin | nutorch display
+```
+
+### If RPATH Is Not Embedded or Plugin Fails to Load
+If the RPATH is not embedded (checked with `otool -l ... | grep RPATH`) or the plugin still fails with `Library not loaded: @rpath/libtorch_cpu.dylib`, manually add the RPATH using `install_name_tool`:
+```bash
+install_name_tool -add_rpath $(brew --prefix python@3.11)/lib/python3.11/site-packages/torch/lib /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_torch
+```
+
+Or set `DYLD_LIBRARY_PATH` at runtime:
+```nu
+let-env DYLD_LIBRARY_PATH = ($"((brew --prefix python@3.11))/lib/python3.11/site-packages/torch/lib" + if ($env.DYLD_LIBRARY_PATH? | is-empty) { "" } else { ":" + $env.DYLD_LIBRARY_PATH })
+plugin add /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_torch
+```
+
+### Additional Notes
+- **Python Version:** Adjust `python@3.11` and `python3.11` based on your installed version. Check with:
+  ```bash
+  brew list python
+  python3.11 --version
+  ```
+- **pip vs. Homebrew PyTorch:** If PyTorch was installed via `pip` in a different Python environment (not Homebrew's), use `pip3.11 show torch` to find the `Location` field and set `LIBTORCH` accordingly.
+- **Version Compatibility:** Ensure the PyTorch version installed matches a compatible `tch-rs` version in `Cargo.toml` (check `tch-rs` GitHub for compatibility notes).
+
+### Summary of Recommended Steps
+1. Locate PyTorch/LibTorch via Homebrew Python and pip:
+   ```bash
+   pip3.11 show torch
+   # Note the Location field
+   brew --prefix python@3.11
+   ```
+2. Set environment variables in Nushell:
+   ```nu
+   let-env LIBTORCH = ($"((brew --prefix python@3.11))/lib/python3.11/site-packages/torch")
+   let-env LD_LIBRARY_PATH = ($env.LIBTORCH + "/lib" + if ($env.LD_LIBRARY_PATH? | is-empty) { "" } else { ":" + $env.LD_LIBRARY_PATH })
+   let-env DYLD_LIBRARY_PATH = ($env.LIBTORCH + "/lib" + if ($env.DYLD_LIBRARY_PATH? | is-empty) { "" } else { ":" + $env.DYLD_LIBRARY_PATH })
+   hide-env LIBTORCH_USE_PYTORCH
+   ```
+3. Update `Cargo.toml` to disable `download-libtorch` if enabled.
+4. Clean and rebuild:
+   ```nu
+   cargo clean
+   cargo build --release --verbose
+   ```
+5. Add the plugin to Nushell:
+   ```nu
+   plugin add /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_torch
+   ```
+
+### Next Steps
+If the plugin loads successfully after setting the correct path for a local PyTorch/LibTorch installation, test the commands and let me know if you'd like to expand functionality. If it still fails, please share:
+- The output of `pip3.11 show torch` to confirm the exact path.
+- Any additional error messages from `plugin add ... --log-level debug`.
+- The output of `otool -l /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_torch | grep RPATH` after rebuilding.
+
+This approach with a fixed local installation should eliminate the hash-changing issue and provide a stable path for both building and running. Let me know how it goes, and I'll be happy to assist further!
+
+# === USER ===
+
 

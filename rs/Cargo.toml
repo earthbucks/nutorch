@@ -1,5 +1,5 @@
 [package]
-name = "nutorch"
+name = "nu_plugin_torch"
 version = "0.0.1"
 edition = "2021"
 license = "MIT"
@@ -9,5 +9,5 @@ authors = ["Ryan X. Charles <ryan@ryanxcharles.com>"]
 lazy_static = "1.5.0"
 nu-plugin = "0.105.1"
 nu-protocol = "0.105.1"
-tch = { version = "0.20.0", features = ["download-libtorch"] }
+tch = { version = "0.20.0" }
 uuid = {version = "1.17.0", features = ["v4"]} 
