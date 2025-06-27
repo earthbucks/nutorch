@@ -399,7 +399,7 @@ impl PluginCommand for CommandValue {
     }
 
     fn description(&self) -> &str {
-        "Display a tensor as a Nushell list or table with support for arbitrary dimensions"
+        "Get a tensor as a Nushell list or table (\"value\") with support for arbitrary dimensions"
     }
 
     fn signature(&self) -> Signature {
@@ -411,12 +411,12 @@ impl PluginCommand for CommandValue {
     fn examples(&self) -> Vec<Example> {
         vec![
             Example {
-                description: "Display a 1D tensor's values",
+                description: "Get a 1D tensor's values",
                 example: "nutorch linspace 0.0 1.0 4 | nutorch value",
                 result: None,
             },
             Example {
-                description: "Display a 2D or higher dimensional tensor",
+                description: "Get a 2D or higher dimensional tensor",
                 example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 2 2 | nutorch value",
                 result: None,
             },
