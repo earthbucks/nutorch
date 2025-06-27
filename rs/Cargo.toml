@@ -6,3 +6,4 @@ license = "MIT"
 authors = ["Ryan X. Charles <ryan@ryanxcharles.com>"]
 
 [dependencies]
+tch = "0.20.0"
