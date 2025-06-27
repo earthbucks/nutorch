@@ -6,4 +6,4 @@ license = "MIT"
 authors = ["Ryan X. Charles <ryan@ryanxcharles.com>"]
 
 [dependencies]
-tch = "0.20.0"
+tch = { version = "0.20.0", features = ["download-libtorch"] }
