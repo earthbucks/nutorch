@@ -18,12 +18,12 @@ struct NutorchPlugin;
 impl Plugin for NutorchPlugin {
     fn commands(&self) -> Vec<Box<dyn PluginCommand<Plugin = Self>>> {
         vec![
-            Box::new(Nutorch), // New top-level command
-            Box::new(Devices),
-            Box::new(Linspace),
-            Box::new(Repeat),
-            Box::new(Sin),
-            Box::new(Display),
+            Box::new(CommandNutorch), // New top-level command
+            Box::new(CommandDevices),
+            Box::new(CommandLinspace),
+            Box::new(CommandRepeat),
+            Box::new(CommandSin),
+            Box::new(CommandValue),
         ]
     }
 
@@ -33,9 +33,9 @@ impl Plugin for NutorchPlugin {
 }
 
 // New top-level Nutorch command
-struct Nutorch;
+struct CommandNutorch;
 
-impl PluginCommand for Nutorch {
+impl PluginCommand for CommandNutorch {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
@@ -73,9 +73,9 @@ impl PluginCommand for Nutorch {
 }
 
 // Devices command to list available devices
-struct Devices;
+struct CommandDevices;
 
-impl PluginCommand for Devices {
+impl PluginCommand for CommandDevices {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
@@ -125,9 +125,9 @@ impl PluginCommand for Devices {
 }
 
 // Linspace command to create a tensor
-struct Linspace;
+struct CommandLinspace;
 
-impl PluginCommand for Linspace {
+impl PluginCommand for CommandLinspace {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
@@ -239,9 +239,9 @@ impl PluginCommand for Linspace {
 }
 
 // Repeat command to replicate a tensor into a multidimensional structure
-struct Repeat;
+struct CommandRepeat;
 
-impl PluginCommand for Repeat {
+impl PluginCommand for CommandRepeat {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
@@ -267,12 +267,12 @@ impl PluginCommand for Repeat {
         vec![
             Example {
                 description: "Repeat a tensor 3 times along the first dimension",
-                example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 3 | nutorch display",
+                example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 3 | nutorch value",
                 result: None,
             },
             Example {
                 description: "Repeat a tensor 2 times along first dim and 2 times along second dim (creates new dim if needed)",
-                example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 2 2 | nutorch display",
+                example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 2 2 | nutorch value",
                 result: None,
             }
         ]
@@ -343,9 +343,9 @@ impl PluginCommand for Repeat {
 }
 
 // Sin command to apply sine to a tensor
-struct Sin;
+struct CommandSin;
 
-impl PluginCommand for Sin {
+impl PluginCommand for CommandSin {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
@@ -389,13 +389,13 @@ impl PluginCommand for Sin {
 }
 
 // Display command to convert tensor to Nushell data structure for output
-struct Display;
+struct CommandValue;
 
-impl PluginCommand for Display {
+impl PluginCommand for CommandValue {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch display"
+        "nutorch value"
     }
 
     fn description(&self) -> &str {
@@ -403,7 +403,7 @@ impl PluginCommand for Display {
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch display")
+        Signature::build("nutorch value")
             .input_output_types(vec![(Type::String, Type::Any)])
             .category(Category::Custom("nutorch".into()))
     }
@@ -412,12 +412,12 @@ impl PluginCommand for Display {
         vec![
             Example {
                 description: "Display a 1D tensor's values",
-                example: "nutorch linspace 0.0 1.0 4 | nutorch display",
+                example: "nutorch linspace 0.0 1.0 4 | nutorch value",
                 result: None,
             },
             Example {
                 description: "Display a 2D or higher dimensional tensor",
-                example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 2 2 | nutorch display",
+                example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 2 2 | nutorch value",
                 result: None,
             },
         ]
