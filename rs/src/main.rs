@@ -142,10 +142,11 @@ impl PluginCommand for Linspace {
             .required("start", SyntaxShape::Float, "Start value")
             .required("end", SyntaxShape::Float, "End value")
             .required("steps", SyntaxShape::Int, "Number of steps")
-            .optional(
+            .named(
                 "device",
                 SyntaxShape::String,
                 "Device to create the tensor on (default: cpu)",
+                None,
             )
             .category(Category::Custom("nutorch".into()))
     }
@@ -168,32 +169,24 @@ impl PluginCommand for Linspace {
         let start: f64 = call.nth(0).unwrap().as_float()?;
         let end: f64 = call.nth(1).unwrap().as_float()?;
         let steps: i64 = call.nth(2).unwrap().as_int()?;
-        if steps < 2 {
-            return Err(LabeledError::new("Invalid input")
-                .with_label("Steps must be at least 2", call.head));
-        }
         // Handle optional device argument
-        let device = match call.get_flag::<String>("device")? {
-            Some(device_str) => {
-                match device_str.as_str() {
-                    "cpu" => Device::Cpu,
-                    "cuda" => Device::Cuda(0), // Default to first CUDA device
-                    // "mps" => {
-                    //     if tch::Mps::is_available() {
-                    //         Device::Mps
-                    //     } else {
-                    //         return Err(LabeledError::new("Device not available")
-                    //             .with_label("MPS is not available on this system", call.head));
-                    //     }
-                    // }
-                    _ => {
-                        return Err(LabeledError::new("Invalid device")
-                            .with_label("Device must be 'cpu', 'cuda', or 'mps'", call.head))
-                    }
-                }
-            }
-            None => Device::Cpu, // Default to CPU if not specified
+
+        let device_str_opt = call.get_flag::<String>("device").unwrap_or_else(|_| Some("cpu".to_string()));
+        let device_str: String = match device_str_opt {
+            Some(s) => s,
+            None => "cpu".to_string(),
         };
+        let device = match device_str.as_str() {
+            "cpu" => Device::Cpu,
+            "cuda" => Device::Cuda(0),
+            "mps" => Device::Mps,
+            // "mps" if tch::Mps::is_available() => Device::Mps,
+            _ => {
+                return Err(LabeledError::new("Invalid device")
+                    .with_label("Device must be 'cpu' or 'cuda'", call.head));
+            }
+        };
+
         // Create a PyTorch tensor using tch-rs
         let tensor = Tensor::linspace(start, end, steps, (Kind::Float, device));
         // Generate a unique ID for the tensor
