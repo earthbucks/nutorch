@@ -21,7 +21,7 @@ impl Plugin for NutorchPlugin {
     }
 
     fn version(&self) -> std::string::String {
-        env!("CARGO_PKG_VERSION").to_string()
+        "0.0.1".to_string()
     }
 }
 
