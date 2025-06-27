@@ -145,7 +145,7 @@ impl PluginCommand for Linspace {
             .named(
                 "device",
                 SyntaxShape::String,
-                "Device to create the tensor on (default: cpu)",
+                "Device to create the tensor on ('cpu', 'cuda', 'mps', default: 'cpu')",
                 None,
             )
             .category(Category::Custom("nutorch".into()))
