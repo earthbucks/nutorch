@@ -6,7 +6,8 @@ license = "MIT"
 authors = ["Ryan X. Charles <ryan@ryanxcharles.com>"]
 
 [dependencies]
+lazy_static = "1.5.0"
 nu-plugin = "0.105.1"
 nu-protocol = "0.105.1"
 tch = { version = "0.20.0", features = ["download-libtorch"] }
-uuid = "1.17.0"
+uuid = {version = "1.17.0", features = ["v4"]} 
