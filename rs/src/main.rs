@@ -195,12 +195,12 @@ impl PluginCommand for Linspace {
                     Device::Cuda(num)
                 } else {
                     return Err(LabeledError::new("Invalid CUDA device")
-                        .with_label("Device must be 'cpu', 'cuda', or 'mps'", call.head));
+                        .with_label("Invalid CUDA device", call.head));
                 }
             }
             _ => {
                 return Err(LabeledError::new("Invalid device")
-                    .with_label("Device must be 'cpu' or 'cuda'", call.head));
+                    .with_label("Invalid device", call.head));
             }
         };
 
