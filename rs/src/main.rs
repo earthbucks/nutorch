@@ -1,7 +1,7 @@
 use lazy_static::lazy_static;
 use nu_plugin::{serve_plugin, Plugin, PluginCommand};
 use nu_protocol::{
-    Category, Example, LabeledError, PipelineData, Signature, SyntaxShape, Value,
+    Category, Example, LabeledError, PipelineData, Signature, SyntaxShape, Value, Type
 };
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -19,6 +19,7 @@ impl Plugin for NutorchPlugin {
     fn commands(&self) -> Vec<Box<dyn PluginCommand<Plugin = Self>>> {
         vec![
             Box::new(Nutorch), // New top-level command
+            Box::new(Devices),
             Box::new(Linspace),
             Box::new(Sin),
             Box::new(Display),
@@ -67,6 +68,58 @@ impl PluginCommand for Nutorch {
             Value::string("Hello, World!", call.head),
             None,
         ))
+    }
+}
+
+// Devices command to list available devices
+struct Devices;
+
+impl PluginCommand for Devices {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "nutorch devices"
+    }
+
+    fn description(&self) -> &str {
+        "List available devices for tensor operations"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("nutorch devices")
+            .input_output_types(vec![(Type::Nothing, Type::List(Box::new(Type::String)))])
+            .category(Category::Custom("nutorch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![Example {
+            description: "List available devices for tensor operations",
+            example: "nutorch devices",
+            result: None,
+        }]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        _input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        let span = call.head;
+        let mut devices = vec![Value::string("cpu", span)];
+        
+        // Check for CUDA availability
+        if tch::Cuda::is_available() {
+            devices.push(Value::string("cuda", span));
+        }
+        
+        // // Check for MPS (Metal Performance Shaders) availability on macOS
+        // if tch::Mps::is_available() {
+        //     devices.push(Value::string("mps", span));
+        // }
+        
+        Ok(PipelineData::Value(Value::list(devices, span), None))
     }
 }
 
