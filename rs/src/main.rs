@@ -47,10 +47,6 @@ impl PluginCommand for Linspace {
             .category(Category::Custom("nutorch".into()))
     }
 
-    // fn usage(&self) -> &str {
-    //     "Create a 1D tensor with linearly spaced values"
-    // }
-
     fn examples(&self) -> Vec<Example> {
         vec![Example {
             description: "Create a tensor from 0.0 to 1.0 with 4 steps",
@@ -102,10 +98,6 @@ impl PluginCommand for Sin {
         Signature::build("nutorch sin").category(Category::Custom("nutorch".into()))
     }
 
-    // fn usage(&self) -> &str {
-    //     "Apply sine function element-wise to a tensor"
-    // }
-
     fn run(
         &self,
         _plugin: &NutorchPlugin,
@@ -151,10 +143,6 @@ impl PluginCommand for Display {
     fn signature(&self) -> Signature {
         Signature::build("nutorch display").category(Category::Custom("nutorch".into()))
     }
-
-    // fn usage(&self) -> &str {
-    //     "Display a tensor as a Nushell list or table"
-    // }
 
     fn run(
         &self,
