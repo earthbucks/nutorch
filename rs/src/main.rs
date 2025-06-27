@@ -145,13 +145,13 @@ impl PluginCommand for Linspace {
             .named(
                 "device",
                 SyntaxShape::String,
-                "Device to create the tensor on ('cpu', 'cuda', 'mps', default: 'cpu')",
+                "Device to create the tensor on (efault: 'cpu')",
                 None,
             )
             .named(
                 "dtype",
                 SyntaxShape::String,
-                "Data type of the tensor ('float32', 'float64', 'int32', 'int64', default: 'float32')",
+                "Data type of the tensor (default: 'float32')",
                 None,
             )
             .category(Category::Custom("nutorch".into()))
@@ -189,6 +189,15 @@ impl PluginCommand for Linspace {
             "cuda" => Device::Cuda(0),
             "mps" => Device::Mps,
             // "mps" if tch::Mps::is_available() => Device::Mps,
+            _ if device_str.starts_with("cuda:") => {
+                // Handle specific CUDA device like "cuda:0", "cuda:1", etc.
+                if let Some(num) = device_str[5..].parse::<usize>().ok() {
+                    Device::Cuda(num)
+                } else {
+                    return Err(LabeledError::new("Invalid CUDA device")
+                        .with_label("Device must be 'cpu', 'cuda', or 'mps'", call.head));
+                }
+            }
             _ => {
                 return Err(LabeledError::new("Invalid device")
                     .with_label("Device must be 'cpu' or 'cuda'", call.head));
