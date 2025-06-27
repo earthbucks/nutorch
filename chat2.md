@@ -4944,3 +4944,192 @@ impl PluginCommand for Display {
     }
 }
 ```
+
+# === ASSISTANT ===
+
+I'm glad you're pushing the boundaries of your `nutorch` plugin by exploring the display of higher-dimensional tensors. You're correct that Nushell has no inherent limit on the number of dimensions for nested data structures like lists (it supports arbitrary nesting of lists), and we can refactor the `Display` command to handle tensors of any dimensionality by recursively constructing nested lists to represent the tensor's structure. Let's update the `Display` command to support an arbitrary number of dimensions, converting a tensor into a deeply nested list structure in Nushell.
+
+### Refactored `Display` Command for Arbitrary Dimensions
+We'll modify the `run` method of the `Display` command to handle tensors of any number of dimensions by recursively extracting data from the tensor and building nested `Value::list` structures. Since directly indexing into higher-dimensional tensors with `get()` becomes cumbersome for arbitrary dimensions, we'll use a recursive approach to handle nested dimensions, flattening or iterating through the tensor's structure.
+
+Here's the updated `Display` command code:
+
+```rust
+// Display command to convert tensor to Nushell data structure for output
+struct Display;
+
+impl PluginCommand for Display {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "nutorch display"
+    }
+
+    fn description(&self) -> &str {
+        "Display a tensor as a Nushell list or table with support for arbitrary dimensions"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("nutorch display")
+            .input_output_types(vec![(Type::String, Type::Any)])
+            .category(Category::Custom("nutorch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Display a 1D tensor's values",
+                example: "nutorch linspace 0.0 1.0 4 | nutorch display",
+                result: None,
+            },
+            Example {
+                description: "Display a 2D or higher dimensional tensor",
+                example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 2 2 | nutorch display",
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Get tensor ID from input
+        let input_value = input.into_value(call.head)?;
+        let tensor_id = input_value.as_str()?;
+        // Look up tensor in registry
+        let registry = TENSOR_REGISTRY.lock().unwrap();
+        let tensor = registry.get(tensor_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
+        })?;
+        // Ensure tensor is on CPU before accessing data
+        let tensor = tensor.to_device(Device::Cpu);
+        // Convert tensor to Nushell Value with support for arbitrary dimensions
+        let span = call.head;
+        let value = tensor_to_value(&tensor, span)?;
+        Ok(PipelineData::Value(value, None))
+    }
+}
+
+// Helper function to recursively convert a tensor to a nested Nushell Value
+fn tensor_to_value(tensor: &Tensor, span: Span) -> Result<Value, LabeledError> {
+    let dims = tensor.size();
+    if dims.is_empty() {
+        // Scalar tensor (0D)
+        let value = tensor.double_value(&[]);
+        return Ok(Value::float(value, span));
+    }
+
+    if dims.len() == 1 {
+        // 1D tensor to list
+        let size = dims[0] as usize;
+        let mut data: Vec<f64> = Vec::with_capacity(size);
+        for i in 0..size as i64 {
+            data.push(tensor.get(i).double_value(&[]));
+        }
+        let list = data.into_iter().map(|v| Value::float(v, span)).collect();
+        return Ok(Value::list(list, span));
+    }
+
+    // For higher dimensions, create nested lists recursively
+    let first_dim_size = dims[0] as usize;
+    let mut nested_data: Vec<Value> = Vec::with_capacity(first_dim_size);
+    for i in 0..first_dim_size as i64 {
+        // Get a subtensor by indexing along the first dimension
+        let subtensor = tensor.get(i);
+        // Recursively convert the subtensor to a Value
+        let nested_value = tensor_to_value(&subtensor, span)?;
+        nested_data.push(nested_value);
+    }
+    Ok(Value::list(nested_data, span))
+}
+```
+
+### Explanation of the Refactoring
+- **Recursive Approach for Arbitrary Dimensions:** Introduced a helper function `tensor_to_value` that recursively processes the tensor's dimensions to build a nested list structure in Nushell.
+  - **Base Cases:** For 0D tensors (scalars), it returns a single `Value::float`. For 1D tensors, it builds a flat list of values as before.
+  - **Recursive Case:** For tensors with 2 or more dimensions, it iterates along the first dimension, extracting subtensors (using `tensor.get(i)`), and recursively converts each subtensor to a `Value`. This builds a nested list structure (e.g., a 3D tensor becomes a list of lists of lists).
+- **Removed Dimension Limit:** Removed the explicit check and error for tensors with more than 2 dimensions, allowing the recursive function to handle any number of dimensions.
+- **Type in Signature:** Kept `Type::Any` in `input_output_types` since the output can be a deeply nested structure, which Nushell can handle as nested lists.
+
+### Build and Test
+After updating the `Display` command as shown, rebuild your plugin:
+```bash
+cd /Users/ryan/dev/nutorch/rs
+cargo build --release
+```
+
+Re-add the plugin to Nushell:
+```nu
+plugin rm nutorch
+plugin add /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_nutorch
+```
+
+Test displaying tensors of various dimensions:
+```nu
+nutorch linspace 0.0 1.57 4 | nutorch display
+# Expected Output: 1D list like [0.0, 0.5233, 1.0467, 1.57]
+nutorch linspace 0.0 1.57 4 | nutorch repeat 3 | nutorch display
+# Expected Output: 2D list like [[0.0, 0.5233, 1.0467, 1.57], [0.0, 0.5233, 1.0467, 1.57], [0.0, 0.5233, 1.0467, 1.57]]
+nutorch linspace 0.0 1.57 4 | nutorch repeat 2 2 | nutorch display
+# Expected Output: 3D list as nested lists, like [[[0.0, 0.5233, 1.0467, 1.57], [0.0, 0.5233, 1.0467, 1.57]], [[0.0, 0.5233, 1.0467, 1.57], [0.0, 0.5233, 1.0467, 1.57]]]
+```
+
+### Additional Notes
+- **Nushell Support for Nested Structures:** You're correct that Nushell supports arbitrary nesting of lists, and this implementation leverages that by creating deeply nested `Value::list` structures for higher-dimensional tensors. The display in Nushell's terminal will show nested tables or lists as seen in your earlier outputs.
+- **Performance Consideration:** For very large or high-dimensional tensors, recursively processing all elements might be slow. If needed, we can add a limit or summarization (e.g., show only a subset of data) in a future update.
+- **Error Handling:** The code assumes all tensor elements can be converted to `f64` via `double_value(&[])`. If you encounter tensors with unsupported types, we can add type conversion or error handling.
+
+### Next Steps
+Test the updated `Display` command with 1D, 2D, and 3D (or higher) tensors to ensure it handles arbitrary dimensions as expected. Let me know if:
+- It works correctly for all tested dimensions or if there are errors or unexpected outputs.
+- You'd like to add limits or summarization for large tensors.
+- You're ready to implement other features or operations for `nutorch`.
+
+I'm happy to assist further. Let me know how the test goes!
+
+# === USER ===
+
+what is Span? that type is not found. we need to add an import.
+
+# === ASSISTANT ===
+
+I'm sorry for the oversight regarding the `Span` type in the updated `Display` command code. You're correct that `Span` needs to be imported from the `nu_protocol` crate to be used in your `nutorch` plugin. `Span` is a type in Nushell that represents a source code location (used for error reporting and metadata about values), and it's commonly used when creating `Value` objects to provide context about where the value originated.
+
+Here's the updated import statement to include `Span` along with the other necessary imports from `nu_protocol`. Add or modify the import line at the top of your `src/main.rs`:
+
+```rust
+use nu_protocol::{
+    Category, Example, LabeledError, PipelineData, Signature, Span, Spanned, SyntaxShape, Type, Value,
+};
+```
+
+### Explanation of `Span`
+- **`Span` Struct:** `Span` is a struct in `nu_protocol` that holds information about a range in the source code (start and end positions). It's used in Nushell to associate values or errors with their origin in the command or script for better error messages and debugging.
+- **Usage in Code:** In the `Display` command, `span` (set to `call.head`) is passed to `Value` constructors like `Value::float` and `Value::list` to indicate the source location of the command invocation. This is also passed recursively in the `tensor_to_value` helper function to maintain consistency across nested structures.
+
+With this import added, the `Span` type should be recognized, and the code should compile without errors. If you encounter any other issues after adding the import, please let me know, and I'll assist further.
+
+### Build and Test
+After adding the import, rebuild your plugin to ensure it compiles:
+```bash
+cd /Users/ryan/dev/nutorch/rs
+cargo build --release
+```
+
+Re-add the plugin to Nushell if needed:
+```nu
+plugin rm nutorch
+plugin add /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_nutorch
+```
+
+Test the updated `Display` command as outlined in the previous response.
+
+Let me know if this resolves the issue or if you need further assistance!
+
+# === USER ===
+
+

@@ -1,7 +1,7 @@
 use lazy_static::lazy_static;
 use nu_plugin::{serve_plugin, Plugin, PluginCommand};
 use nu_protocol::{
-    Category, Example, LabeledError, PipelineData, Signature, SyntaxShape, Type, Value,
+    Category, Example, LabeledError, PipelineData, Signature, SyntaxShape, Type, Value, Span
 };
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -200,8 +200,9 @@ impl PluginCommand for Linspace {
                 }
             }
             _ => {
-                return Err(LabeledError::new("Invalid device")
-                    .with_label("Invalid device", call.head));
+                return Err(
+                    LabeledError::new("Invalid device").with_label("Invalid device", call.head)
+                );
             }
         };
 
@@ -219,8 +220,10 @@ impl PluginCommand for Linspace {
             "int32" => Kind::Int,
             "int64" => Kind::Int64,
             _ => {
-                return Err(LabeledError::new("Invalid dtype")
-                    .with_label("Dtype must be 'float32', 'float64', 'int32', or 'int64'", call.head));
+                return Err(LabeledError::new("Invalid dtype").with_label(
+                    "Dtype must be 'float32', 'float64', 'int32', or 'int64'",
+                    call.head,
+                ));
             }
         };
 
@@ -251,7 +254,11 @@ impl PluginCommand for Repeat {
 
     fn signature(&self) -> Signature {
         Signature::build("nutorch repeat")
-            .rest("sizes", SyntaxShape::Int, "Number of times to repeat along each dimension")
+            .rest(
+                "sizes",
+                SyntaxShape::Int,
+                "Number of times to repeat along each dimension",
+            )
             .input_output_types(vec![(Type::String, Type::String)])
             .category(Category::Custom("nutorch".into()))
     }
@@ -282,9 +289,13 @@ impl PluginCommand for Repeat {
         let input_value = input.into_value(call.head)?;
         let tensor_id = input_value.as_str()?;
         // Get repeat sizes (rest arguments)
-        let sizes: Vec<i64> = call.rest(0).map_err(|_| {
-            LabeledError::new("Invalid input").with_label("Unable to parse repeat sizes", call.head)
-        })?.into_iter()
+        let sizes: Vec<i64> = call
+            .rest(0)
+            .map_err(|_| {
+                LabeledError::new("Invalid input")
+                    .with_label("Unable to parse repeat sizes", call.head)
+            })?
+            .into_iter()
             .map(|v: Value| v.as_int())
             .collect::<Result<Vec<i64>, _>>()?;
         if sizes.is_empty() {
@@ -297,9 +308,12 @@ impl PluginCommand for Repeat {
         }
         // Look up tensor in registry
         let mut registry = TENSOR_REGISTRY.lock().unwrap();
-        let tensor = registry.get(tensor_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
-        })?.shallow_clone();
+        let tensor = registry
+            .get(tensor_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
+            })?
+            .shallow_clone();
         // Get tensor dimensions
         let dims = tensor.size();
         // Adjust tensor dimensions to match the length of sizes by unsqueezing if necessary
@@ -385,11 +399,28 @@ impl PluginCommand for Display {
     }
 
     fn description(&self) -> &str {
-        "Display a tensor as a Nushell list or table"
+        "Display a tensor as a Nushell list or table with support for arbitrary dimensions"
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch display").category(Category::Custom("nutorch".into()))
+        Signature::build("nutorch display")
+            .input_output_types(vec![(Type::String, Type::Any)])
+            .category(Category::Custom("nutorch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Display a 1D tensor's values",
+                example: "nutorch linspace 0.0 1.0 4 | nutorch display",
+                result: None,
+            },
+            Example {
+                description: "Display a 2D or higher dimensional tensor",
+                example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 2 2 | nutorch display",
+                result: None,
+            },
+        ]
     }
 
     fn run(
@@ -407,44 +438,46 @@ impl PluginCommand for Display {
         let tensor = registry.get(tensor_id).ok_or_else(|| {
             LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
         })?;
-        // Convert tensor to Nushell Value (simplified for 1D/2D tensors)
-        let dims = tensor.size();
+        // Ensure tensor is on CPU before accessing data
+        let tensor = tensor.to_device(Device::Cpu);
+        // Convert tensor to Nushell Value with support for arbitrary dimensions
         let span = call.head;
-        if dims.len() == 1 {
-            // 1D tensor to list
-            let size = dims[0] as usize;
-            let mut data: Vec<f64> = Vec::with_capacity(size);
-            for i in 0..size as i64 {
-                data.push(tensor.get(i).double_value(&[]));
-            }
-            let list = data.into_iter().map(|v| Value::float(v, span)).collect();
-            Ok(PipelineData::Value(Value::list(list, span), None))
-        } else if dims.len() == 2 {
-            // 2D tensor to list of lists
-            // 2D tensor to list of lists
-            let rows = dims[0] as usize;
-            let cols = dims[1] as usize;
-            let mut data = Vec::with_capacity(rows);
-            for i in 0..rows as i64 {
-                let mut row = Vec::with_capacity(cols);
-                for j in 0..cols as i64 {
-                    row.push(tensor.get(i).get(j).double_value(&[]));
-                }
-                data.push(row);
-            }
-            let list = data
-                .into_iter()
-                .map(|row| {
-                    let row_list = row.into_iter().map(|v| Value::float(v, span)).collect();
-                    Value::list(row_list, span)
-                })
-                .collect();
-            Ok(PipelineData::Value(Value::list(list, span), None))
-        } else {
-            Err(LabeledError::new("Unsupported dimension")
-                .with_label("Only 1D and 2D tensors supported for display", span))
-        }
+        let value = tensor_to_value(&tensor, span)?;
+        Ok(PipelineData::Value(value, None))
     }
+}
+
+// Helper function to recursively convert a tensor to a nested Nushell Value
+fn tensor_to_value(tensor: &Tensor, span: Span) -> Result<Value, LabeledError> {
+    let dims = tensor.size();
+    if dims.is_empty() {
+        // Scalar tensor (0D)
+        let value = tensor.double_value(&[]);
+        return Ok(Value::float(value, span));
+    }
+
+    if dims.len() == 1 {
+        // 1D tensor to list
+        let size = dims[0] as usize;
+        let mut data: Vec<f64> = Vec::with_capacity(size);
+        for i in 0..size as i64 {
+            data.push(tensor.get(i).double_value(&[]));
+        }
+        let list = data.into_iter().map(|v| Value::float(v, span)).collect();
+        return Ok(Value::list(list, span));
+    }
+
+    // For higher dimensions, create nested lists recursively
+    let first_dim_size = dims[0] as usize;
+    let mut nested_data: Vec<Value> = Vec::with_capacity(first_dim_size);
+    for i in 0..first_dim_size as i64 {
+        // Get a subtensor by indexing along the first dimension
+        let subtensor = tensor.get(i);
+        // Recursively convert the subtensor to a Value
+        let nested_value = tensor_to_value(&subtensor, span)?;
+        nested_data.push(nested_value);
+    }
+    Ok(Value::list(nested_data, span))
 }
 
 fn main() {
