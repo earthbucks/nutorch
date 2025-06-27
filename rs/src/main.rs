@@ -21,6 +21,7 @@ impl Plugin for NutorchPlugin {
             Box::new(Nutorch), // New top-level command
             Box::new(Devices),
             Box::new(Linspace),
+            Box::new(Repeat),
             Box::new(Sin),
             Box::new(Display),
         ]
@@ -231,6 +232,94 @@ impl PluginCommand for Linspace {
         TENSOR_REGISTRY.lock().unwrap().insert(id.clone(), tensor);
         // Return the ID as a string to Nushell, wrapped in PipelineData
         Ok(PipelineData::Value(Value::string(id, call.head), None))
+    }
+}
+
+// Repeat command to replicate a tensor into a multidimensional structure
+struct Repeat;
+
+impl PluginCommand for Repeat {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "nutorch repeat"
+    }
+
+    fn description(&self) -> &str {
+        "Repeat a tensor N times along a dimension to create a multidimensional tensor"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("nutorch repeat")
+            .required("n", SyntaxShape::Int, "Number of times to repeat along the first dimension")
+            .named(
+                "dim",
+                SyntaxShape::Int,
+                "Dimension to repeat along (default: 0, first dimension)",
+                None,
+            )
+            .input_output_types(vec![(Type::String, Type::String)])
+            .category(Category::Custom("nutorch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Repeat a tensor 3 times along the first dimension",
+                example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 3 | nutorch display",
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Get tensor ID from input
+        let input_value = input.into_value(call.head)?;
+        let tensor_id = input_value.as_str()?;
+        // Get repeat count
+        let n: i64 = call.nth(0).unwrap().as_int()?;
+        if n < 1 {
+            return Err(LabeledError::new("Invalid input")
+                .with_label("Number of repetitions must be at least 1", call.head));
+        }
+        // Get optional dimension to repeat along (default to 0)
+        let dim: i64 = match call.get_flag::<i64>("dim")? {
+            Some(d) => {
+                if d < 0 {
+                    return Err(LabeledError::new("Invalid input")
+                        .with_label("Dimension must be non-negative", call.head));
+                }
+                d
+            },
+            None => 0,
+        };
+        // Look up tensor in registry
+        let mut registry = TENSOR_REGISTRY.lock().unwrap();
+        let tensor = registry.get(tensor_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
+        })?.shallow_clone();
+        // Get tensor dimensions
+        let dims = tensor.size();
+        if dim >= dims.len() as i64 {
+            return Err(LabeledError::new("Invalid dimension")
+                .with_label(format!("Dimension {} exceeds tensor dimensions {}", dim, dims.len()), call.head));
+        }
+        // Create repeat vector with 1s for all dimensions except the specified one
+        let mut repeat_dims = vec![1; dims.len()];
+        repeat_dims[dim as usize] = n;
+        // Apply repeat operation
+        let result_tensor = tensor.repeat(&repeat_dims);
+        // Store result in registry with new ID
+        let new_id = Uuid::new_v4().to_string();
+        registry.insert(new_id.clone(), result_tensor);
+        // Return new ID wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
     }
 }
 
