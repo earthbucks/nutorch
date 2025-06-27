@@ -107,9 +107,9 @@ impl PluginCommand for Linspace {
         call: &nu_plugin::EvaluatedCall,
         _input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
-        let start: f64 = call.get_flag_value("start").unwrap().as_float()?;
-        let end: f64 = call.get_flag_value("end").unwrap().as_float()?;
-        let steps: i64 = call.get_flag_value("steps").unwrap().as_int()?;
+        let start: f64 = call.nth(0).unwrap().as_float()?;
+        let end: f64 = call.nth(1).unwrap().as_float()?;
+        let steps: i64 = call.nth(2).unwrap().as_int()?;
         if steps < 2 {
             return Err(LabeledError::new("Invalid input")
                 .with_label("Steps must be at least 2", call.head));
