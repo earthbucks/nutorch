@@ -246,18 +246,12 @@ impl PluginCommand for Repeat {
     }
 
     fn description(&self) -> &str {
-        "Repeat a tensor N times along a dimension to create a multidimensional tensor"
+        "Repeat a tensor along specified dimensions to create a multidimensional tensor"
     }
 
     fn signature(&self) -> Signature {
         Signature::build("nutorch repeat")
-            .required("n", SyntaxShape::Int, "Number of times to repeat")
-            .named(
-                "dim",
-                SyntaxShape::Int,
-                "Dimension to repeat along (default: adds a new dimension at 0)",
-                None,
-            )
+            .rest("sizes", SyntaxShape::Int, "Number of times to repeat along each dimension")
             .input_output_types(vec![(Type::String, Type::String)])
             .category(Category::Custom("nutorch".into()))
     }
@@ -265,13 +259,13 @@ impl PluginCommand for Repeat {
     fn examples(&self) -> Vec<Example> {
         vec![
             Example {
-                description: "Repeat a tensor 3 times to create a 2D tensor",
+                description: "Repeat a tensor 3 times along the first dimension",
                 example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 3 | nutorch display",
                 result: None,
             },
             Example {
-                description: "Repeat a tensor 3 times along dimension 1 (if already 2D)",
-                example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 2 --dim 1 | nutorch display",
+                description: "Repeat a tensor 2 times along first dim and 2 times along second dim (creates new dim if needed)",
+                example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 2 2 | nutorch display",
                 result: None,
             }
         ]
@@ -287,11 +281,19 @@ impl PluginCommand for Repeat {
         // Get tensor ID from input
         let input_value = input.into_value(call.head)?;
         let tensor_id = input_value.as_str()?;
-        // Get repeat count
-        let n: i64 = call.nth(0).unwrap().as_int()?;
-        if n < 1 {
+        // Get repeat sizes (rest arguments)
+        let sizes: Vec<i64> = call.rest(0).map_err(|_| {
+            LabeledError::new("Invalid input").with_label("Unable to parse repeat sizes", call.head)
+        })?.into_iter()
+            .map(|v: Value| v.as_int())
+            .collect::<Result<Vec<i64>, _>>()?;
+        if sizes.is_empty() {
             return Err(LabeledError::new("Invalid input")
-                .with_label("Number of repetitions must be at least 1", call.head));
+                .with_label("At least one repeat size must be provided", call.head));
+        }
+        if sizes.iter().any(|&n| n < 1) {
+            return Err(LabeledError::new("Invalid input")
+                .with_label("All repeat sizes must be at least 1", call.head));
         }
         // Look up tensor in registry
         let mut registry = TENSOR_REGISTRY.lock().unwrap();
@@ -300,32 +302,22 @@ impl PluginCommand for Repeat {
         })?.shallow_clone();
         // Get tensor dimensions
         let dims = tensor.size();
-        // Handle optional dimension to repeat along
-        let dim: i64 = match call.get_flag::<i64>("dim")? {
-            Some(d) => {
-                if d < 0 {
-                    return Err(LabeledError::new("Invalid input")
-                        .with_label("Dimension must be non-negative", call.head));
-                }
-                if d > dims.len() as i64 {
-                    return Err(LabeledError::new("Invalid dimension")
-                        .with_label(format!("Dimension {} exceeds tensor dimensions {}", d, dims.len()), call.head));
-                }
-                d
-            },
-            None => 0, // Default to repeating along a new dimension at 0
-        };
-        // If dim is equal to the number of dimensions, we need to unsqueeze to add a new dimension
+        // Adjust tensor dimensions to match the length of sizes by unsqueezing if necessary
         let mut working_tensor = tensor;
-        let target_dim = dim as usize;
-        if dim as usize == dims.len() {
-            // Unsqueeze to add a new dimension at the end
-            working_tensor = working_tensor.unsqueeze(dim as i64);
+        let target_dims = sizes.len();
+        let current_dims = dims.len();
+        if target_dims > current_dims {
+            // Add leading singleton dimensions to match sizes length
+            for _ in 0..(target_dims - current_dims) {
+                working_tensor = working_tensor.unsqueeze(0);
+            }
         }
-        // Create repeat vector with 1s for all dimensions except the specified one
-        let current_dims = working_tensor.size();
-        let mut repeat_dims = vec![1; current_dims.len()];
-        repeat_dims[target_dim] = n;
+        // Now repeat_dims can be directly set to sizes (or padded with 1s if sizes is shorter)
+        let final_dims = working_tensor.size();
+        let mut repeat_dims = vec![1; final_dims.len()];
+        for (i, &size) in sizes.iter().enumerate() {
+            repeat_dims[i] = size;
+        }
         // Apply repeat operation
         let result_tensor = working_tensor.repeat(&repeat_dims);
         // Store result in registry with new ID
