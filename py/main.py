@@ -7,53 +7,53 @@ import matplotlib.pyplot as plt
 torch.manual_seed(42)
 np.random.seed(42)
 
-# Step 1: Generate synthetic data (two Gaussian blobs) using pure PyTorch
-def generate_data(n_samples=200, centers=2, cluster_std=1.0, skew_factor=0.5):
+# Step 1: Generate synthetic data (three Gaussian blobs in a triangular arrangement)
+def generate_data(n_samples=300, centers=3, cluster_std=0.7, skew_factor=0.3):
     n_samples_per_class = n_samples // centers
     X_list = []
     y_list = []
 
-    # Define centers for two blobs
+    # Define centers for three blobs in a triangular arrangement
     blob_centers = [
-        torch.tensor([0.0, 0.0]),  # Center for class 0
-        torch.tensor([3.0, 3.0])   # Center for class 1
+        torch.tensor([0.0, 0.0]),       # Center for class 0 (bottom left)
+        torch.tensor([3.0, 0.0]),       # Center for class 1 (bottom right)
+        torch.tensor([1.5, 2.5])        # Center for class 2 (top middle)
     ]
 
     for i in range(centers):
         # Generate points from a Gaussian distribution around the center
         points = torch.randn(n_samples_per_class, 2) * cluster_std + blob_centers[i]
-        # Optionally apply a skew transformation (linear transformation)
-        if i == 1:  # Skew the second blob for visual distinction
-            skew_matrix = torch.tensor([[1.0, skew_factor], [skew_factor, 1.0]])
+        # Apply a slight skew transformation for visual distinction
+        if i == 1 or i == 2:  # Skew the second and third blobs
+            skew_matrix = torch.tensor([[1.0, skew_factor * (i-1)], [skew_factor * (i-1), 1.0]])
             points = torch.mm(points - blob_centers[i], skew_matrix) + blob_centers[i]
-        labels = torch.full((n_samples_per_class, 1), float(i))
+        labels = torch.full((n_samples_per_class,), i, dtype=torch.long)
         X_list.append(points)
         y_list.append(labels)
 
-    # Concatenate the data from both classes
+    # Concatenate the data from all classes
     X = torch.cat(X_list, dim=0)
     y = torch.cat(y_list, dim=0)
     return X, y
 
-# Step 2: Define the two-layer neural network
+# Step 2: Define the two-layer neural network for multi-class classification
 class SimpleNN(nn.Module):
-    def __init__(self, input_size=2, hidden_size=10, output_size=1):
+    def __init__(self, input_size=2, hidden_size=20, output_size=3):
         super(SimpleNN, self).__init__()
         self.layer1 = nn.Linear(input_size, hidden_size)
         self.relu = nn.ReLU()
         self.layer2 = nn.Linear(hidden_size, output_size)
-        self.sigmoid = nn.Sigmoid()
+        # No sigmoid; we'll use softmax in loss (CrossEntropyLoss applies it internally)
 
     def forward(self, x):
         x = self.layer1(x)
         x = self.relu(x)
         x = self.layer2(x)
-        x = self.sigmoid(x)
-        return x
+        return x  # Raw logits for CrossEntropyLoss
 
-# Step 3: Training function
-def train_model(model, X, y, epochs=1000, lr=0.01):
-    criterion = nn.BCELoss()  # Binary Cross Entropy Loss
+# Step 3: Training function for multi-class
+def train_model(model, X, y, epochs=1000, lr=0.1):
+    criterion = nn.CrossEntropyLoss()  # Cross Entropy Loss for multi-class
     optimizer = torch.optim.SGD(model.parameters(), lr=lr)
 
     losses = []
@@ -78,22 +78,23 @@ def train_model(model, X, y, epochs=1000, lr=0.01):
 def plot_raw_data(X, y):
     # Convert tensors to numpy for plotting
     X_np = X.detach().numpy()
-    y_np = y.detach().numpy().flatten()
+    y_np = y.detach().numpy()
 
     # Plot data points with different colors for each class
-    plt.scatter(X_np[:, 0], X_np[:, 1], c=y_np, alpha=0.8)
-    plt.title("Raw Data Points (Before Training)")
+    plt.scatter(X_np[:, 0], X_np[:, 1], c=y_np, alpha=0.8, cmap='viridis')
+    plt.title("Raw Data Points (Before Training) - Three Blobs")
     plt.xlabel("Feature 1")
     plt.ylabel("Feature 2")
+    plt.colorbar(label='Class')
     plt.show()
 
-# Step 5: Plotting function for data and decision boundary (after training)
+# Step 5: Plotting function for data and decision boundaries (after training)
 def plot_results(X, y, model):
     # Convert tensors to numpy for plotting
     X_np = X.detach().numpy()
-    y_np = y.detach().numpy().flatten()
+    y_np = y.detach().numpy()
 
-    # Create a mesh grid for decision boundary
+    # Create a mesh grid for decision boundaries
     x_min, x_max = X_np[:, 0].min() - 1, X_np[:, 0].max() + 1
     y_min, y_max = X_np[:, 1].min() - 1, X_np[:, 1].max() + 1
     xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.1), np.arange(y_min, y_max, 0.1))
@@ -101,28 +102,30 @@ def plot_results(X, y, model):
     # Predict over the mesh grid
     mesh_tensor = torch.FloatTensor(np.c_[xx.ravel(), yy.ravel()])
     with torch.no_grad():
-        Z = model(mesh_tensor)
-        Z = (Z > 0.5).float().numpy().reshape(xx.shape)
+        outputs = model(mesh_tensor)
+        _, Z = torch.max(outputs, dim=1)  # Get class with highest probability
+        Z = Z.numpy().reshape(xx.shape)
 
-    # Plot decision boundary and data points
-    plt.contourf(xx, yy, Z, alpha=0.4)
-    plt.scatter(X_np[:, 0], X_np[:, 1], c=y_np, alpha=0.8)
-    plt.title("Two-Layer Neural Network Decision Boundary (After Training)")
+    # Plot decision boundaries and data points
+    plt.contourf(xx, yy, Z, alpha=0.4, cmap='viridis')
+    plt.scatter(X_np[:, 0], X_np[:, 1], c=y_np, alpha=0.8, cmap='viridis')
+    plt.title("Two-Layer Neural Network Decision Boundaries (After Training)")
     plt.xlabel("Feature 1")
     plt.ylabel("Feature 2")
+    plt.colorbar(label='Class')
     plt.show()
 
 # Main execution
 if __name__ == "__main__":
     # Generate data
-    X, y = generate_data(n_samples=200, centers=2, cluster_std=1.0, skew_factor=0.5)
+    X, y = generate_data(n_samples=300, centers=3, cluster_std=0.7, skew_factor=0.3)
     print("Data shape:", X.shape, y.shape)
 
     # Plot raw data before training
     plot_raw_data(X, y)
 
     # Initialize model
-    model = SimpleNN(input_size=2, hidden_size=10, output_size=1)
+    model = SimpleNN(input_size=2, hidden_size=20, output_size=3)
     print("Model architecture:\n", model)
 
     # Train model
@@ -135,5 +138,5 @@ if __name__ == "__main__":
     plt.ylabel("Loss")
     plt.show()
 
-    # Plot decision boundary and data points after training
+    # Plot decision boundaries and data points after training
     plot_results(X, y, model)
