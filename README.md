@@ -4,7 +4,7 @@
 
 ## Garbage Collection
 
-After installing the plugin, may want to lengthen the garbage collection
+After installing the plugin, you may want to lengthen the garbage collection
 interval in your nushell settings:
 
 ```nu
