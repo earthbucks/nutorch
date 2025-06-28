@@ -24,8 +24,8 @@ impl Plugin for NutorchPlugin {
             Box::new(CommandLinspace),
             Box::new(CommandRepeat),
             Box::new(CommandSin),
-            Box::new(CommandToValue),
-            Box::new(CommandFromValue),
+            Box::new(CommandExport),
+            Box::new(CommandImport),
         ]
     }
 
@@ -430,22 +430,22 @@ impl PluginCommand for CommandSin {
     }
 }
 
-// Command to convert tensor to Nushell data structure (tovalue)
-struct CommandToValue;
+// Command to convert tensor to Nushell data structure (export)
+struct CommandExport;
 
-impl PluginCommand for CommandToValue {
+impl PluginCommand for CommandExport {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch tovalue"
+        "nutorch export"
     }
 
     fn description(&self) -> &str {
-        "Convert a tensor to a Nushell Value (nested list structure) with support for arbitrary dimensions"
+        "Convert a tensor to a Nushell Value (nested list structure)"
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch tovalue")
+        Signature::build("nutorch export")
             .input_output_types(vec![(Type::String, Type::Any)])
             .category(Category::Custom("nutorch".into()))
     }
@@ -454,12 +454,12 @@ impl PluginCommand for CommandToValue {
         vec![
             Example {
                 description: "Convert a 1D tensor to a Nushell Value (list)",
-                example: "nutorch linspace 0.0 1.0 4 | nutorch tovalue",
+                example: "nutorch linspace 0.0 1.0 4 | nutorch export",
                 result: None,
             },
             Example {
                 description: "Convert a 2D or higher dimensional tensor to nested Values",
-                example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 2 2 | nutorch tovalue",
+                example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 2 2 | nutorch export",
                 result: None,
             },
         ]
@@ -489,14 +489,14 @@ impl PluginCommand for CommandToValue {
     }
 }
 
-// Command to convert Nushell data structure to tensor (fromvalue)
-struct CommandFromValue;
+// Command to convert Nushell data structure to tensor (import)
+struct CommandImport;
 
-impl PluginCommand for CommandFromValue {
+impl PluginCommand for CommandImport {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch fromvalue"
+        "nutorch import"
     }
 
     fn description(&self) -> &str {
@@ -504,7 +504,7 @@ impl PluginCommand for CommandFromValue {
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch fromvalue")
+        Signature::build("nutorch import")
             .input_output_types(vec![(Type::Any, Type::String)])
             .named(
                 "device",
@@ -525,13 +525,13 @@ impl PluginCommand for CommandFromValue {
         vec![
             Example {
                 description: "Convert a 1D list to a tensor",
-                example: "[0.0, 1.0, 2.0, 3.0] | nutorch fromvalue",
+                example: "[0.0, 1.0, 2.0, 3.0] | nutorch import",
                 result: None,
             },
             Example {
                 description: "Convert a 2D nested list to a tensor with specific device and dtype",
                 example:
-                    "[[0.0, 1.0], [2.0, 3.0]] | nutorch fromvalue --device cpu --dtype float64",
+                    "[[0.0, 1.0], [2.0, 3.0]] | nutorch import --device cpu --dtype float64",
                 result: None,
             },
         ]
