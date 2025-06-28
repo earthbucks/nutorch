@@ -116,10 +116,6 @@ impl PluginCommand for CommandDevices {
             devices.push(Value::string("cuda", span));
         }
 
-        tch::Cuda::
-
-        Device::Mps.
-
         // // Check for MPS (Metal Performance Shaders) availability on macOS
         // if tch::Mps::is_available() {
         //     devices.push(Value::string("mps", span));
@@ -151,7 +147,7 @@ impl PluginCommand for CommandLinspace {
             .named(
                 "device",
                 SyntaxShape::String,
-                "Device to create the tensor on (efault: 'cpu')",
+                "Device to create the tensor on (default: 'cpu')",
                 None,
             )
             .named(
@@ -212,24 +208,20 @@ impl PluginCommand for CommandLinspace {
         };
 
         // Handle optional dtype argument
-        let dtype_str_opt = call
-            .get_flag::<String>("dtype")
-            .unwrap_or_else(|_| Some("float32".to_string()));
-        let dtype_str: String = match dtype_str_opt {
-            Some(s) => s,
-            None => "float32".to_string(),
-        };
-        let kind = match dtype_str.as_str() {
-            "float32" => Kind::Float,
-            "float64" => Kind::Double,
-            "int32" => Kind::Int,
-            "int64" => Kind::Int64,
-            _ => {
-                return Err(LabeledError::new("Invalid dtype").with_label(
-                    "Dtype must be 'float32', 'float64', 'int32', or 'int64'",
-                    call.head,
-                ));
-            }
+        let kind = match call.get_flag::<String>("dtype")? {
+            Some(dtype_str) => match dtype_str.to_lowercase().as_str() {
+                "float32" | "float" => Kind::Float,
+                "float64" | "double" => Kind::Double,
+                "int32" | "int" => Kind::Int,
+                "int64" | "long" => Kind::Int64,
+                _ => {
+                    return Err(LabeledError::new("Invalid dtype").with_label(
+                        "Data type must be 'float32', 'float64', 'int32', or 'int64'",
+                        call.head,
+                    ))
+                }
+            },
+            None => Kind::Float, // Default to float32 if not specified
         };
 
         // Create a PyTorch tensor using tch-rs
@@ -472,13 +464,13 @@ impl PluginCommand for CommandFromValue {
             .named(
                 "device",
                 SyntaxShape::String,
-                "Device to create the tensor on ('cpu', 'cuda', 'mps', default: 'cpu')",
+                "Device to create the tensor on (default: 'cpu')",
                 None,
             )
             .named(
                 "dtype",
                 SyntaxShape::String,
-                "Data type of the tensor ('float32', 'float64', 'int32', 'int64', default: 'float32')",
+                "Data type of the tensor (default: 'float32')",
                 None,
             )
             .category(Category::Custom("nutorch".into()))
@@ -507,8 +499,7 @@ impl PluginCommand for CommandFromValue {
         call: &nu_plugin::EvaluatedCall,
         input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
-        let span = call.head;
-        let input_value = input.into_value(span)?;
+        let input_value = input.into_value(call.head)?;
 
         // Handle optional device argument
         let device_str_opt = call
@@ -549,7 +540,7 @@ impl PluginCommand for CommandFromValue {
                 _ => {
                     return Err(LabeledError::new("Invalid dtype").with_label(
                         "Data type must be 'float32', 'float64', 'int32', or 'int64'",
-                        span,
+                        call.head,
                     ))
                 }
             },
@@ -557,13 +548,13 @@ impl PluginCommand for CommandFromValue {
         };
 
         // Convert Nushell Value to tensor
-        let tensor = value_to_tensor(&input_value, kind, device, span)?;
+        let tensor = value_to_tensor(&input_value, kind, device, call.head)?;
         // Generate a unique ID for the tensor
         let id = Uuid::new_v4().to_string();
         // Store in registry
         TENSOR_REGISTRY.lock().unwrap().insert(id.clone(), tensor);
         // Return the ID as a string to Nushell, wrapped in PipelineData
-        Ok(PipelineData::Value(Value::string(id, span), None))
+        Ok(PipelineData::Value(Value::string(id, call.head), None))
     }
 }
 
