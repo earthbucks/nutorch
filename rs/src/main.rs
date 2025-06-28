@@ -337,10 +337,6 @@ impl PluginCommand for CommandFull {
                 // Direct float usage
                 Tensor::full(&dims, f, (kind, device))
             }
-            // (Number::Float(_), Kind::Int | Kind::Int64) => {
-            //     // This case is already handled by earlier validation error
-            //     unreachable!("Float input with integer dtype should have been rejected")
-            // }
             _ => {
                 return Err(LabeledError::new("Invalid dtype")
                     .with_label("Invalid data/dtype combo.", call.head));

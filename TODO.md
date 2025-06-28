@@ -2,8 +2,8 @@
 
 - [x] torch.manual_seed
 - [x] tensor.linspace
-- [ ] torch.randn
-- [ ] torch.mm
-- [ ] torch.full
-- [ ] torch.tensor
+- [x] torch.randn
+- [x] torch.mm
+- [x] torch.full
+- [x] torch.tensor
 - [ ] export -> value
