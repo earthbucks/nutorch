@@ -84,7 +84,7 @@ impl PluginCommand for CommandDevices {
     }
 
     fn description(&self) -> &str {
-        "List available devices for tensor operations"
+        "List some available devices. Additional devices may be available, but unlisted here."
     }
 
     fn signature(&self) -> Signature {
@@ -115,6 +115,10 @@ impl PluginCommand for CommandDevices {
         if tch::Cuda::is_available() {
             devices.push(Value::string("cuda", span));
         }
+
+        tch::Cuda::
+
+        Device::Mps.
 
         // // Check for MPS (Metal Performance Shaders) availability on macOS
         // if tch::Mps::is_available() {
