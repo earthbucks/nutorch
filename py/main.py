@@ -74,7 +74,20 @@ def train_model(model, X, y, epochs=1000, lr=0.01):
 
     return losses
 
-# Step 4: Plotting function for data and decision boundary
+# Step 4: Plotting function for raw data (before training)
+def plot_raw_data(X, y):
+    # Convert tensors to numpy for plotting
+    X_np = X.detach().numpy()
+    y_np = y.detach().numpy().flatten()
+
+    # Plot data points with different colors for each class
+    plt.scatter(X_np[:, 0], X_np[:, 1], c=y_np, alpha=0.8)
+    plt.title("Raw Data Points (Before Training)")
+    plt.xlabel("Feature 1")
+    plt.ylabel("Feature 2")
+    plt.show()
+
+# Step 5: Plotting function for data and decision boundary (after training)
 def plot_results(X, y, model):
     # Convert tensors to numpy for plotting
     X_np = X.detach().numpy()
@@ -94,7 +107,7 @@ def plot_results(X, y, model):
     # Plot decision boundary and data points
     plt.contourf(xx, yy, Z, alpha=0.4)
     plt.scatter(X_np[:, 0], X_np[:, 1], c=y_np, alpha=0.8)
-    plt.title("Two-Layer Neural Network Decision Boundary")
+    plt.title("Two-Layer Neural Network Decision Boundary (After Training)")
     plt.xlabel("Feature 1")
     plt.ylabel("Feature 2")
     plt.show()
@@ -104,6 +117,9 @@ if __name__ == "__main__":
     # Generate data
     X, y = generate_data(n_samples=200, centers=2, cluster_std=1.0, skew_factor=0.5)
     print("Data shape:", X.shape, y.shape)
+
+    # Plot raw data before training
+    plot_raw_data(X, y)
 
     # Initialize model
     model = SimpleNN(input_size=2, hidden_size=10, output_size=1)
@@ -119,5 +135,5 @@ if __name__ == "__main__":
     plt.ylabel("Loss")
     plt.show()
 
-    # Plot decision boundary and data points
+    # Plot decision boundary and data points after training
     plot_results(X, y, model)
