@@ -24,7 +24,7 @@ impl Plugin for NutorchPlugin {
             Box::new(CommandLinspace),
             Box::new(CommandRepeat),
             Box::new(CommandSin),
-            Box::new(CommandExport),
+            Box::new(CommandValue),
             Box::new(CommandTensor),
         ]
     }
@@ -398,9 +398,9 @@ impl PluginCommand for CommandSin {
 }
 
 // Command to convert tensor to Nushell data structure (export)
-struct CommandExport;
+struct CommandValue;
 
-impl PluginCommand for CommandExport {
+impl PluginCommand for CommandValue {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
