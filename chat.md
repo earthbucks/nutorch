@@ -3813,11 +3813,11 @@ command name with "nutorch"?
 
 # === ASSISTANT ===
 
-You're absolutely correct to point out the limitation with Nushell aliases
-when dealing with multi-word command names like `nutorch linspace` in your
-`nutorch` plugin. Unlike Bash aliases, which perform simple text substitution on
-the command line, Nushell aliases replace the entire command name as a single
-unit. This means that an alias like `alias nt = nutorch` won't work as expected
+You're absolutely correct to point out the limitation with Nushell aliases when
+dealing with multi-word command names like `nutorch linspace` in your `nutorch`
+plugin. Unlike Bash aliases, which perform simple text substitution on the
+command line, Nushell aliases replace the entire command name as a single unit.
+This means that an alias like `alias nt = nutorch` won't work as expected
 because Nushell looks for a command named `nt` and doesn't interpret it as a
 prefix for subcommands like `nt linspace`. Let's explore why this happens, and
 how we can address it while preserving the idea of prefixing each command with
@@ -3845,13 +3845,13 @@ workflow solutions.
 
 #### Option 1: Restructure Command Names with a Common Prefix in Plugin Metadata
 
-- **Approach:** Keep the full command names as they are (e.g., `nutorch
-  linspace`) in the plugin's `name()` method to preserve the prefix, but design
-  the plugin to accept a shorter aliasable prefix by grouping commands under a
-  single namespace or using a custom category. However, since Nushell doesn't
-  support dynamic prefix substitution in plugin command names, the most practical
-  way is to document or provide a script for users to create aliases for each
-  full command name.
+- **Approach:** Keep the full command names as they are (e.g.,
+  `nutorch linspace`) in the plugin's `name()` method to preserve the prefix,
+  but design the plugin to accept a shorter aliasable prefix by grouping
+  commands under a single namespace or using a custom category. However, since
+  Nushell doesn't support dynamic prefix substitution in plugin command names,
+  the most practical way is to document or provide a script for users to create
+  aliases for each full command name.
 - **Implementation:** You can't change how Nushell parses command names directly
   in the plugin, but you can provide a helper script or configuration snippet
   for users to define aliases for each subcommand. For example, provide a
@@ -3862,11 +3862,11 @@ workflow solutions.
 
 #### Option 2: Use a Single Top-Level Command with Subcommands as Arguments
 
-- **Approach:** Redesign the plugin to have a single top-level command
-  `nutorch` (or a shorter aliasable name like `nt`) that takes subcommands as
-  arguments (e.g., `nutorch linspace 0 10 10` or `nt linspace 0 10 10`). This
-  way, aliasing `nt = nutorch` would work because the entire command starts with
-  a single word, and subcommands are parsed as arguments within the plugin.
+- **Approach:** Redesign the plugin to have a single top-level command `nutorch`
+  (or a shorter aliasable name like `nt`) that takes subcommands as arguments
+  (e.g., `nutorch linspace 0 10 10` or `nt linspace 0 10 10`). This way,
+  aliasing `nt = nutorch` would work because the entire command starts with a
+  single word, and subcommands are parsed as arguments within the plugin.
 - **Implementation:** Modify the plugin to have a single `Nutorch` command that
   dispatches to subcommand logic based on the first argument (e.g., `linspace`,
   `sin`). This requires restructuring how commands are defined, moving from
@@ -3998,8 +3998,8 @@ implementation in Python, and I'm excited to help you reimplement relevant
 PyTorch methods in your `nutorch` plugin for Nushell. Prioritizing methods used
 in your simple PyTorch NN demo is a great approach to ensure the plugin meets
 your specific needs. Let's address the first method you want to implement,
-`torch.manual_seed`, and check if `tch-rs` (the Rust binding for PyTorch) supports
-an equivalent functionality.
+`torch.manual_seed`, and check if `tch-rs` (the Rust binding for PyTorch)
+supports an equivalent functionality.
 
 ### Does `tch-rs` Have `manual_seed`?
 
@@ -4017,8 +4017,8 @@ produce the same results each time the code is run with the same seed.
 
 ### Implementing `manual_seed` in `nutorch`
 
-Let's add a new command, `nutorch manual_seed`, to your plugin to set the
-random seed for PyTorch operations. This will mirror the functionality of
+Let's add a new command, `nutorch manual_seed`, to your plugin to set the random
+seed for PyTorch operations. This will mirror the functionality of
 `torch.manual_seed(42)` from your Python code.
 
 Here's the implementation of the `ManualSeed` command for your `nutorch` plugin:
@@ -4156,12 +4156,399 @@ nutorch manual_seed 42
 
 Let me know if the `manual_seed` command works as expected or if you encounter
 any issues. Also, please share the next PyTorch methods from your neural network
-demo that you'd like to prioritize for implementation in `nutorch` (e.g.,
-tensor initialization, layer creation, or training functions). I'm ready to
-assist with those as well.
+demo that you'd like to prioritize for implementation in `nutorch` (e.g., tensor
+initialization, layer creation, or training functions). I'm ready to assist with
+those as well.
 
 Let me know how the test goes or if you have further questions!
 
 # === USER ===
 
+seeing as we just implemented `manual_seed`, and it runs without error, it would
+be good try to a random function next. howabout randn? this function comes soon
+in the python code i want to implement. we can implement this method and then
+verify that running it multiple times in different sessions produces the same
+output, assuming we do manual_seed first.
 
+# === ASSISTANT ===
+
+I'm glad to hear that the `manual_seed` command runs without errors in your
+`nutorch` plugin. Implementing `randn` next is a great idea, as it allows us to
+test random tensor generation and verify the reproducibility of results when
+combined with `manual_seed`. The `torch.randn` function in PyTorch generates a
+tensor filled with random numbers from a normal distribution (mean 0, variance
+1), and we can implement an equivalent in `nutorch` using `tch-rs`. We'll then
+test it across sessions to ensure that setting the same seed produces identical
+outputs.
+
+### Does `tch-rs` Support `randn`?
+
+Yes, `tch-rs` supports generating random tensors from a normal distribution,
+equivalent to PyTorch's `torch.randn`. In `tch-rs`, this is provided by
+`Tensor::randn`, which takes a shape (dimensions) as input and generates a
+tensor filled with random values sampled from a normal distribution (mean 0,
+standard deviation 1). You can also specify the data type (`Kind`) and device
+(`Device`) for the tensor, just like in PyTorch.
+
+### Implementing `randn` in `nutorch`
+
+Let's add a new command, `nutorch randn`, to your plugin to generate a random
+tensor from a normal distribution. This command will take a list of dimensions
+as input to define the shape of the tensor, along with optional arguments for
+data type and device, similar to other tensor creation commands in `nutorch`.
+
+Here's the implementation of the `Randn` command for your `nutorch` plugin:
+
+```rust
+struct Randn;
+
+impl PluginCommand for Randn {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "nutorch randn"
+    }
+
+    fn description(&self) -> &str {
+        "Generate a tensor filled with random numbers from a normal distribution (mean 0, std 1)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("nutorch randn")
+            .rest("dims", SyntaxShape::Int, "Dimensions of the tensor (e.g., 2 3 for a 2x3 tensor)")
+            .named(
+                "device",
+                SyntaxShape::String,
+                "Device to create the tensor on ('cpu', 'cuda', 'mps', default: 'cpu')",
+                None,
+            )
+            .named(
+                "dtype",
+                SyntaxShape::String,
+                "Data type of the tensor ('float32', 'float64', 'int32', 'int64', default: 'float32')",
+                None,
+            )
+            .input_output_types(vec![(Type::Nothing, Type::String)])
+            .category(Category::Custom("nutorch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Generate a 2x3 tensor with random values from a normal distribution",
+                example: "nutorch randn 2 3 | nutorch tovalue",
+                result: None,
+            },
+            Example {
+                description: "Generate a 1D tensor of size 5 with a specific seed for reproducibility",
+                example: "nutorch manual_seed 42; nutorch randn 5 | nutorch tovalue",
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        _input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Get dimensions for the tensor shape
+        let dims: Vec<i64> = call.rest(0).map_err(|_| {
+            LabeledError::new("Invalid input").with_label("Unable to parse dimensions", call.head)
+        })?.into_iter()
+            .map(|v| v.as_int())
+            .collect::<Result<Vec<i64>, _>>()?;
+        if dims.is_empty() {
+            return Err(LabeledError::new("Invalid input")
+                .with_label("At least one dimension must be provided", call.head));
+        }
+        if dims.iter().any(|&d| d < 1) {
+            return Err(LabeledError::new("Invalid input")
+                .with_label("All dimensions must be positive", call.head));
+        }
+
+        // Handle optional device argument
+        let device = match call.get_flag::<String>("device")? {
+            Some(device_str) => {
+                let device_str_lower = device_str.to_lowercase();
+                match device_str_lower.as_str() {
+                    "cpu" => Device::Cpu,
+                    "cuda" => {
+                        if tch::Cuda::is_available() {
+                            Device::Cuda(0) // Default to first CUDA device
+                        } else {
+                            return Err(LabeledError::new("Device not available")
+                                .with_label("CUDA is not available on this system", call.head));
+                        }
+                    },
+                    "mps" => {
+                        if tch::Mps::is_available() {
+                            Device::Mps
+                        } else {
+                            return Err(LabeledError::new("Device not available")
+                                .with_label("MPS is not available on this system", call.head));
+                        }
+                    },
+                    _ if device_str_lower.starts_with("cuda:") => {
+                        if !tch::Cuda::is_available() {
+                            return Err(LabeledError::new("Device not available")
+                                .with_label("CUDA is not available on this system", call.head));
+                        }
+                        let index_str = device_str_lower.strip_prefix("cuda:").unwrap();
+                        let index: i32 = index_str.parse().map_err(|_| {
+                            LabeledError::new("Invalid device index")
+                                .with_label("CUDA device index must be a number", call.head)
+                        })?;
+                        let device_count = tch::Cuda::device_count();
+                        if index < 0 || index >= device_count {
+                            return Err(LabeledError::new("Device index out of range")
+                                .with_label(format!("CUDA device index must be between 0 and {}", device_count - 1), call.head));
+                        }
+                        Device::Cuda(index)
+                    },
+                    _ => return Err(LabeledError::new("Invalid device")
+                        .with_label("Device must be 'cpu', 'cuda', 'cuda:<index>', or 'mps'", call.head)),
+                }
+            },
+            None => Device::Cpu, // Default to CPU if not specified
+        };
+
+        // Handle optional dtype argument
+        let kind = match call.get_flag::<String>("dtype")? {
+            Some(dtype_str) => {
+                match dtype_str.to_lowercase().as_str() {
+                    "float32" | "float" => Kind::Float,
+                    "float64" | "double" => Kind::Double,
+                    "int32" | "int" => Kind::Int,
+                    "int64" | "long" => Kind::Int64,
+                    _ => return Err(LabeledError::new("Invalid dtype")
+                        .with_label("Data type must be 'float32', 'float64', 'int32', or 'int64'", call.head)),
+                }
+            },
+            None => Kind::Float, // Default to float32 if not specified
+        };
+
+        // Create a random tensor using tch-rs
+        let tensor = Tensor::randn(&dims, (kind, device));
+        // Generate a unique ID for the tensor
+        let id = Uuid::new_v4().to_string();
+        // Store in registry
+        TENSOR_REGISTRY.lock().unwrap().insert(id.clone(), tensor);
+        // Return the ID as a string to Nushell, wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(id, call.head), None))
+    }
+}
+```
+
+### Update to `NutorchPlugin` to Include `Randn`
+
+Make sure to add the `Randn` command to the list of commands in your plugin's
+`commands()` method:
+
+```rust
+impl Plugin for NutorchPlugin {
+    fn commands(&self) -> Vec<Box<dyn PluginCommand<Plugin = Self>>> {
+        vec![
+            Box::new(Nutorch),
+            Box::new(Linspace),
+            Box::new(Sin),
+            Box::new(Repeat),
+            Box::new(ToValue),
+            Box::new(FromValue),
+            Box::new(Ping), // If you have this from earlier
+            Box::new(ManualSeed),
+            Box::new(Randn), // Added Randn command
+        ]
+    }
+}
+```
+
+### Explanation of the Implementation
+
+- **Command Definition:** The `Randn` command is defined with the name
+  `nutorch randn`, consistent with other commands in your plugin.
+- **Input:** It takes a variable number of integer arguments (`dims`) using
+  `rest()` to specify the shape of the tensor (e.g., `2 3` for a 2x3 tensor).
+  Also includes optional `device` and `dtype` flags, mirroring other tensor
+  creation commands like `linspace`.
+- **Functionality:** It calls `Tensor::randn(&dims, (kind, device))` to create a
+  tensor filled with random values from a normal distribution (mean 0, standard
+  deviation 1).
+- **Storage and Output:** Stores the tensor in `TENSOR_REGISTRY` with a unique
+  UUID and returns the ID as a string, consistent with other tensor creation
+  commands.
+- **Error Handling:** Validates that dimensions are provided, are positive, and
+  handles invalid device or dtype inputs with descriptive errors.
+
+### Build and Test
+
+After adding the `Randn` command as shown, rebuild your plugin:
+
+```bash
+cd /Users/ryan/dev/nutorch/rs
+cargo build --release
+```
+
+Re-add the plugin to Nushell:
+
+```nu
+plugin rm nutorch
+plugin add /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_nutorch
+```
+
+Test the `randn` command to verify reproducibility with `manual_seed` across
+different sessions or command invocations. Since plugin process lifetime may
+affect registry persistence (as discussed earlier), run these tests in quick
+succession to ensure the process doesn't terminate between commands:
+
+```nu
+# Test 1: Set seed and generate random tensor
+nutorch manual_seed 42
+let res1 = (nutorch randn 2 3 | nutorch tovalue)
+$res1  # Display first result
+
+# Test 2: Set same seed and generate another random tensor
+nutorch manual_seed 42
+let res2 = (nutorch randn 2 3 | nutorch tovalue)
+$res2  # Display second result, should match res1 due to same seed
+
+# Compare res1 and res2 (manually or with a simple check)
+# Expected: res1 and res2 should be identical due to manual_seed
+```
+
+### Verifying Reproducibility Across Sessions
+
+Since the plugin process might terminate between sessions (as discussed in
+previous responses about tensor lifetime), verifying reproducibility across
+different sessions can be challenging due to the loss of state. However, within
+the same session (or while the plugin process is alive), setting the same seed
+should produce identical results for `randn`. To test across sessions:
+
+1. Run the above test in one Nushell session and note the output of `res1`.
+2. Start a new Nushell session (or wait long enough for the plugin process to
+   potentially terminate and restart), then run the same commands with the same
+   seed.
+3. Compare the outputs. If the plugin process restarts, the seed should still
+   work as long as `manual_seed` is called before `randn` in the new session,
+   because `manual_seed` sets the global random state for PyTorch.
+
+If you notice inconsistency due to process termination, consider the keep-alive
+`ping` workaround or disk persistence discussed earlier to maintain state, though
+`manual_seed` should reset the random generator state correctly in a new process.
+
+### Additional Notes
+
+- **Version Compatibility:** The `Tensor::randn` method should be available in
+  most versions of `tch-rs`. If you encounter a compilation error, check your
+  `tch` crate version in `Cargo.toml` and consult the documentation for the
+  correct function name or path. You can update the crate with `cargo update` if
+  needed.
+- **GPU Reproducibility:** As noted in the previous response, `manual_seed` may
+  need additional handling for CUDA devices (e.g., `tch::Cuda::manual_seed`).
+  Test with `--device cuda` if applicable, and let me know if results aren't
+  reproducible on GPU; we can add a CUDA-specific seed command if needed.
+- **Output Verification:** Since `randn` outputs are random, exact values depend
+  on the seed. With `manual_seed 42`, the outputs should match across runs
+  within the same process or across sessions if the seed is reset properly.
+
+### Next Steps
+
+Let me know if the `randn` command works as expected and if the reproducibility
+with `manual_seed` holds across your test cases. Also, please share the next
+PyTorch methods from your neural network demo that you'd like to implement in
+`nutorch` (e.g., other random functions, tensor operations, or NN layers). I'm
+ready to assist with those as well.
+
+Let me know how the test goes or if you have further questions!
+
+# === USER ===
+
+i had to fix your code a big. please note, for future reference, we have convenience methods for get-device_from_call and get_kind_from_call, because we do them over and over. also, every command starts with "Command".
+
+```rust
+impl PluginCommand for CommandRandn {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "nutorch randn"
+    }
+
+    fn description(&self) -> &str {
+        "Generate a tensor filled with random numbers from a normal distribution (mean 0, std 1)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("nutorch randn")
+            .rest("dims", SyntaxShape::Int, "Dimensions of the tensor (e.g., 2 3 for a 2x3 tensor)")
+            .named(
+                "device",
+                SyntaxShape::String,
+                "Device to create the tensor on ('cpu', 'cuda', 'mps', default: 'cpu')",
+                None,
+            )
+            .named(
+                "dtype",
+                SyntaxShape::String,
+                "Data type of the tensor ('float32', 'float64', 'int32', 'int64', default: 'float32')",
+                None,
+            )
+            .input_output_types(vec![(Type::Nothing, Type::String)])
+            .category(Category::Custom("nutorch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Generate a 2x3 tensor with random values from a normal distribution",
+                example: "nutorch randn 2 3 | nutorch tovalue",
+                result: None,
+            },
+            Example {
+                description: "Generate a 1D tensor of size 5 with a specific seed for reproducibility",
+                example: "nutorch manual_seed 42; nutorch randn 5 | nutorch tovalue",
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        _input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Get dimensions for the tensor shape
+        let dims: Vec<i64> = call.rest(0).map_err(|_| {
+            LabeledError::new("Invalid input").with_label("Unable to parse dimensions", call.head)
+        })?.into_iter()
+            .map(|v: Value| v.as_int())
+            .collect::<Result<Vec<i64>, _>>()?;
+        if dims.is_empty() {
+            return Err(LabeledError::new("Invalid input")
+                .with_label("At least one dimension must be provided", call.head));
+        }
+        if dims.iter().any(|&d| d < 1) {
+            return Err(LabeledError::new("Invalid input")
+                .with_label("All dimensions must be positive", call.head));
+        }
+
+        // Handle optional device argument
+        let device = get_device_from_call(call)?;
+
+        // Handle optional dtype argument
+        let kind = get_kind_from_call(call)?;
+
+        // Create a random tensor using tch-rs
+        let tensor = Tensor::randn(&dims, (kind, device));
+        // Generate a unique ID for the tensor
+        let id = Uuid::new_v4().to_string();
+        // Store in registry
+        TENSOR_REGISTRY.lock().unwrap().insert(id.clone(), tensor);
+        // Return the ID as a string to Nushell, wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(id, call.head), None))
+    }
+}
+```
