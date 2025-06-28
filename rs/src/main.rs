@@ -186,50 +186,10 @@ impl PluginCommand for CommandLinspace {
         let steps: i64 = call.nth(2).unwrap().as_int()?;
 
         // Handle optional device argument
-        let device_str_opt = call
-            .get_flag::<String>("device")
-            .unwrap_or_else(|_| Some("cpu".to_string()));
-        let device_str: String = match device_str_opt {
-            Some(s) => s,
-            None => "cpu".to_string(),
-        };
-        let device = match device_str.as_str() {
-            "cpu" => Device::Cpu,
-            "cuda" => Device::Cuda(0),
-            "mps" => Device::Mps,
-            // "mps" if tch::Mps::is_available() => Device::Mps,
-            _ if device_str.starts_with("cuda:") => {
-                // Handle specific CUDA device like "cuda:0", "cuda:1", etc.
-                if let Some(num) = device_str[5..].parse::<usize>().ok() {
-                    Device::Cuda(num)
-                } else {
-                    return Err(LabeledError::new("Invalid CUDA device")
-                        .with_label("Invalid CUDA device", call.head));
-                }
-            }
-            _ => {
-                return Err(
-                    LabeledError::new("Invalid device").with_label("Invalid device", call.head)
-                );
-            }
-        };
+        let device = get_device_from_call(call)?;
 
         // Handle optional dtype argument
-        let kind = match call.get_flag::<String>("dtype")? {
-            Some(dtype_str) => match dtype_str.as_str() {
-                "float32" | "float" => Kind::Float,
-                "float64" | "double" => Kind::Double,
-                "int32" | "int" => Kind::Int,
-                "int64" | "long" => Kind::Int64,
-                _ => {
-                    return Err(LabeledError::new("Invalid dtype").with_label(
-                        "Data type must be 'float32', 'float64', 'int32', or 'int64'",
-                        call.head,
-                    ))
-                }
-            },
-            None => Kind::Float, // Default to float32 if not specified
-        };
+        let kind = get_kind_from_call(call)?;
 
         // Create a PyTorch tensor using tch-rs
         let tensor = Tensor::linspace(start, end, steps, (kind, device));
@@ -508,50 +468,10 @@ impl PluginCommand for CommandImport {
         let input_value = input.into_value(call.head)?;
 
         // Handle optional device argument
-        let device_str_opt = call
-            .get_flag::<String>("device")
-            .unwrap_or_else(|_| Some("cpu".to_string()));
-        let device_str: String = match device_str_opt {
-            Some(s) => s,
-            None => "cpu".to_string(),
-        };
-        let device = match device_str.as_str() {
-            "cpu" => Device::Cpu,
-            "cuda" => Device::Cuda(0),
-            "mps" => Device::Mps,
-            // "mps" if tch::Mps::is_available() => Device::Mps,
-            _ if device_str.starts_with("cuda:") => {
-                // Handle specific CUDA device like "cuda:0", "cuda:1", etc.
-                if let Some(num) = device_str[5..].parse::<usize>().ok() {
-                    Device::Cuda(num)
-                } else {
-                    return Err(LabeledError::new("Invalid CUDA device")
-                        .with_label("Invalid CUDA device", call.head));
-                }
-            }
-            _ => {
-                return Err(
-                    LabeledError::new("Invalid device").with_label("Invalid device", call.head)
-                );
-            }
-        };
+        let device = get_device_from_call(call)?;
 
         // Handle optional dtype argument
-        let kind = match call.get_flag::<String>("dtype")? {
-            Some(dtype_str) => match dtype_str.as_str() {
-                "float32" | "float" => Kind::Float,
-                "float64" | "double" => Kind::Double,
-                "int32" | "int" => Kind::Int,
-                "int64" | "long" => Kind::Int64,
-                _ => {
-                    return Err(LabeledError::new("Invalid dtype").with_label(
-                        "Data type must be 'float32', 'float64', 'int32', or 'int64'",
-                        call.head,
-                    ))
-                }
-            },
-            None => Kind::Float, // Default to float32 if not specified
-        };
+        let kind = get_kind_from_call(call)?;
 
         // Convert Nushell Value to tensor
         let tensor = value_to_tensor(&input_value, kind, device, call.head)?;
@@ -561,6 +481,43 @@ impl PluginCommand for CommandImport {
         TENSOR_REGISTRY.lock().unwrap().insert(id.clone(), tensor);
         // Return the ID as a string to Nushell, wrapped in PipelineData
         Ok(PipelineData::Value(Value::string(id, call.head), None))
+    }
+}
+
+fn get_device_from_call(call: &nu_plugin::EvaluatedCall) -> Result<Device, LabeledError> {
+    match call.get_flag::<String>("device")? {
+        Some(device_str) => match device_str.as_str() {
+            "cpu" => Ok(Device::Cpu),
+            "cuda" => Ok(Device::Cuda(0)),
+            "mps" => Ok(Device::Mps),
+            _ if device_str.starts_with("cuda:") => {
+                // Handle specific CUDA device like "cuda:0", "cuda:1", etc.
+                if let Some(num) = device_str[5..].parse::<usize>().ok() {
+                    Ok(Device::Cuda(num))
+                } else {
+                    Err(LabeledError::new("Invalid CUDA device")
+                        .with_label("Invalid CUDA device", call.head))
+                }
+            }
+            _ => Err(LabeledError::new("Invalid device").with_label("Invalid device", call.head)),
+        },
+        None => Ok(Device::Cpu), // Default to CPU if not specified
+    }
+}
+
+fn get_kind_from_call(call: &nu_plugin::EvaluatedCall) -> Result<Kind, LabeledError> {
+    match call.get_flag::<String>("dtype")? {
+        Some(dtype_str) => match dtype_str.as_str() {
+            "float32" | "float" => Ok(Kind::Float),
+            "float64" | "double" => Ok(Kind::Double),
+            "int32" | "int" => Ok(Kind::Int),
+            "int64" | "long" => Ok(Kind::Int64),
+            _ => Err(LabeledError::new("Invalid dtype").with_label(
+                "Data type must be 'float32', 'float64', 'int32', or 'int64'",
+                call.head,
+            )),
+        },
+        None => Ok(Kind::Float), // Default to float32 if not specified
     }
 }
 
