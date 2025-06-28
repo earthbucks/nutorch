@@ -18,15 +18,19 @@ struct NutorchPlugin;
 impl Plugin for NutorchPlugin {
     fn commands(&self) -> Vec<Box<dyn PluginCommand<Plugin = Self>>> {
         vec![
-            Box::new(CommandNutorch), // New top-level command
-            Box::new(CommandManualSeed),
-            Box::new(CommandRandn),
+            // Top-level Nutorch command
+            Box::new(CommandNutorch),
+
+            // Individual commands for tensor operations
             Box::new(CommandDevices),
             Box::new(CommandLinspace),
+            Box::new(CommandManualSeed),
+            Box::new(CommandMm),
+            Box::new(CommandRandn),
             Box::new(CommandRepeat),
             Box::new(CommandSin),
-            Box::new(CommandValue),
             Box::new(CommandTensor),
+            Box::new(CommandValue),
         ]
     }
 
@@ -430,6 +434,87 @@ impl PluginCommand for CommandRepeat {
         }
         // Apply repeat operation
         let result_tensor = working_tensor.repeat(&repeat_dims);
+        // Store result in registry with new ID
+        let new_id = Uuid::new_v4().to_string();
+        registry.insert(new_id.clone(), result_tensor);
+        // Return new ID wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+
+struct CommandMm;
+
+impl PluginCommand for CommandMm {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "nutorch mm"
+    }
+
+    fn description(&self) -> &str {
+        "Perform matrix multiplication of two 2D tensors (similar to torch.mm)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("nutorch mm")
+            .required("tensor1_id", SyntaxShape::String, "ID of the first tensor for matrix multiplication")
+            .required("tensor2_id", SyntaxShape::String, "ID of the second tensor for matrix multiplication")
+            .input_output_types(vec![(Type::Nothing, Type::String)])
+            .category(Category::Custom("nutorch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Perform matrix multiplication between two tensors",
+                example: "let t1 = (nutorch linspace 0 5 6 | nutorch repeat 2); let t2 = (nutorch linspace 0 2 3 | nutorch repeat 2); nutorch mm $t1 $t2 | nutorch value",
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        _input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Get tensor1 ID from first required argument
+        let tensor1_id_opt = call.nth(0).unwrap();
+        let tensor1_id = tensor1_id_opt.as_str()?;
+        // Get tensor2 ID from second required argument
+        let tensor2_id_opt = call.nth(1).unwrap();
+        let tensor2_id = tensor2_id_opt.as_str()?;
+
+        // Look up tensors in registry
+        let mut registry = TENSOR_REGISTRY.lock().unwrap();
+        let tensor1 = registry.get(tensor1_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid tensor1 ID", call.head)
+        })?.shallow_clone();
+        let tensor2 = registry.get(tensor2_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid tensor2 ID", call.head)
+        })?.shallow_clone();
+
+        // Check if tensors are 2D
+        let dims1 = tensor1.size();
+        let dims2 = tensor2.size();
+        if dims1.len() != 2 {
+            return Err(LabeledError::new("Invalid tensor dimension")
+                .with_label(format!("First tensor must be 2D, got {}D", dims1.len()), call.head));
+        }
+        if dims2.len() != 2 {
+            return Err(LabeledError::new("Invalid tensor dimension")
+                .with_label(format!("Second tensor must be 2D, got {}D", dims2.len()), call.head));
+        }
+        // Check if matrix multiplication is possible (columns of first == rows of second)
+        if dims1[1] != dims2[0] {
+            return Err(LabeledError::new("Incompatible dimensions")
+                .with_label(format!("Cannot multiply {}x{} with {}x{}", dims1[0], dims1[1], dims2[0], dims2[1]), call.head));
+        }
+
+        // Perform matrix multiplication
+        let result_tensor = tensor1.mm(&tensor2);
         // Store result in registry with new ID
         let new_id = Uuid::new_v4().to_string();
         registry.insert(new_id.clone(), result_tensor);
