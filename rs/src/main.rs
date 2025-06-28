@@ -1,7 +1,7 @@
 use lazy_static::lazy_static;
 use nu_plugin::{serve_plugin, Plugin, PluginCommand};
 use nu_protocol::{
-    Category, Example, LabeledError, PipelineData, Signature, SyntaxShape, Type, Value, Span
+    Category, Example, LabeledError, PipelineData, Signature, Span, SyntaxShape, Type, Value,
 };
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -23,7 +23,8 @@ impl Plugin for NutorchPlugin {
             Box::new(CommandLinspace),
             Box::new(CommandRepeat),
             Box::new(CommandSin),
-            Box::new(CommandValue),
+            Box::new(CommandToValue),
+            Box::new(CommandFromValue),
         ]
     }
 
@@ -388,22 +389,22 @@ impl PluginCommand for CommandSin {
     }
 }
 
-// Display command to convert tensor to Nushell data structure for output
-struct CommandValue;
+// Command to convert tensor to Nushell data structure (tovalue)
+struct CommandToValue;
 
-impl PluginCommand for CommandValue {
+impl PluginCommand for CommandToValue {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch value"
+        "nutorch tovalue"
     }
 
     fn description(&self) -> &str {
-        "Get a tensor as a Nushell list or table (\"value\") with support for arbitrary dimensions"
+        "Convert a tensor to a Nushell Value (nested list structure) with support for arbitrary dimensions"
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch value")
+        Signature::build("nutorch tovalue")
             .input_output_types(vec![(Type::String, Type::Any)])
             .category(Category::Custom("nutorch".into()))
     }
@@ -411,13 +412,13 @@ impl PluginCommand for CommandValue {
     fn examples(&self) -> Vec<Example> {
         vec![
             Example {
-                description: "Get a 1D tensor's values",
-                example: "nutorch linspace 0.0 1.0 4 | nutorch value",
+                description: "Convert a 1D tensor to a Nushell Value (list)",
+                example: "nutorch linspace 0.0 1.0 4 | nutorch tovalue",
                 result: None,
             },
             Example {
-                description: "Get a 2D or higher dimensional tensor",
-                example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 2 2 | nutorch value",
+                description: "Convert a 2D or higher dimensional tensor to nested Values",
+                example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 2 2 | nutorch tovalue",
                 result: None,
             },
         ]
@@ -444,6 +445,121 @@ impl PluginCommand for CommandValue {
         let span = call.head;
         let value = tensor_to_value(&tensor, span)?;
         Ok(PipelineData::Value(value, None))
+    }
+}
+
+// Command to convert Nushell data structure to tensor (fromvalue)
+struct CommandFromValue;
+
+impl PluginCommand for CommandFromValue {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "nutorch fromvalue"
+    }
+
+    fn description(&self) -> &str {
+        "Convert a Nushell Value (nested list structure) to a tensor"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("nutorch fromvalue")
+            .input_output_types(vec![(Type::Any, Type::String)])
+            .named(
+                "device",
+                SyntaxShape::String,
+                "Device to create the tensor on ('cpu', 'cuda', 'mps', default: 'cpu')",
+                None,
+            )
+            .named(
+                "dtype",
+                SyntaxShape::String,
+                "Data type of the tensor ('float32', 'float64', 'int32', 'int64', default: 'float32')",
+                None,
+            )
+            .category(Category::Custom("nutorch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Convert a 1D list to a tensor",
+                example: "[0.0, 1.0, 2.0, 3.0] | nutorch fromvalue",
+                result: None,
+            },
+            Example {
+                description: "Convert a 2D nested list to a tensor with specific device and dtype",
+                example:
+                    "[[0.0, 1.0], [2.0, 3.0]] | nutorch fromvalue --device cpu --dtype float64",
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        let span = call.head;
+        let input_value = input.into_value(span)?;
+
+        // Handle optional device argument
+        let device_str_opt = call
+            .get_flag::<String>("device")
+            .unwrap_or_else(|_| Some("cpu".to_string()));
+        let device_str: String = match device_str_opt {
+            Some(s) => s,
+            None => "cpu".to_string(),
+        };
+        let device = match device_str.as_str() {
+            "cpu" => Device::Cpu,
+            "cuda" => Device::Cuda(0),
+            "mps" => Device::Mps,
+            // "mps" if tch::Mps::is_available() => Device::Mps,
+            _ if device_str.starts_with("cuda:") => {
+                // Handle specific CUDA device like "cuda:0", "cuda:1", etc.
+                if let Some(num) = device_str[5..].parse::<usize>().ok() {
+                    Device::Cuda(num)
+                } else {
+                    return Err(LabeledError::new("Invalid CUDA device")
+                        .with_label("Invalid CUDA device", call.head));
+                }
+            }
+            _ => {
+                return Err(
+                    LabeledError::new("Invalid device").with_label("Invalid device", call.head)
+                );
+            }
+        };
+
+        // Handle optional dtype argument
+        let kind = match call.get_flag::<String>("dtype")? {
+            Some(dtype_str) => match dtype_str.to_lowercase().as_str() {
+                "float32" | "float" => Kind::Float,
+                "float64" | "double" => Kind::Double,
+                "int32" | "int" => Kind::Int,
+                "int64" | "long" => Kind::Int64,
+                _ => {
+                    return Err(LabeledError::new("Invalid dtype").with_label(
+                        "Data type must be 'float32', 'float64', 'int32', or 'int64'",
+                        span,
+                    ))
+                }
+            },
+            None => Kind::Float, // Default to float32 if not specified
+        };
+
+        // Convert Nushell Value to tensor
+        let tensor = value_to_tensor(&input_value, kind, device, span)?;
+        // Generate a unique ID for the tensor
+        let id = Uuid::new_v4().to_string();
+        // Store in registry
+        TENSOR_REGISTRY.lock().unwrap().insert(id.clone(), tensor);
+        // Return the ID as a string to Nushell, wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(id, span), None))
     }
 }
 
@@ -478,6 +594,81 @@ fn tensor_to_value(tensor: &Tensor, span: Span) -> Result<Value, LabeledError> {
         nested_data.push(nested_value);
     }
     Ok(Value::list(nested_data, span))
+}
+
+// Helper function to recursively convert a Nushell Value to a tensor
+fn value_to_tensor(
+    value: &Value,
+    kind: Kind,
+    device: Device,
+    span: Span,
+) -> Result<Tensor, LabeledError> {
+    match value {
+        Value::List { vals, .. } => {
+            if vals.is_empty() {
+                return Err(
+                    LabeledError::new("Invalid input").with_label("List cannot be empty", span)
+                );
+            }
+            // Check if the first element is a list (nested structure)
+            if let Some(first_val) = vals.first() {
+                if matches!(first_val, Value::List { .. }) {
+                    // Nested list: recursively convert each sublist to a tensor and stack them
+                    let subtensors: Result<Vec<Tensor>, LabeledError> = vals
+                        .iter()
+                        .map(|v| value_to_tensor(v, kind, device, span))
+                        .collect();
+                    let subtensors = subtensors?;
+                    // Stack tensors along a new dimension (dim 0)
+                    return Ok(Tensor::stack(&subtensors, 0)
+                        .to_kind(kind)
+                        .to_device(device));
+                }
+            }
+            // Flat list: convert to 1D tensor
+            // Check if all elements are integers to decide initial tensor type
+            let all_ints = vals.iter().all(|v| matches!(v, Value::Int { .. }));
+            if all_ints {
+                let data: Result<Vec<i64>, LabeledError> = vals
+                    .iter()
+                    .map(|v| {
+                        v.as_int().map_err(|_| {
+                            LabeledError::new("Invalid input")
+                                .with_label("Expected integer value", span)
+                        })
+                    })
+                    .collect();
+                let data = data?;
+                // Create 1D tensor from integer data
+                Ok(Tensor::from_slice(&data).to_kind(kind).to_device(device))
+            } else {
+                let data: Result<Vec<f64>, LabeledError> = vals
+                    .iter()
+                    .map(|v| {
+                        v.as_float().map_err(|_| {
+                            LabeledError::new("Invalid input")
+                                .with_label("Expected numeric value", span)
+                        })
+                    })
+                    .collect();
+                let data = data?;
+                // Create 1D tensor from float data
+                Ok(Tensor::from_slice(&data).to_kind(kind).to_device(device))
+            }
+        }
+        Value::Float { val, .. } => {
+            // Single float value (scalar)
+            Ok(Tensor::from(*val).to_kind(kind).to_device(device))
+        }
+        Value::Int { val, .. } => {
+            // Single int value (scalar)
+            Ok(Tensor::from(*val).to_kind(kind).to_device(device))
+        }
+        _ => Err(LabeledError::new("Invalid input").with_label(
+            "Input must be a number or a list (nested for higher dimensions)",
+            span,
+        )),
+    }
 }
 
 fn main() {
