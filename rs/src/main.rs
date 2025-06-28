@@ -20,9 +20,9 @@ impl Plugin for NutorchPlugin {
         vec![
             // Top-level Nutorch command
             Box::new(CommandNutorch),
-
             // Individual commands for tensor operations
             Box::new(CommandDevices),
+            Box::new(CommandFull),
             Box::new(CommandLinspace),
             Box::new(CommandManualSeed),
             Box::new(CommandMm),
@@ -100,7 +100,11 @@ impl PluginCommand for CommandManualSeed {
 
     fn signature(&self) -> Signature {
         Signature::build("nutorch manual_seed")
-            .required("seed", SyntaxShape::Int, "The seed value for the random number generator")
+            .required(
+                "seed",
+                SyntaxShape::Int,
+                "The seed value for the random number generator",
+            )
             .input_output_types(vec![(Type::Nothing, Type::Nothing)])
             .category(Category::Custom("nutorch".into()))
     }
@@ -169,10 +173,11 @@ impl PluginCommand for CommandRandn {
                 result: None,
             },
             Example {
-                description: "Generate a 1D tensor of size 5 with a specific seed for reproducibility",
+                description:
+                    "Generate a 1D tensor of size 5 with a specific seed for reproducibility",
                 example: "nutorch manual_seed 42; nutorch randn 5 | nutorch tovalue",
                 result: None,
-            }
+            },
         ]
     }
 
@@ -184,9 +189,13 @@ impl PluginCommand for CommandRandn {
         _input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
         // Get dimensions for the tensor shape
-        let dims: Vec<i64> = call.rest(0).map_err(|_| {
-            LabeledError::new("Invalid input").with_label("Unable to parse dimensions", call.head)
-        })?.into_iter()
+        let dims: Vec<i64> = call
+            .rest(0)
+            .map_err(|_| {
+                LabeledError::new("Invalid input")
+                    .with_label("Unable to parse dimensions", call.head)
+            })?
+            .into_iter()
             .map(|v: Value| v.as_int())
             .collect::<Result<Vec<i64>, _>>()?;
         if dims.is_empty() {
@@ -206,6 +215,100 @@ impl PluginCommand for CommandRandn {
 
         // Create a random tensor using tch-rs
         let tensor = Tensor::randn(&dims, (kind, device));
+        // Generate a unique ID for the tensor
+        let id = Uuid::new_v4().to_string();
+        // Store in registry
+        TENSOR_REGISTRY.lock().unwrap().insert(id.clone(), tensor);
+        // Return the ID as a string to Nushell, wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(id, call.head), None))
+    }
+}
+
+struct CommandFull;
+
+impl PluginCommand for CommandFull {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "nutorch full"
+    }
+
+    fn description(&self) -> &str {
+        "Create a tensor of specified shape filled with a given value (similar to torch.full)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("nutorch full")
+            .required("value", SyntaxShape::Number, "The value to fill the tensor with")
+            .rest("dims", SyntaxShape::Int, "Dimensions of the tensor (e.g., 2 3 for a 2x3 tensor)")
+            .named(
+                "device",
+                SyntaxShape::String,
+                "Device to create the tensor on ('cpu', 'cuda', 'mps', default: 'cpu')",
+                None,
+            )
+            .named(
+                "dtype",
+                SyntaxShape::String,
+                "Data type of the tensor ('float32', 'float64', 'int32', 'int64', default: 'float32')",
+                None,
+            )
+            .input_output_types(vec![(Type::Nothing, Type::String)])
+            .category(Category::Custom("nutorch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Create a 1D tensor of length 5 filled with value 7",
+                example: "nutorch full 7 5 | nutorch value",
+                result: None,
+            },
+            Example {
+                description: "Create a 2x3 tensor filled with value 0.5 with float64 dtype on CPU",
+                example: "nutorch full 0.5 2 3 --dtype float64 --device cpu | nutorch value",
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        _input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Get the fill value (can be int or float, will cast based on dtype)
+        let fill_value: f64 = call.nth(0).unwrap().as_float()?;
+
+        // Get dimensions for the tensor shape
+        let dims: Vec<i64> = call
+            .rest(1)
+            .map_err(|_| {
+                LabeledError::new("Invalid input")
+                    .with_label("Unable to parse dimensions", call.head)
+            })?
+            .into_iter()
+            .map(|v: Value| v.as_int())
+            .collect::<Result<Vec<i64>, _>>()?;
+        if dims.is_empty() {
+            return Err(LabeledError::new("Invalid input")
+                .with_label("At least one dimension must be provided", call.head));
+        }
+        if dims.iter().any(|&d| d < 1) {
+            return Err(LabeledError::new("Invalid input")
+                .with_label("All dimensions must be positive", call.head));
+        }
+
+        // Handle optional device argument using convenience method
+        let device = get_device_from_call(call)?;
+
+        // Handle optional dtype argument using convenience method
+        let kind = get_kind_from_call(call)?;
+
+        // Create a tensor filled with the specified value using tch-rs
+        let tensor = Tensor::full(&dims, fill_value, (kind, device));
         // Generate a unique ID for the tensor
         let id = Uuid::new_v4().to_string();
         // Store in registry
@@ -457,8 +560,16 @@ impl PluginCommand for CommandMm {
 
     fn signature(&self) -> Signature {
         Signature::build("nutorch mm")
-            .required("tensor1_id", SyntaxShape::String, "ID of the first tensor for matrix multiplication")
-            .required("tensor2_id", SyntaxShape::String, "ID of the second tensor for matrix multiplication")
+            .required(
+                "tensor1_id",
+                SyntaxShape::String,
+                "ID of the first tensor for matrix multiplication",
+            )
+            .required(
+                "tensor2_id",
+                SyntaxShape::String,
+                "ID of the second tensor for matrix multiplication",
+            )
             .input_output_types(vec![(Type::Nothing, Type::String)])
             .category(Category::Custom("nutorch".into()))
     }
@@ -489,28 +600,43 @@ impl PluginCommand for CommandMm {
 
         // Look up tensors in registry
         let mut registry = TENSOR_REGISTRY.lock().unwrap();
-        let tensor1 = registry.get(tensor1_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found").with_label("Invalid tensor1 ID", call.head)
-        })?.shallow_clone();
-        let tensor2 = registry.get(tensor2_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found").with_label("Invalid tensor2 ID", call.head)
-        })?.shallow_clone();
+        let tensor1 = registry
+            .get(tensor1_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found").with_label("Invalid tensor1 ID", call.head)
+            })?
+            .shallow_clone();
+        let tensor2 = registry
+            .get(tensor2_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found").with_label("Invalid tensor2 ID", call.head)
+            })?
+            .shallow_clone();
 
         // Check if tensors are 2D
         let dims1 = tensor1.size();
         let dims2 = tensor2.size();
         if dims1.len() != 2 {
-            return Err(LabeledError::new("Invalid tensor dimension")
-                .with_label(format!("First tensor must be 2D, got {}D", dims1.len()), call.head));
+            return Err(LabeledError::new("Invalid tensor dimension").with_label(
+                format!("First tensor must be 2D, got {}D", dims1.len()),
+                call.head,
+            ));
         }
         if dims2.len() != 2 {
-            return Err(LabeledError::new("Invalid tensor dimension")
-                .with_label(format!("Second tensor must be 2D, got {}D", dims2.len()), call.head));
+            return Err(LabeledError::new("Invalid tensor dimension").with_label(
+                format!("Second tensor must be 2D, got {}D", dims2.len()),
+                call.head,
+            ));
         }
         // Check if matrix multiplication is possible (columns of first == rows of second)
         if dims1[1] != dims2[0] {
-            return Err(LabeledError::new("Incompatible dimensions")
-                .with_label(format!("Cannot multiply {}x{} with {}x{}", dims1[0], dims1[1], dims2[0], dims2[1]), call.head));
+            return Err(LabeledError::new("Incompatible dimensions").with_label(
+                format!(
+                    "Cannot multiply {}x{} with {}x{}",
+                    dims1[0], dims1[1], dims2[0], dims2[1]
+                ),
+                call.head,
+            ));
         }
 
         // Perform matrix multiplication
