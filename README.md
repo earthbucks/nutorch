@@ -2,7 +2,7 @@
 
 <img src="https://github.com/user-attachments/assets/182a87f7-f1da-41cb-8cf2-3e6cbd0539db" width="200" height="200" alt="Nutorch" />
 
-**GPU-powered machine learning on the command line.**
+**GPU-powered neural networks on the command line.**
 
 ## Garbage Collection
 
