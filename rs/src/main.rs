@@ -224,6 +224,11 @@ impl PluginCommand for CommandRandn {
     }
 }
 
+enum Number {
+    Int(i64),
+    Float(f64),
+}
+
 struct CommandFull;
 
 impl PluginCommand for CommandFull {
@@ -279,8 +284,19 @@ impl PluginCommand for CommandFull {
         call: &nu_plugin::EvaluatedCall,
         _input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
-        // Get the fill value (can be int or float, will cast based on dtype)
-        let fill_value: f64 = call.nth(0).unwrap().as_float()?;
+        // Get the fill value (try as int first, then float)
+        let fill_value_val = call.nth(0).unwrap();
+        let fill_value_result = match fill_value_val.as_int() {
+            Ok(int_val) => Ok(Number::Int(int_val)),
+            Err(_) => fill_value_val
+                .as_float()
+                .map(Number::Float)
+                .map_err(|_| {
+                    LabeledError::new("Invalid input")
+                        .with_label("Value must be a number (integer or float)", call.head)
+                }),
+        };
+        let fill_value = fill_value_result?;
 
         // Get dimensions for the tensor shape
         let dims: Vec<i64> = call
@@ -307,8 +323,29 @@ impl PluginCommand for CommandFull {
         // Handle optional dtype argument using convenience method
         let kind = get_kind_from_call(call)?;
 
-        // Create a tensor filled with the specified value using tch-rs
-        let tensor = Tensor::full(&dims, fill_value, (kind, device));
+        let tensor = match (fill_value, kind) {
+            (Number::Int(i), Kind::Int | Kind::Int64) => {
+                // Use integer-specific creation if tch-rs supports it directly
+                // Since Tensor::full may expect f64, we pass as f64 but kind ensures it's stored as int
+                Tensor::full(&dims, i, (kind, device))
+            }
+            (Number::Int(i), Kind::Float | Kind::Double) => {
+                // Safe to cast int to float for float dtype
+                Tensor::full(&dims, i, (kind, device))
+            }
+            (Number::Float(f), Kind::Float | Kind::Double) => {
+                // Direct float usage
+                Tensor::full(&dims, f, (kind, device))
+            }
+            // (Number::Float(_), Kind::Int | Kind::Int64) => {
+            //     // This case is already handled by earlier validation error
+            //     unreachable!("Float input with integer dtype should have been rejected")
+            // }
+            _ => {
+                return Err(LabeledError::new("Invalid dtype")
+                    .with_label("Invalid data/dtype combo.", call.head));
+            }
+        };
         // Generate a unique ID for the tensor
         let id = Uuid::new_v4().to_string();
         // Store in registry
