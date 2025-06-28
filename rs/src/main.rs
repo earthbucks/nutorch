@@ -122,6 +122,7 @@ impl PluginCommand for CommandDevices {
             devices.push(Value::string("cuda", span));
         }
 
+        // TODO: This doesn't actually work. But when tch-rs enables this feature, we can use it.
         // // Check for MPS (Metal Performance Shaders) availability on macOS
         // if tch::Mps::is_available() {
         //     devices.push(Value::string("mps", span));
@@ -215,7 +216,7 @@ impl PluginCommand for CommandLinspace {
 
         // Handle optional dtype argument
         let kind = match call.get_flag::<String>("dtype")? {
-            Some(dtype_str) => match dtype_str.to_lowercase().as_str() {
+            Some(dtype_str) => match dtype_str.as_str() {
                 "float32" | "float" => Kind::Float,
                 "float64" | "double" => Kind::Double,
                 "int32" | "int" => Kind::Int,
@@ -537,7 +538,7 @@ impl PluginCommand for CommandImport {
 
         // Handle optional dtype argument
         let kind = match call.get_flag::<String>("dtype")? {
-            Some(dtype_str) => match dtype_str.to_lowercase().as_str() {
+            Some(dtype_str) => match dtype_str.as_str() {
                 "float32" | "float" => Kind::Float,
                 "float64" | "double" => Kind::Double,
                 "int32" | "int" => Kind::Int,
