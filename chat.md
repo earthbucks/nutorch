@@ -4552,3 +4552,44 @@ impl PluginCommand for CommandRandn {
     }
 }
 ```
+
+---
+
+any way, the new code worked perfectly. i set manual seed twice in a row, and created a random tensor, and got the same value.
+
+```nu
+rs: nutorch randn 5 | nutorch value
+╭───┬───────╮
+│ 0 │  0.34 │
+│ 1 │  0.13 │
+│ 2 │  0.23 │
+│ 3 │  0.23 │
+│ 4 │ -1.12 │
+╰───┴───────╯
+rs: nutorch randn 5 | nutorch value
+╭───┬───────╮
+│ 0 │ -0.19 │
+│ 1 │  2.21 │
+│ 2 │ -0.64 │
+│ 3 │  0.46 │
+│ 4 │  0.27 │
+╰───┴───────╯
+rs: plugin stop nutorch
+rs: nutorch manual_seed 42
+rs: nutorch randn 5 | nutorch value
+╭───┬───────╮
+│ 0 │  0.34 │
+│ 1 │  0.13 │
+│ 2 │  0.23 │
+│ 3 │  0.23 │
+│ 4 │ -1.12 │
+╰───┴───────╯
+rs: nutorch randn 5 | nutorch value
+╭───┬───────╮
+│ 0 │ -0.19 │
+│ 1 │  2.21 │
+│ 2 │ -0.64 │
+│ 3 │  0.46 │
+│ 4 │  0.27 │
+╰───┴───────╯
+```
