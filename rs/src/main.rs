@@ -25,7 +25,7 @@ impl Plugin for NutorchPlugin {
             Box::new(CommandRepeat),
             Box::new(CommandSin),
             Box::new(CommandExport),
-            Box::new(CommandImport),
+            Box::new(CommandTensor),
         ]
     }
 
@@ -456,14 +456,14 @@ impl PluginCommand for CommandExport {
     }
 }
 
-// Command to convert Nushell data structure to tensor (import)
-struct CommandImport;
+// Command to convert Nushell data structure to tensor (tensor)
+struct CommandTensor;
 
-impl PluginCommand for CommandImport {
+impl PluginCommand for CommandTensor {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch import"
+        "nutorch tensor"
     }
 
     fn description(&self) -> &str {
@@ -471,7 +471,7 @@ impl PluginCommand for CommandImport {
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch import")
+        Signature::build("nutorch tensor")
             .input_output_types(vec![(Type::Any, Type::String)])
             .named(
                 "device",
@@ -492,12 +492,12 @@ impl PluginCommand for CommandImport {
         vec![
             Example {
                 description: "Convert a 1D list to a tensor",
-                example: "[0.0, 1.0, 2.0, 3.0] | nutorch import",
+                example: "[0.0, 1.0, 2.0, 3.0] | nutorch tensor",
                 result: None,
             },
             Example {
                 description: "Convert a 2D nested list to a tensor with specific device and dtype",
-                example: "[[0.0, 1.0], [2.0, 3.0]] | nutorch import --device cpu --dtype float64",
+                example: "[[0.0, 1.0], [2.0, 3.0]] | nutorch tensor --device cpu --dtype float64",
                 result: None,
             },
         ]
