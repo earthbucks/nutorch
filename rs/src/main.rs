@@ -19,6 +19,7 @@ impl Plugin for NutorchPlugin {
     fn commands(&self) -> Vec<Box<dyn PluginCommand<Plugin = Self>>> {
         vec![
             Box::new(CommandNutorch), // New top-level command
+            Box::new(Ping),           // Ping command to keep the plugin alive
             Box::new(CommandDevices),
             Box::new(CommandLinspace),
             Box::new(CommandRepeat),
@@ -55,7 +56,10 @@ impl PluginCommand for CommandNutorch {
         vec![Example {
             description: "Run the nutorch command to test the plugin".into(),
             example: "nutorch".into(),
-            result: Some(Value::string("Welcome to Nutorch. Type `nutorch --help` for more information.", nu_protocol::Span::unknown())),
+            result: Some(Value::string(
+                "Welcome to Nutorch. Type `nutorch --help` for more information.",
+                nu_protocol::Span::unknown(),
+            )),
         }]
     }
 
@@ -67,9 +71,50 @@ impl PluginCommand for CommandNutorch {
         _input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
         Ok(PipelineData::Value(
-            Value::string("Welcome to Nutorch. Type `nutorch --help` for more information.", call.head),
+            Value::string(
+                "Welcome to Nutorch. Type `nutorch --help` for more information.",
+                call.head,
+            ),
             None,
         ))
+    }
+}
+
+struct Ping;
+
+impl PluginCommand for Ping {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "nutorch ping"
+    }
+
+    fn description(&self) -> &str {
+        "Keep the plugin process alive by returning a simple response"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("nutorch ping")
+            .input_output_types(vec![(Type::Nothing, Type::String)])
+            .category(Category::Custom("nutorch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![Example {
+            description: "Ping the plugin to keep it alive",
+            example: "nutorch ping",
+            result: Some(Value::string("pong", Span::unknown())),
+        }]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        _input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        Ok(PipelineData::Value(Value::string("pong", call.head), None))
     }
 }
 
