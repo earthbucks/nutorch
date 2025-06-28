@@ -19,7 +19,7 @@ impl Plugin for NutorchPlugin {
     fn commands(&self) -> Vec<Box<dyn PluginCommand<Plugin = Self>>> {
         vec![
             Box::new(CommandNutorch), // New top-level command
-            Box::new(Ping),           // Ping command to keep the plugin alive
+            Box::new(CommandPing),           // Ping command to keep the plugin alive
             Box::new(CommandDevices),
             Box::new(CommandLinspace),
             Box::new(CommandRepeat),
@@ -80,9 +80,9 @@ impl PluginCommand for CommandNutorch {
     }
 }
 
-struct Ping;
+struct CommandPing;
 
-impl PluginCommand for Ping {
+impl PluginCommand for CommandPing {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
