@@ -606,20 +606,46 @@ impl PluginCommand for CommandImport {
 // Helper function to recursively convert a tensor to a nested Nushell Value
 fn tensor_to_value(tensor: &Tensor, span: Span) -> Result<Value, LabeledError> {
     let dims = tensor.size();
+    let kind = tensor.kind();
+    
     if dims.is_empty() {
         // Scalar tensor (0D)
-        let value = tensor.double_value(&[]);
-        return Ok(Value::float(value, span));
+        let value = match kind {
+            Kind::Int | Kind::Int8 | Kind::Int16 | Kind::Int64 | Kind::Uint8 => {
+                let int_val = tensor.int64_value(&[]);
+                Value::int(int_val, span)
+            },
+            Kind::Float | Kind::Double | Kind::Half => {
+                let float_val = tensor.double_value(&[]);
+                Value::float(float_val, span)
+            },
+            _ => return Err(LabeledError::new("Unsupported tensor type")
+                .with_label(format!("Cannot convert tensor of type {:?}", kind), span))
+        };
+        return Ok(value);
     }
 
     if dims.len() == 1 {
         // 1D tensor to list
         let size = dims[0] as usize;
-        let mut data: Vec<f64> = Vec::with_capacity(size);
-        for i in 0..size as i64 {
-            data.push(tensor.get(i).double_value(&[]));
-        }
-        let list = data.into_iter().map(|v| Value::float(v, span)).collect();
+        let list: Vec<Value> = match kind {
+            Kind::Int | Kind::Int8 | Kind::Int16 | Kind::Int64 | Kind::Uint8 => {
+                let mut data: Vec<i64> = Vec::with_capacity(size);
+                for i in 0..size as i64 {
+                    data.push(tensor.get(i).int64_value(&[]));
+                }
+                data.into_iter().map(|v| Value::int(v, span)).collect()
+            },
+            Kind::Float | Kind::Double | Kind::Half => {
+                let mut data: Vec<f64> = Vec::with_capacity(size);
+                for i in 0..size as i64 {
+                    data.push(tensor.get(i).double_value(&[]));
+                }
+                data.into_iter().map(|v| Value::float(v, span)).collect()
+            },
+            _ => return Err(LabeledError::new("Unsupported tensor type")
+                .with_label(format!("Cannot convert tensor of type {:?}", kind), span))
+        };
         return Ok(Value::list(list, span));
     }
 
