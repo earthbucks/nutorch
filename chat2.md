@@ -8665,6 +8665,7 @@ thus preserving the `TENSOR_REGISTRY` in memory for extended periods, even
 during idle times or tangential activities. Here are the feasible approaches:
 
 #### 1. Keep-Alive Command with Periodic Invocation
+
 - **Approach:** Create a simple `nutorch ping` command that does nothing but
   return a success response (or a minimal operation) to keep the plugin process
   active. Then, periodically invoke this command in the background or via a
@@ -8748,6 +8749,7 @@ while true {
 ```
 
 #### 2. Persist Tensor Data to Disk (Long-Term Solution)
+
 - **Approach:** As discussed previously, save tensors to disk when created
   (using a temporary directory or user-specified path) and load them back when
   accessed. This avoids reliance on the plugin process lifetime since data is
@@ -8761,6 +8763,7 @@ while true {
   be moved to CPU first).
 
 #### 3. Hybrid Approach (Cache with Timeout Awareness)
+
 - **Approach:** Keep the current in-memory `TENSOR_REGISTRY` for fast access
   during active sessions, but warn users (via documentation or a plugin message)
   that tensor IDs may expire after inactivity. Optionally, add a mechanism to
@@ -8827,4 +8830,225 @@ Let me know your thoughts on the solution or if you have further questions!
 
 # === USER ===
 
+i think this output is wrong. when converting a tensor to a "value", we need to
+bear in mind floats vs. ints. all torch float types because nushell floats, and
+all torch int types become nushell ints. nushell doesn't have quite as many
+types as pytorch, but we should mantain what we can.
 
+```rust
+// Helper function to recursively convert a tensor to a nested Nushell Value
+fn tensor_to_value(tensor: &Tensor, span: Span) -> Result<Value, LabeledError> {
+    let dims = tensor.size();
+    if dims.is_empty() {
+        // Scalar tensor (0D)
+        let value = tensor.double_value(&[]);
+        return Ok(Value::float(value, span));
+    }
+
+    if dims.len() == 1 {
+        // 1D tensor to list
+        let size = dims[0] as usize;
+        let mut data: Vec<f64> = Vec::with_capacity(size);
+        for i in 0..size as i64 {
+            data.push(tensor.get(i).double_value(&[]));
+        }
+        let list = data.into_iter().map(|v| Value::float(v, span)).collect();
+        return Ok(Value::list(list, span));
+    }
+
+    // For higher dimensions, create nested lists recursively
+    let first_dim_size = dims[0] as usize;
+    let mut nested_data: Vec<Value> = Vec::with_capacity(first_dim_size);
+    for i in 0..first_dim_size as i64 {
+        // Get a subtensor by indexing along the first dimension
+        let subtensor = tensor.get(i);
+        // Recursively convert the subtensor to a Value
+        let nested_value = tensor_to_value(&subtensor, span)?;
+        nested_data.push(nested_value);
+    }
+    Ok(Value::list(nested_data, span))
+}
+```
+
+can you fix this code to also support ints output?
+
+# === ASSISTANT ===
+
+You're absolutely correct to point out that the current implementation of
+`tensor_to_value` in your `nutorch` plugin does not preserve the distinction
+between floating-point and integer tensor types when converting to Nushell
+`Value` objects. Converting all tensor values to `f64` (via `double_value(&[])`)
+and then to `Value::float` disregards the original data type of the tensor
+(e.g., `int32`, `int64`, `float32`, `float64`), which can lead to unnecessary
+precision loss or misrepresentation of the data. Since Nushell supports both
+integer (`Value::Int`) and floating-point (`Value::Float`) types, we can
+maintain this distinction by checking the tensor's `Kind` (data type) and
+converting values accordingly.
+
+Let's update the `tensor_to_value` helper function to support both integer and
+float outputs based on the tensor's type, ensuring we match the PyTorch tensor's
+data type as closely as possible to the appropriate Nushell `Value` variant.
+
+### Updated `tensor_to_value` Function
+
+We'll modify the function to check the tensor's `Kind` using `tensor.kind()` and
+choose the appropriate conversion method (`int64_value` for integers,
+`double_value` for floats) to create either `Value::Int` or `Value::Float`
+outputs. This preserves the type information where possible.
+
+```rust
+// Helper function to recursively convert a tensor to a nested Nushell Value
+fn tensor_to_value(tensor: &Tensor, span: Span) -> Result<Value, LabeledError> {
+    let dims = tensor.size();
+    let kind = tensor.kind();
+
+    if dims.is_empty() {
+        // Scalar tensor (0D)
+        let value = match kind {
+            Kind::Int | Kind::Int8 | Kind::Int16 | Kind::Int64 | Kind::Uint8 => {
+                let int_val = tensor.int64_value(&[]);
+                Value::int(int_val, span)
+            },
+            Kind::Float | Kind::Double | Kind::Half => {
+                let float_val = tensor.double_value(&[]);
+                Value::float(float_val, span)
+            },
+            _ => return Err(LabeledError::new("Unsupported tensor type")
+                .with_label(format!("Cannot convert tensor of type {:?}", kind), span))
+        };
+        return Ok(value);
+    }
+
+    if dims.len() == 1 {
+        // 1D tensor to list
+        let size = dims[0] as usize;
+        let list: Vec<Value> = match kind {
+            Kind::Int | Kind::Int8 | Kind::Int16 | Kind::Int64 | Kind::Uint8 => {
+                let mut data: Vec<i64> = Vec::with_capacity(size);
+                for i in 0..size as i64 {
+                    data.push(tensor.get(i).int64_value(&[]));
+                }
+                data.into_iter().map(|v| Value::int(v, span)).collect()
+            },
+            Kind::Float | Kind::Double | Kind::Half => {
+                let mut data: Vec<f64> = Vec::with_capacity(size);
+                for i in 0..size as i64 {
+                    data.push(tensor.get(i).double_value(&[]));
+                }
+                data.into_iter().map(|v| Value::float(v, span)).collect()
+            },
+            _ => return Err(LabeledError::new("Unsupported tensor type")
+                .with_label(format!("Cannot convert tensor of type {:?}", kind), span))
+        };
+        return Ok(Value::list(list, span));
+    }
+
+    // For higher dimensions, create nested lists recursively
+    let first_dim_size = dims[0] as usize;
+    let mut nested_data: Vec<Value> = Vec::with_capacity(first_dim_size);
+    for i in 0..first_dim_size as i64 {
+        // Get a subtensor by indexing along the first dimension
+        let subtensor = tensor.get(i);
+        // Recursively convert the subtensor to a Value
+        let nested_value = tensor_to_value(&subtensor, span)?;
+        nested_data.push(nested_value);
+    }
+    Ok(Value::list(nested_data, span))
+}
+```
+
+### Explanation of the Update
+
+- **Check Tensor Kind:** Used `tensor.kind()` to determine the data type of the
+  tensor (e.g., `Kind::Int`, `Kind::Float`, etc.). This allows us to choose the
+  appropriate conversion method and `Value` variant based on whether the tensor
+  holds integer or floating-point data.
+- **Integer Types to `Value::Int`:** For tensor kinds that represent integers
+  (`Kind::Int`, `Kind::Int8`, `Kind::Int16`, `Kind::Int64`, `Kind::Uint8`), we
+  use `int64_value(&[])` to extract the data as `i64` and create `Value::int`
+  objects. This preserves the integer nature of the data without converting to
+  float, avoiding precision loss for large integers (within `i64` range).
+- **Floating-Point Types to `Value::Float`:** For tensor kinds that represent
+  floating-point numbers (`Kind::Float`, `Kind::Double`, `Kind::Half`), we use
+  `double_value(&[])` to extract the data as `f64` and create `Value::float`
+  objects, maintaining the floating-point representation.
+- **Unsupported Types:** If the tensor's `Kind` is not one of the supported
+  integer or float types (e.g., `Kind::Bool` or complex types), return an error
+  with a descriptive message. This can be extended later if needed.
+- **Recursive Handling:** The recursive case for higher dimensions remains
+  unchanged, passing the subtensor recursively to build nested lists, but each
+  subtensor inherits the type checking logic.
+
+### Build and Test
+
+After updating the `tensor_to_value` function as shown, rebuild your plugin to
+ensure it compiles:
+
+```bash
+cd /Users/ryan/dev/nutorch/rs
+cargo build --release
+```
+
+Re-add the plugin to Nushell:
+
+```nu
+plugin rm nutorch
+plugin add /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_nutorch
+```
+
+Test the `tovalue` command with different tensor types to verify correct type
+preservation:
+
+```nu
+nutorch linspace 0.0 1.57 4 --dtype float32 | nutorch tovalue
+# Expected Output: List of floats like [0.0, 0.5233, 1.0467, 1.57]
+nutorch linspace 0 10 5 --dtype int32 | nutorch tovalue
+# Expected Output: List of integers like [0, 2, 5, 7, 10]
+nutorch linspace 0 10 5 --dtype int32 | nutorch repeat 2 | nutorch tovalue
+# Expected Output: 2D list of integers like [[0, 2, 5, 7, 10], [0, 2, 5, 7, 10]]
+```
+
+### Additional Notes
+
+- **Type Mapping:** This implementation maps PyTorch's integer types to
+  `Value::Int` (which uses `i64` in Nushell) and floating-point types to
+  `Value::Float` (which uses `f64`). While Nushell doesn't support as many types
+  as PyTorch (e.g., no `int8` or `float16` distinction), this preserves the
+  fundamental int vs. float distinction, avoiding unnecessary precision loss.
+- **Precision Consideration:** For very large integers beyond `i64` range (if
+  PyTorch supports them), or for `float16` losing precision when upcast to
+  `f64`, there might still be limitations due to Nushell's type system. However,
+  this update handles the common cases (`int32`, `int64`, `float32`, `float64`)
+  appropriately.
+- **Extensibility:** If you later need to support other types (e.g., `bool`),
+  you can extend the `match kind` arms to map to appropriate `Value` variants or
+  return custom errors.
+
+### Next Steps
+
+Let me know if this updated `tensor_to_value` function works as expected and
+preserves the integer vs. float distinction in the output. If you encounter any
+issues or would like to handle additional types or precision concerns, I'm happy
+to assist further.
+
+Let me know how the test goes or if you have other questions!
+
+# === USER ===
+
+there is a weird property of the command names we have created, that don't work
+the way i expected.
+
+because each command starts with "nutorch", you can't just alias nutorch and
+expected it to work. for example, if i do:
+
+```nu
+alias nt = nutorch
+nt linspace 0 10 10
+```
+
+this will not work, because the command is actually `nutorch linspace`, not
+`nt linspace`. this is because nushell aliases are not like bash aliases, they
+don't just replace the first word in a command, they replace the entire command.
+
+can this be done differently, while still preserving the idea of prefixing each
+command name with "nutorch"?
