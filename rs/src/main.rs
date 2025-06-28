@@ -19,7 +19,6 @@ impl Plugin for NutorchPlugin {
     fn commands(&self) -> Vec<Box<dyn PluginCommand<Plugin = Self>>> {
         vec![
             Box::new(CommandNutorch), // New top-level command
-            Box::new(CommandPing),           // Ping command to keep the plugin alive
             Box::new(CommandDevices),
             Box::new(CommandLinspace),
             Box::new(CommandRepeat),
@@ -77,44 +76,6 @@ impl PluginCommand for CommandNutorch {
             ),
             None,
         ))
-    }
-}
-
-struct CommandPing;
-
-impl PluginCommand for CommandPing {
-    type Plugin = NutorchPlugin;
-
-    fn name(&self) -> &str {
-        "nutorch ping"
-    }
-
-    fn description(&self) -> &str {
-        "Keep the plugin process alive by returning a simple response"
-    }
-
-    fn signature(&self) -> Signature {
-        Signature::build("nutorch ping")
-            .input_output_types(vec![(Type::Nothing, Type::String)])
-            .category(Category::Custom("nutorch".into()))
-    }
-
-    fn examples(&self) -> Vec<Example> {
-        vec![Example {
-            description: "Ping the plugin to keep it alive",
-            example: "nutorch ping",
-            result: Some(Value::string("pong", Span::unknown())),
-        }]
-    }
-
-    fn run(
-        &self,
-        _plugin: &NutorchPlugin,
-        _engine: &nu_plugin::EngineInterface,
-        call: &nu_plugin::EvaluatedCall,
-        _input: PipelineData,
-    ) -> Result<PipelineData, LabeledError> {
-        Ok(PipelineData::Value(Value::string("pong", call.head), None))
     }
 }
 
@@ -530,8 +491,7 @@ impl PluginCommand for CommandImport {
             },
             Example {
                 description: "Convert a 2D nested list to a tensor with specific device and dtype",
-                example:
-                    "[[0.0, 1.0], [2.0, 3.0]] | nutorch import --device cpu --dtype float64",
+                example: "[[0.0, 1.0], [2.0, 3.0]] | nutorch import --device cpu --dtype float64",
                 result: None,
             },
         ]
@@ -607,20 +567,22 @@ impl PluginCommand for CommandImport {
 fn tensor_to_value(tensor: &Tensor, span: Span) -> Result<Value, LabeledError> {
     let dims = tensor.size();
     let kind = tensor.kind();
-    
+
     if dims.is_empty() {
         // Scalar tensor (0D)
         let value = match kind {
             Kind::Int | Kind::Int8 | Kind::Int16 | Kind::Int64 | Kind::Uint8 => {
                 let int_val = tensor.int64_value(&[]);
                 Value::int(int_val, span)
-            },
+            }
             Kind::Float | Kind::Double | Kind::Half => {
                 let float_val = tensor.double_value(&[]);
                 Value::float(float_val, span)
-            },
-            _ => return Err(LabeledError::new("Unsupported tensor type")
-                .with_label(format!("Cannot convert tensor of type {:?}", kind), span))
+            }
+            _ => {
+                return Err(LabeledError::new("Unsupported tensor type")
+                    .with_label(format!("Cannot convert tensor of type {:?}", kind), span))
+            }
         };
         return Ok(value);
     }
@@ -635,16 +597,18 @@ fn tensor_to_value(tensor: &Tensor, span: Span) -> Result<Value, LabeledError> {
                     data.push(tensor.get(i).int64_value(&[]));
                 }
                 data.into_iter().map(|v| Value::int(v, span)).collect()
-            },
+            }
             Kind::Float | Kind::Double | Kind::Half => {
                 let mut data: Vec<f64> = Vec::with_capacity(size);
                 for i in 0..size as i64 {
                     data.push(tensor.get(i).double_value(&[]));
                 }
                 data.into_iter().map(|v| Value::float(v, span)).collect()
-            },
-            _ => return Err(LabeledError::new("Unsupported tensor type")
-                .with_label(format!("Cannot convert tensor of type {:?}", kind), span))
+            }
+            _ => {
+                return Err(LabeledError::new("Unsupported tensor type")
+                    .with_label(format!("Cannot convert tensor of type {:?}", kind), span))
+            }
         };
         return Ok(Value::list(list, span));
     }
