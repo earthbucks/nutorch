@@ -48,14 +48,14 @@ impl PluginCommand for CommandNutorch {
     }
 
     fn description(&self) -> &str {
-        "A simple command to test the nutorch plugin"
+        "The entry point for the Nutorch plugin, providing access to tensor operations and utilities"
     }
 
     fn examples(&self) -> Vec<Example> {
         vec![Example {
             description: "Run the nutorch command to test the plugin".into(),
             example: "nutorch".into(),
-            result: Some(Value::string("Hello, World!", nu_protocol::Span::unknown())),
+            result: Some(Value::string("Welcome to Nutorch. Type `nutorch --help` for more information.", nu_protocol::Span::unknown())),
         }]
     }
 
@@ -67,7 +67,7 @@ impl PluginCommand for CommandNutorch {
         _input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
         Ok(PipelineData::Value(
-            Value::string("Hello, World!", call.head),
+            Value::string("Welcome to Nutorch. Type `nutorch --help` for more information.", call.head),
             None,
         ))
     }
