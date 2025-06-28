@@ -1,6 +1,6 @@
 # Nutorch
 
-**GPU-powered machine learning from your shell.**
+**GPU-powered machine learning on the command line.**
 
 ## Garbage Collection
 
