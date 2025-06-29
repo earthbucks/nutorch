@@ -1035,7 +1035,6 @@ impl PluginCommand for CommandTensor {
 
         // Convert Nushell Value to tensor
         let mut tensor = value_to_tensor(&input_value, kind, device, call.head)?;
-        // Generate a unique ID for the tensor
 
         // Handle optional requires_grad argument
         tensor = add_grad_from_call(call, tensor)?;

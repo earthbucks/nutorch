@@ -5187,14 +5187,14 @@ description = "A Nushell plugin for PyTorch operations"
 
 [bin]
 name = "nu_plugin_nutorch"
-path = "src/main.rs"  # Path to your main entry point file
+path = "src/main.rs" # Path to your main entry point file
 ```
 
 - **`[package]` Section:** Sets the crate name to `nutorch`, which is how it
   will be referred to in Rust code, dependencies, and documentation.
 - **`[bin]` Section:** Specifies a binary target with the name
-  `nu_plugin_nutorch`, which is the output binary name that Nushell expects.
-  The `path` points to your entry point file (likely `src/main.rs` for a typical
+  `nu_plugin_nutorch`, which is the output binary name that Nushell expects. The
+  `path` points to your entry point file (likely `src/main.rs` for a typical
   plugin setup).
 
 If your project has multiple binaries or other targets, you can list them under
@@ -5235,10 +5235,9 @@ cd /Users/ryan/dev/nutorch/rs
 cargo build --release
 ```
 
-The resulting binary will be located at
-`target/release/nu_plugin_nutorch` (or `target/release/nu_plugin_nutorch.exe`
-on Windows), which matches Nushell's expected naming convention, even though the
-crate is named `nutorch`.
+The resulting binary will be located at `target/release/nu_plugin_nutorch` (or
+`target/release/nu_plugin_nutorch.exe` on Windows), which matches Nushell's
+expected naming convention, even though the crate is named `nutorch`.
 
 #### Step 4: Register the Plugin in Nushell
 
@@ -5289,7 +5288,6 @@ error: invalid type: map, expected a sequence
  9 | | name = "nu_plugin_nutorch"
 10 | | path = "src/main.rs"
    | |____________________^
-
 ```
 
 what's wrong?
@@ -5323,7 +5321,7 @@ description = "A Nushell plugin for PyTorch operations"
 
 [[bin]]
 name = "nu_plugin_nutorch"
-path = "src/main.rs"  # Path to your main entry point file
+path = "src/main.rs" # Path to your main entry point file
 ```
 
 ### Explanation of the Fix
@@ -5334,7 +5332,8 @@ path = "src/main.rs"  # Path to your main entry point file
   properties like `name` and `path`.
 - **Why `[bin]` Failed:** A single bracket `[bin]` is not a valid section for
   defining binary targets in Cargo. It might be misinterpreted as a map or
-  another type of configuration, leading to the `invalid type: map, expected a
+  another type of configuration, leading to the
+  `invalid type: map, expected a
   sequence` error.
 
 ### Build the Project
@@ -5347,10 +5346,9 @@ cd /Users/ryan/dev/nutorch/rs
 cargo build --release
 ```
 
-The resulting binary should now be located at
-`target/release/nu_plugin_nutorch` (or `target/release/nu_plugin_nutorch.exe`
-on Windows), matching Nushell's expected naming convention, while the crate
-itself is named `nutorch`.
+The resulting binary should now be located at `target/release/nu_plugin_nutorch`
+(or `target/release/nu_plugin_nutorch.exe` on Windows), matching Nushell's
+expected naming convention, while the crate itself is named `nutorch`.
 
 ### Register the Plugin in Nushell
 
@@ -5376,6 +5374,595 @@ successfully builds the binary as `nu_plugin_nutorch` with the crate named
 `nutorch`. If you encounter any further issues or if you'd like to proceed to
 the next PyTorch method or feature from your neural network demo for
 implementation in `nutorch`, I'm ready to assist.
+
+Let me know how this goes or if you have further questions!
+
+# === USER ===
+
+ok, we've got `requires_grad` working for the most elementary of methods we need
+to make a neural network. now, in the interest of making the api as similar to
+pytorch as possible, let's take a look at this call to torch.tensor:
+
+```python
+torch.tensor([0.0, 0.0]),
+```
+
+i can see using my LSP that the `torch.tensor` method has one more optional
+named argument: `pin_memory`. first, help me understand, what is this value and
+what role does it play in pytorch? please keep your answer brief.
+
+# === ASSISTANT ===
+
+I'm glad to hear that `requires_grad` is working for the basic methods in your
+`nutorch` plugin. Let's briefly explore the `pin_memory` optional argument in
+`torch.tensor` and its role in PyTorch, keeping the explanation concise as
+requested.
+
+### What is `pin_memory` in PyTorch?
+
+`pin_memory` is an optional boolean argument in PyTorch tensor creation methods
+like `torch.tensor`, defaulting to `False`. When set to `True`, it allocates the
+tensor in **pinned memory** (also called page-locked memory) on the host (CPU)
+when the tensor is created on the CPU. Pinned memory is a special type of memory
+that cannot be swapped out by the operating system, ensuring faster data
+transfers to CUDA-enabled GPUs.
+
+### Role in PyTorch
+
+- **Faster GPU Transfers:** Pinned memory enables asynchronous memory copies
+  from host to GPU, which can significantly speed up data loading and transfer
+  operations during training or inference (e.g., when using `DataLoader` with
+  `pin_memory=True`).
+- **Use Case:** It's primarily useful for tensors that will be frequently moved
+  to the GPU, such as input data or batches in deep learning workflows, as it
+  reduces transfer latency.
+- **Overhead:** Enabling `pin_memory` uses non-swappable memory, which can be a
+  limited resource, so it's typically used only when GPU acceleration is needed
+  and transfer performance is critical.
+
+In your example `torch.tensor([0.0, 0.0], pin_memory=True)`, the tensor would be
+allocated in pinned memory if it's on the CPU, preparing it for efficient GPU
+transfer if later moved to a CUDA device.
+
+### Next Steps
+
+Let me know if you'd like to include `pin_memory` as an optional argument in
+`nutorch tensor` or other tensor creation methods, and I can help implement it
+using `tch-rs` (which supports pinned memory via options or methods like
+`to_device` with pinned allocation). If you have other priorities or want to
+move to the next PyTorch method, I'm ready to assist.
+
+Let me know your thoughts!
+
+# === USER ===
+
+yes, considering `tch-rs` supports pinned memory, let's go ahead and add
+support.
+
+let me give you the current working version of the `CommandTensor` code. please
+keep this method the same, except add support for the new argument.
+
+```rust
+// Command to convert Nushell data structure to tensor (tensor)
+struct CommandTensor;
+
+impl PluginCommand for CommandTensor {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "nutorch tensor"
+    }
+
+    fn description(&self) -> &str {
+        "Convert a Nushell Value (nested list structure) to a tensor"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("nutorch tensor")
+            .input_output_types(vec![(Type::Any, Type::String)])
+            .named(
+                "device",
+                SyntaxShape::String,
+                "Device to create the tensor on (default: 'cpu')",
+                None,
+            )
+            .named(
+                "dtype",
+                SyntaxShape::String,
+                "Data type of the tensor (default: 'float32')",
+                None,
+            )
+            .named(
+                "requires_grad",
+                SyntaxShape::Boolean,
+                "Whether the tensor requires gradient tracking for autograd (default: false)",
+                None,
+            )
+            .category(Category::Custom("nutorch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Convert a 1D list to a tensor",
+                example: "[0.0, 1.0, 2.0, 3.0] | nutorch tensor",
+                result: None,
+            },
+            Example {
+                description: "Convert a 2D nested list to a tensor with specific device and dtype",
+                example: "[[0.0, 1.0], [2.0, 3.0]] | nutorch tensor --device cpu --dtype float64",
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        let input_value = input.into_value(call.head)?;
+
+        // Handle optional device argument
+        let device = get_device_from_call(call)?;
+
+        // Handle optional dtype argument
+        let kind = get_kind_from_call(call)?;
+
+        // Convert Nushell Value to tensor
+        let mut tensor = value_to_tensor(&input_value, kind, device, call.head)?;
+        // Generate a unique ID for the tensor
+
+        // Handle optional requires_grad argument
+        tensor = add_grad_from_call(call, tensor)?;
+
+        let id = Uuid::new_v4().to_string();
+        // Store in registry
+        TENSOR_REGISTRY.lock().unwrap().insert(id.clone(), tensor);
+        // Return the ID as a string to Nushell, wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(id, call.head), None))
+    }
+}
+```
+
+# === ASSISTANT ===
+
+I'm glad to help add support for the `pin_memory` argument to your
+`CommandTensor` implementation in the `nutorch` plugin, keeping the rest of the
+method unchanged as requested. Since `tch-rs` supports pinned memory through
+tensor creation options or methods (often tied to CPU allocation before moving
+to GPU), we'll add this as an optional named argument in the `signature` and
+apply it during tensor creation if specified.
+
+### Role of `pin_memory` in `tch-rs`
+
+In `tch-rs`, pinned memory can be enabled for tensors on the CPU by using
+specific creation options or by calling methods like `pin_memory()` on a tensor
+after creation. The `pin_memory()` method is a direct way to allocate the tensor
+in pinned memory, which optimizes data transfer to CUDA devices. We'll use this
+method to mirror PyTorch's `pin_memory=True` behavior, applying it only when the
+tensor is on the CPU (as pinned memory is irrelevant for GPU tensors).
+
+### Updated `CommandTensor` with `pin_memory` Support
+
+Here's the updated `CommandTensor` code, maintaining your existing structure and
+conventions (e.g., using `get_device_from_call` and `get_kind_from_call`), with
+the addition of the `pin_memory` argument:
+
+```rust
+// Command to convert Nushell data structure to tensor (tensor)
+struct CommandTensor;
+
+impl PluginCommand for CommandTensor {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "nutorch tensor"
+    }
+
+    fn description(&self) -> &str {
+        "Convert a Nushell Value (nested list structure) to a tensor"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("nutorch tensor")
+            .input_output_types(vec![(Type::Any, Type::String)])
+            .named(
+                "device",
+                SyntaxShape::String,
+                "Device to create the tensor on (default: 'cpu')",
+                None,
+            )
+            .named(
+                "dtype",
+                SyntaxShape::String,
+                "Data type of the tensor (default: 'float32')",
+                None,
+            )
+            .named(
+                "requires_grad",
+                SyntaxShape::Boolean,
+                "Whether the tensor requires gradient tracking for autograd (default: false)",
+                None,
+            )
+            .named(
+                "pin_memory",
+                SyntaxShape::Boolean,
+                "Whether to allocate the tensor in pinned memory for faster GPU transfer (default: false, CPU only)",
+                None,
+            )
+            .category(Category::Custom("nutorch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Convert a 1D list to a tensor",
+                example: "[0.0, 1.0, 2.0, 3.0] | nutorch tensor",
+                result: None,
+            },
+            Example {
+                description: "Convert a 2D nested list to a tensor with specific device, dtype, and pinned memory",
+                example: "[[0.0, 1.0], [2.0, 3.0]] | nutorch tensor --device cpu --dtype float64 --pin_memory true",
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        let input_value = input.into_value(call.head)?;
+
+        // Handle optional device argument
+        let device = get_device_from_call(call)?;
+
+        // Handle optional dtype argument
+        let kind = get_kind_from_call(call)?;
+
+        // Convert Nushell Value to tensor
+        let mut tensor = value_to_tensor(&input_value, kind, device, call.head)?;
+
+        // Handle optional requires_grad argument
+        tensor = add_grad_from_call(call, tensor)?;
+
+        // Handle optional pin_memory argument (only applicable for CPU tensors)
+        let pin_memory = call.get_flag::<bool>("pin_memory")?.unwrap_or(false);
+        if pin_memory {
+            if device == Device::Cpu {
+                tensor = tensor.pin_memory();
+            } else {
+                print "Warning: pin_memory is ignored for non-CPU devices";
+            }
+        }
+
+        let id = Uuid::new_v4().to_string();
+        // Store in registry
+        TENSOR_REGISTRY.lock().unwrap().insert(id.clone(), tensor);
+        // Return the ID as a string to Nushell, wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(id, call.head), None))
+    }
+}
+```
+
+### Explanation of the Update
+
+- **Added `pin_memory` to `signature()`:** Included a new optional named
+  argument `pin_memory` of type `SyntaxShape::Boolean`, with a description
+  clarifying its purpose and default value (`false`). This mirrors PyTorch's API
+  for `torch.tensor` and other creation methods.
+- **Updated `examples()`:** Added an example demonstrating the use of
+  `pin_memory` alongside other optional arguments like `device` and `dtype`.
+- **Handled `pin_memory` in `run()`:** Added logic to retrieve the `pin_memory`
+  flag value (defaulting to `false`). If set to `true` and the tensor is on the
+  CPU (`device == Device::Cpu`), we call `tensor.pin_memory()` to allocate it in
+  pinned memory. If the tensor is not on the CPU, we ignore the setting with a
+  warning message (since pinned memory is irrelevant for GPU tensors).
+- **Preserved Existing Structure:** Kept all other parts of the method
+  unchanged, including the use of `get_device_from_call`, `get_kind_from_call`,
+  and `add_grad_from_call` as per your conventions.
+
+### Build and Test
+
+After updating `CommandTensor` as shown, rebuild your plugin:
+
+```bash
+cd /Users/ryan/dev/nutorch/rs
+cargo build --release
+```
+
+Re-add the plugin to Nushell:
+
+```nu
+plugin rm nutorch
+plugin add /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_nutorch
+```
+
+Test the updated `tensor` command to ensure it supports `pin_memory`:
+
+```nu
+# Test 1: Create a tensor with pin_memory enabled on CPU
+let t1 = ([1.5 2.5] | nutorch tensor --device cpu --pin_memory true)
+$t1 | nutorch value  # Should show [1.5, 2.5]
+print "Test 1: SUCCESS - Tensor created with pin_memory=true on CPU"
+
+# Test 2: Create a tensor with pin_memory enabled on GPU (ignored with warning)
+let t2 = ([3.0 4.0] | nutorch tensor --device cuda --pin_memory true)
+$t2 | nutorch value  # Should show [3.0, 4.0], with warning about pin_memory ignored
+print "Test 2: SUCCESS - Tensor created with pin_memory=true on GPU (ignored)"
+
+# Test 3: Create a tensor without pin_memory (default)
+let t3 = ([5.0 6.0] | nutorch tensor)
+$t3 | nutorch value  # Should show [5.0, 6.0]
+print "Test 3: SUCCESS - Tensor created with default pin_memory=false"
+```
+
+### Additional Notes
+
+- **CPU-Only Applicability:** Pinned memory is only relevant for CPU tensors, so
+  the code checks the device type and ignores `pin_memory` for non-CPU devices
+  with a warning. This prevents unnecessary operations and clarifies behavior to
+  users.
+- **Performance Impact:** Enabling `pin_memory` should have minimal impact
+  during tensor creation but can improve performance when transferring to GPU in
+  later operations. Testing its effect requires GPU operations, which can be
+  assessed once you implement data transfer or training steps.
+- **Compatibility:** The `pin_memory()` method is supported in `tch-rs` (based
+  on common versions like `0.13.0`). If your version lacks it or if you
+  encounter issues, let me know, and we can explore alternative approaches
+  (e.g., creation options if available).
+
+### Next Steps
+
+Let me know if this updated `CommandTensor` with `pin_memory` support works as
+expected. If you'd like to apply this to other tensor creation commands (e.g.,
+`nutorch full`, `nutorch randn`) or proceed to the next PyTorch method or
+feature from your neural network demo, I'm ready to assist.
+
+Let me know how the test goes or if you have further questions!
+
+# === USER ===
+
+i got this error:
+
+```
+utorch: [0.0, 1.0, 2.0, 3.0] | nutorch tensor --requires_grad true --pin_memory true | nutorch value
+[W629 16:27:28.714139000 Memory.cpp:48] Warning: The argument 'device' of Tensor.pin_memory() is deprecated. Please do not pass this argument. (function pin_memory)
+[W629 16:27:28.714159000 Memory.cpp:33] Warning: The argument 'device' of Tensor.is_pinned() is deprecated. Please do not pass this argument. (function is_pinned)
+
+thread 'plugin runner (primary)' panicked at /Users/ryan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tch-0.20.0/src/wrappers/tensor_generated.rs:14502:35:
+```
+
+that looks like an error from the C++ code. of course, in rust, there is no such
+thing as an optional argument. there is no way to not pass the device. is there
+another way to pin memory, or should we just give up on this as it seems to be
+deprecated?
+
+# === ASSISTANT ===
+
+I apologize for the error you encountered when trying to use `pin_memory()` with
+`tch-rs` in your `nutorch` plugin. The warnings and subsequent panic you're
+seeing indicate an issue with how `pin_memory()` is interacting with the
+underlying LibTorch C++ library, likely due to deprecated arguments or
+incompatible API usage in the version of `tch-rs` you're using (0.20.0, as per
+the error message). Let's analyze the error, address whether there's another way
+to pin memory, and decide whether to proceed or abandon this feature given the
+deprecation warning.
+
+### Understanding the Error
+
+The error messages and panic originate from the C++ backend of LibTorch (via
+`tch-rs`):
+
+- **Warnings:** 
+  - `Warning: The argument 'device' of Tensor.pin_memory() is deprecated. Please
+    do not pass this argument.`
+  - `Warning: The argument 'device' of Tensor.is_pinned() is deprecated. Please
+    do not pass this argument.`
+  These warnings suggest that the `pin_memory()` method in the version of
+  LibTorch used by `tch-rs` 0.20.0 no longer accepts a `device` argument, or
+  that `tch-rs` is passing it internally in a way that's no longer supported.
+
+- **Panic:** The panic at
+  `tch-0.20.0/src/wrappers/tensor_generated.rs:14502:35` indicates a runtime
+  error in the `tch-rs` wrapper, likely triggered by an incompatibility or
+  invalid call to the underlying C++ function when attempting to pin memory.
+
+In Rust (and by extension `tch-rs`), as you noted, there are no optional
+arguments in the same sense as in C++ or Python. The `tch-rs` API for
+`pin_memory()` might be calling a C++ function with a `device` parameter
+internally, which is now deprecated in the LibTorch version you're using,
+causing the warning and subsequent panic.
+
+### Is There Another Way to Pin Memory?
+
+In PyTorch (and LibTorch), pinning memory is still supported, but the API might
+have evolved. In newer versions of PyTorch, `pin_memory()` for tensors and
+`pin_memory=True` in `DataLoader` are still valid, though internal
+implementations or optional arguments like `device` may have been deprecated or
+removed (as seen in the warning). In `tch-rs`, there are a few potential
+approaches to pin memory without triggering this error:
+
+1. **Use `pin_memory()` Without Additional Arguments:** Check if your version of
+   `tch-rs` supports a simple `tensor.pin_memory()` call without passing a
+   `device` argument. The warning suggests that `device` is being passed
+   internally by `tch-rs`, so we need to verify the exact API signature.
+   Unfortunately, in `tch-rs` 0.20.0, it seems `pin_memory()` might still
+   attempt to pass deprecated arguments, leading to the panic.
+
+2. **Alternative Method or Option During Creation:** Some versions of `tch-rs`
+   or LibTorch may support pinning memory through tensor creation options (e.g.,
+   as part of device or memory allocation settings). However, this is not
+   explicitly exposed in most `tch-rs` versions for tensor creation methods like
+   `of_slice` or `full`.
+
+3. **Check for Updated `tch-rs` Version:** The issue might be specific to
+   `tch-rs` 0.20.0. Updating to a newer version of `tch-rs` (e.g., the latest
+   stable version) might resolve this if the API has been adjusted to align with
+   newer LibTorch versions that deprecated the `device` argument for
+   `pin_memory()`.
+
+4. **Fallback to Manual Handling (Not Feasible):** Unlike Python, where you can
+   sometimes manually pin memory via lower-level APIs, `tch-rs` does not expose
+   such granular control, so we're reliant on the provided methods.
+
+Given the deprecation warning and the panic, it seems that `pin_memory()` in
+`tch-rs` 0.20.0 is not functioning as expected due to an outdated or
+incompatible API call.
+
+### Should We Give Up on `pin_memory` Support?
+
+Given the deprecation warning and the error, I recommend temporarily **giving up
+on `pin_memory` support** in your `nutorch` plugin for now, unless you're able
+to update to a newer version of `tch-rs` that resolves this issue. Here's why:
+
+- **Deprecated API:** The warnings indicate that the `device` argument for
+  `pin_memory()` is deprecated in the underlying LibTorch version, suggesting
+  that this feature's API is in flux or no longer supported in the same way.
+- **Panic Issue:** The panic suggests a deeper incompatibility or bug in
+  `tch-rs` 0.20.0's handling of `pin_memory()`, making it unreliable for use in
+  your plugin.
+- **Non-Critical Feature:** While `pin_memory` can optimize GPU data transfers,
+  it's not critical for basic tensor operations or autograd functionality. You
+  can revisit this later when focusing on performance optimization for GPU
+  training workflows, potentially with an updated `tch-rs` version.
+
+If you wish to pursue `pin_memory` support despite the deprecation warning, we
+can try updating `tch-rs` in your `Cargo.toml` to the latest version (e.g.,
+`0.23.0` or newer, if available) to see if the API has been fixed, or inspect
+the `tch-rs` source code for alternative methods. However, given the time
+investment and the non-critical nature of this feature, I suggest removing it
+for now.
+
+### Updated `CommandTensor` Without `pin_memory`
+
+Let's revert the `CommandTensor` code to remove the `pin_memory` argument until
+a more stable solution is available:
+
+```rust
+// Command to convert Nushell data structure to tensor (tensor)
+struct CommandTensor;
+
+impl PluginCommand for CommandTensor {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "nutorch tensor"
+    }
+
+    fn description(&self) -> &str {
+        "Convert a Nushell Value (nested list structure) to a tensor"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("nutorch tensor")
+            .input_output_types(vec![(Type::Any, Type::String)])
+            .named(
+                "device",
+                SyntaxShape::String,
+                "Device to create the tensor on (default: 'cpu')",
+                None,
+            )
+            .named(
+                "dtype",
+                SyntaxShape::String,
+                "Data type of the tensor (default: 'float32')",
+                None,
+            )
+            .named(
+                "requires_grad",
+                SyntaxShape::Boolean,
+                "Whether the tensor requires gradient tracking for autograd (default: false)",
+                None,
+            )
+            .category(Category::Custom("nutorch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Convert a 1D list to a tensor",
+                example: "[0.0, 1.0, 2.0, 3.0] | nutorch tensor",
+                result: None,
+            },
+            Example {
+                description: "Convert a 2D nested list to a tensor with specific device and dtype",
+                example: "[[0.0, 1.0], [2.0, 3.0]] | nutorch tensor --device cpu --dtype float64",
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        let input_value = input.into_value(call.head)?;
+
+        // Handle optional device argument
+        let device = get_device_from_call(call)?;
+
+        // Handle optional dtype argument
+        let kind = get_kind_from_call(call)?;
+
+        // Convert Nushell Value to tensor
+        let mut tensor = value_to_tensor(&input_value, kind, device, call.head)?;
+        // Generate a unique ID for the tensor
+
+        // Handle optional requires_grad argument
+        tensor = add_grad_from_call(call, tensor)?;
+
+        let id = Uuid::new_v4().to_string();
+        // Store in registry
+        TENSOR_REGISTRY.lock().unwrap().insert(id.clone(), tensor);
+        // Return the ID as a string to Nushell, wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(id, call.head), None))
+    }
+}
+```
+
+### Build and Test
+
+After reverting `CommandTensor` to remove `pin_memory` support, rebuild your
+plugin:
+
+```bash
+cd /Users/ryan/dev/nutorch/rs
+cargo build --release
+```
+
+Re-add the plugin to Nushell:
+
+```nu
+plugin rm nutorch
+plugin add /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_nutorch
+```
+
+Test the `tensor` command to ensure it works without the `pin_memory` flag:
+
+```nu
+# Test 1: Create a tensor without pin_memory
+let t1 = ([1.5 2.5] | nutorch tensor --requires_grad true)
+$t1 | nutorch value  # Should show [1.5, 2.5]
+print "Test 1: SUCCESS - Tensor created without pin_memory"
+```
+
+### Next Steps
+
+Let me know if removing `pin_memory` resolves the error and if you'd like to
+revisit this feature later with a potential `tch-rs` update or alternative
+approach. If you're ready to proceed to the next PyTorch method or feature from
+your neural network demo for implementation in `nutorch`, or if you have other
+concerns, I'm happy to assist.
 
 Let me know how this goes or if you have further questions!
 

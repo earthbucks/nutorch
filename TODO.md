@@ -11,7 +11,7 @@ nutorch
 - [x] add autograd setting to torch.randn
 - [x] add autograd setting to torch.full
 - [x] add autograd setting to torch.mm
-- [ ] add autograd setting to tensor.linspace
+- [x] add autograd setting to tensor.linspace
 - [ ] export -> value
 
 tplot
