@@ -21,6 +21,7 @@ impl Plugin for NutorchPlugin {
             // Top-level Nutorch command
             Box::new(CommandNutorch),
             // Individual commands for tensor operations
+            Box::new(CommandCat),
             Box::new(CommandDevices),
             Box::new(CommandFull),
             Box::new(CommandLinspace),
@@ -82,6 +83,156 @@ impl PluginCommand for CommandNutorch {
             ),
             None,
         ))
+    }
+}
+
+struct CommandCat;
+
+impl PluginCommand for CommandCat {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "nutorch cat"
+    }
+
+    fn description(&self) -> &str {
+        "Concatenate a sequence of tensors along a specified dimension (similar to torch.cat)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("nutorch cat")
+            .rest(
+                "tensor_ids",
+                SyntaxShape::String,
+                "IDs of the tensors to concatenate",
+            )
+            .named(
+                "dim",
+                SyntaxShape::Int,
+                "Dimension along which to concatenate (default: 0)",
+                None,
+            )
+            .input_output_types(vec![(Type::Nothing, Type::String)])
+            .category(Category::Custom("nutorch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Concatenate two 2x3 tensors along dimension 0",
+                example: "let t1 = (nutorch full 1 2 3); let t2 = (nutorch full 2 2 3); nutorch cat $t1 $t2 --dim 0 | nutorch value",
+                result: None,
+            },
+            Example {
+                description: "Concatenate three 2x3 tensors along dimension 1",
+                example: "let t1 = (nutorch full 1 2 3); let t2 = (nutorch full 2 2 3); let t3 = (nutorch full 3 2 3); nutorch cat $t1 $t2 $t3 --dim 1 | nutorch value",
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        _input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Get tensor IDs to concatenate
+        let tensor_ids: Vec<String> = call
+            .rest(0)
+            .map_err(|_| {
+                LabeledError::new("Invalid input")
+                    .with_label("Unable to parse tensor IDs", call.head)
+            })?
+            .into_iter()
+            .map(|v: Value| v.as_str().map(|s| s.to_string()))
+            .collect::<Result<Vec<String>, _>>()?;
+        if tensor_ids.len() < 2 {
+            return Err(LabeledError::new("Invalid input").with_label(
+                "At least two tensor IDs must be provided for concatenation",
+                call.head,
+            ));
+        }
+
+        // Get the dimension to concatenate along (default to 0)
+        let dim: i64 = match call.get_flag::<i64>("dim")? {
+            Some(d) => {
+                if d < 0 {
+                    return Err(LabeledError::new("Invalid input")
+                        .with_label("Dimension must be non-negative", call.head));
+                }
+                d
+            }
+            None => 0,
+        };
+
+        // Look up tensors in registry
+        let mut registry = TENSOR_REGISTRY.lock().unwrap();
+        let mut tensors: Vec<Tensor> = Vec::new();
+        for id in &tensor_ids {
+            match registry.get(id) {
+                Some(tensor) => tensors.push(tensor.shallow_clone()),
+                None => {
+                    return Err(LabeledError::new("Tensor not found")
+                        .with_label(format!("Invalid tensor ID: {}", id), call.head))
+                }
+            }
+        }
+
+        // Check if tensors have compatible shapes for concatenation
+        if tensors.is_empty() {
+            return Err(LabeledError::new("Invalid input")
+                .with_label("No tensors provided for concatenation", call.head));
+        }
+        let first_shape = tensors[0].size();
+        if first_shape.len() as i64 <= dim {
+            return Err(LabeledError::new("Invalid dimension").with_label(
+                format!(
+                    "Dimension {} out of bounds for tensor with {} dimensions",
+                    dim,
+                    first_shape.len()
+                ),
+                call.head,
+            ));
+        }
+        for (i, tensor) in tensors.iter().enumerate().skip(1) {
+            let shape = tensor.size();
+            if shape.len() != first_shape.len() {
+                return Err(LabeledError::new("Shape mismatch").with_label(
+                    format!(
+                        "Tensor {} has different number of dimensions ({} vs {})",
+                        i,
+                        shape.len(),
+                        first_shape.len()
+                    ),
+                    call.head,
+                ));
+            }
+            for (d, (&s1, &s2)) in first_shape.iter().zip(shape.iter()).enumerate() {
+                if d as i64 != dim && s1 != s2 {
+                    return Err(LabeledError::new("Shape mismatch").with_label(
+                        format!(
+                            "Tensor {} has mismatched size in dimension {} ({} vs {})",
+                            i, d, s2, s1
+                        ),
+                        call.head,
+                    ));
+                }
+            }
+        }
+
+        // Create references to tensors for cat
+        let tensor_refs: Vec<&Tensor> = tensors.iter().collect();
+
+        // Perform concatenation using tch-rs
+        let result_tensor = Tensor::cat(&tensor_refs, dim);
+
+        // Store result in registry with new ID
+        let new_id = Uuid::new_v4().to_string();
+        registry.insert(new_id.clone(), result_tensor);
+        // Return new ID wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
     }
 }
 
@@ -288,13 +439,10 @@ impl PluginCommand for CommandFull {
         let fill_value_val = call.nth(0).unwrap();
         let fill_value_result = match fill_value_val.as_int() {
             Ok(int_val) => Ok(Number::Int(int_val)),
-            Err(_) => fill_value_val
-                .as_float()
-                .map(Number::Float)
-                .map_err(|_| {
-                    LabeledError::new("Invalid input")
-                        .with_label("Value must be a number (integer or float)", call.head)
-                }),
+            Err(_) => fill_value_val.as_float().map(Number::Float).map_err(|_| {
+                LabeledError::new("Invalid input")
+                    .with_label("Value must be a number (integer or float)", call.head)
+            }),
         };
         let fill_value = fill_value_result?;
 
