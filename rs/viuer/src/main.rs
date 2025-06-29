@@ -60,8 +60,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         use_iterm: true,
         use_sixel: true,
         truecolor: true,
-        x: 20,
-        y: 4,
+        // x: 20,
+        // y: 4,
         restore_cursor: false,
         ..Default::default()
     };
