@@ -1,0 +1,9 @@
+[package]
+name = "test_plotters"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+authors = ["Ryan X. Charles <ryan@ryanxcharles.com>"]
+
+[dependencies]
+plotters = "0.3.7"
