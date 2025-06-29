@@ -371,7 +371,11 @@ impl PluginCommand for CommandRandn {
         let kind = get_kind_from_call(call)?;
 
         // Create a random tensor using tch-rs
-        let tensor = Tensor::randn(&dims, (kind, device));
+        let mut tensor = Tensor::randn(&dims, (kind, device));
+
+        // Handle optional requires_grad argument
+        tensor = add_grad_from_call(call, tensor)?;
+
         // Generate a unique ID for the tensor
         let id = Uuid::new_v4().to_string();
         // Store in registry
