@@ -2,7 +2,7 @@
 
 <img src="./raw-images/nutorch-3d.png" width="200" height="200" alt="Nutorch" />
 
-**GPU-powered neural networks on the command line.**
+**GPU-powered machine learning on the command line.**
 
 ## Garbage Collection
 
