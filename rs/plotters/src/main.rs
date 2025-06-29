@@ -1,5 +1,5 @@
 use plotters::prelude::*;
-use image::{DynamicImage, ImageBuffer, Rgba};
+use image::{DynamicImage, ImageBuffer, Rgba, Rgb};
 use viuer::{Config, print};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -37,26 +37,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         root.present()?;
     }
 
-    // Force alpha channel to 255 (fully opaque)
-    for pixel in buffer.chunks_mut(4) {
-        if pixel.len() == 4 {
-            pixel[3] = 255; // Set alpha to fully opaque
-        }
-    }
+    // // Force alpha channel to 255 (fully opaque)
+    // for pixel in buffer.chunks_mut(4) {
+    //     if pixel.len() == 4 {
+    //         pixel[3] = 255; // Set alpha to fully opaque
+    //     }
+    // }
 
-    // Create ImageBuffer with RGBA format
-    let img_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_vec(width as u32, height as u32, buffer)
-        .expect("Failed to create image buffer from vector");
+    // Create ImageBuffer with RGB format
+    let rgb_buffer = ImageBuffer::<Rgb<u8>, Vec<u8>>::from_vec(width as u32, height as u32, buffer)
+        .expect("Failed to create RGB image buffer from vector");
+
+    // Convert RGB to RGBA by adding alpha channel (set to 255 for opacity)
+    let mut rgba_data = Vec::with_capacity(width * height * 4);
+    for pixel in rgb_buffer.pixels() {
+        rgba_data.extend_from_slice(&[pixel.0[0], pixel.0[1], pixel.0[2], 255]); // R, G, B, A
+    }
+    let rgba_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_vec(width as u32, height as u32, rgba_data)
+        .expect("Failed to create RGBA image buffer");
 
     // Configure viuer for terminal display
     let conf = Config {
         width: Some(80),  // Adjust based on terminal width; optional
         height: Some(40), // Adjust based on terminal height; optional
+        use_kitty: true,
+        use_iterm: true,
+        use_sixel: true,
+        truecolor: true,
         ..Default::default()
     };
 
     // Convert ImageBuffer to DynamicImage
-    let dynamic_img: DynamicImage = DynamicImage::ImageRgba8(img_buffer.clone());
+    let dynamic_img: DynamicImage = DynamicImage::ImageRgba8(rgba_buffer);
 
     // Display the image in the terminal using viuer (implicit conversion to DynamicImage)
     print(&dynamic_img, &conf).expect("Failed to display image in terminal");
@@ -66,7 +78,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // print(&dynamic_img, &conf).expect("Failed to display image in terminal");
 
     // Optional: Still save for debugging
-    img_buffer.save("debug_buffer.png").expect("Failed to save debug image");
+    // img_buffer.save("debug_buffer.png").expect("Failed to save debug image");
 
     Ok(())
 }
