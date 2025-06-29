@@ -1,11 +1,11 @@
 use plotters::prelude::*;
-use std::io::Write;
-use image::{ImageBuffer, Rgb};
+use image::{DynamicImage, ImageBuffer, Rgba};
+use viuer::{Config, print};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let width = 640;
     let height = 480;
-    let mut buffer = vec![0u8; width * height * 3]; // 3 bytes per pixel (RGB)
+    let mut buffer = vec![0u8; width * height * 4]; // 4 bytes per pixel (RGBA)
 
     {
         let root = BitMapBackend::with_buffer(&mut buffer, (width as u32, height as u32)).into_drawing_area();
@@ -37,21 +37,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         root.present()?;
     }
 
-    // Create ImageBuffer with RGB format
-    let img_buffer = ImageBuffer::<Rgb<u8>, Vec<u8>>::from_vec(width as u32, height as u32, buffer)
+    // Force alpha channel to 255 (fully opaque)
+    for pixel in buffer.chunks_mut(4) {
+        if pixel.len() == 4 {
+            pixel[3] = 255; // Set alpha to fully opaque
+        }
+    }
+
+    // Create ImageBuffer with RGBA format
+    let img_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_vec(width as u32, height as u32, buffer)
         .expect("Failed to create image buffer from vector");
 
-    // // Debug save
-    // img_buffer.save("debug_buffer.png").expect("Failed to save debug image");
+    // Configure viuer for terminal display
+    let conf = Config {
+        width: Some(80),  // Adjust based on terminal width; optional
+        height: Some(40), // Adjust based on terminal height; optional
+        ..Default::default()
+    };
 
-    // Encode to PNG
-    let mut png_buffer = Vec::new();
-    img_buffer.write_to(&mut std::io::Cursor::new(&mut png_buffer), image::ImageFormat::Png)?;
+    // Convert ImageBuffer to DynamicImage
+    let dynamic_img: DynamicImage = DynamicImage::ImageRgba8(img_buffer.clone());
 
-    // Write to stdout
-    let mut stdout = std::io::stdout();
-    stdout.write_all(&png_buffer)?;
-    stdout.flush()?;
+    // Display the image in the terminal using viuer (implicit conversion to DynamicImage)
+    print(&dynamic_img, &conf).expect("Failed to display image in terminal");
+
+    // Alternative: Explicit conversion to DynamicImage if needed (uncomment if implicit fails)
+    // let dynamic_img = image::DynamicImage::ImageRgba8(img_buffer);
+    // print(&dynamic_img, &conf).expect("Failed to display image in terminal");
+
+    // Optional: Still save for debugging
+    img_buffer.save("debug_buffer.png").expect("Failed to save debug image");
 
     Ok(())
 }
