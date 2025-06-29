@@ -312,6 +312,12 @@ impl PluginCommand for CommandRandn {
                 "Data type of the tensor ('float32', 'float64', 'int32', 'int64', default: 'float32')",
                 None,
             )
+            .named(
+                "requires_grad",
+                SyntaxShape::Boolean,
+                "Whether the tensor requires gradient tracking for autograd (default: false)",
+                None,
+            )
             .input_output_types(vec![(Type::Nothing, Type::String)])
             .category(Category::Custom("nutorch".into()))
     }
