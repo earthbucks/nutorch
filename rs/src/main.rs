@@ -964,6 +964,12 @@ impl PluginCommand for CommandTensor {
                 "Data type of the tensor (default: 'float32')",
                 None,
             )
+            .named(
+                "requires_grad",
+                SyntaxShape::Boolean,
+                "Whether the tensor requires gradient tracking for autograd (default: false)",
+                None,
+            )
             .category(Category::Custom("nutorch".into()))
     }
 
