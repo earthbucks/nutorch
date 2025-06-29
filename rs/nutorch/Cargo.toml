@@ -1,13 +1,17 @@
 [package]
-name = "nu_plugin_nutorch"
+name = "nutorch"
 version = "0.0.1"
+authors = ["Ryan X. Charles <ryan@ryanxcharles.com>"]
 edition = "2021"
 license = "MIT"
-authors = ["Ryan X. Charles <ryan@ryanxcharles.com>"]
+
+[[bin]]
+name = "nu_plugin_nutorch"
+path = "src/main.rs"
 
 [dependencies]
 lazy_static = "1.5.0"
 nu-plugin = "0.105.1"
 nu-protocol = "0.105.1"
 tch = { version = "0.20.0" }
-uuid = {version = "1.17.0", features = ["v4"]} 
+uuid = { version = "1.17.0", features = ["v4"] }
