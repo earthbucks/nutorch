@@ -4108,14 +4108,13 @@ fixed and how to do it?
 
 # === ASSISTANT ===
 
-I'm glad to hear that switching from `tmux` to WezTerm has resolved the
-image rendering issue, and the images are now displaying correctly! Regarding
-the new issue where the console seems to "clear" before the image displays at
-the top of the screen, I’m happy to help investigate and potentially fix this
-behavior. Since this doesn't happen with `timg`, it’s likely related to how
-`viuer` interacts with the terminal when rendering the image. Let's analyze the
-possible causes and explore solutions to prevent the clearing or scrolling
-behavior.
+I'm glad to hear that switching from `tmux` to WezTerm has resolved the image
+rendering issue, and the images are now displaying correctly! Regarding the new
+issue where the console seems to "clear" before the image displays at the top of
+the screen, I’m happy to help investigate and potentially fix this behavior.
+Since this doesn't happen with `timg`, it’s likely related to how `viuer`
+interacts with the terminal when rendering the image. Let's analyze the possible
+causes and explore solutions to prevent the clearing or scrolling behavior.
 
 ### Why Does the Console Appear to "Clear"?
 
@@ -4468,6 +4467,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 **Run with `timg`**:
+
 ```bash
 cargo run | timg -
 ```
@@ -4501,6 +4501,7 @@ is more involved.
      reliable fallback.
 
 Run each test with:
+
 ```bash
 cargo run
 ```
@@ -4518,6 +4519,692 @@ before/after visibility, scroll position), and I can explore further
 workarounds, including alternative rendering libraries or custom escape sequence
 handling. I'm happy to help refine this until it matches `timg`'s seamless
 integration!
+
+# === USER ===
+
+i've just figured out something important about viuer. i'm trying to figure out
+why the image always displays at the top of the screen. it seems to clear my
+screen, and then display at the top. however, it has an `x` and `y` offset
+feature. this controls positioning the image. i can lower the image this way. is
+there any way to determine the correct value of `y` so that it always displays
+blow the command line, like any other normal command?
+
+# === ASSISTANT ===
+
+I'm glad you've discovered the `x` and `y` offset features in `viuer`'s `Config`
+struct, as they provide a way to control the positioning of the image in the
+terminal. You're correct that adjusting the `y` offset can lower the image on
+the screen, and it's a promising approach to ensure the image displays below the
+command line like a normal command output, rather than at the top after a
+perceived screen clear.
+
+The challenge is determining the correct `y` offset dynamically so that the
+image appears just below the current cursor position (where the command line
+output would typically continue). Let's analyze why the image appears at the top
+and explore how to calculate or set the appropriate `y` offset to mimic the
+behavior of a normal command output.
+
+### Why Does the Image Appear at the Top?
+
+As discussed previously, `viuer` (or the terminal protocol it uses, such as
+Kitty or iTerm2) may be sending escape sequences that reset the cursor to the
+top of the screen or clear the viewport before rendering the image. This
+behavior can override the natural flow of terminal output, making it seem like
+the screen is cleared and the image is placed at the top. The `x` and `y`
+offsets in `viuer::Config` allow you to shift the image's rendering position
+relative to this starting point, but without knowing the current cursor
+position, setting a static `y` value might not always place it correctly below
+the command line.
+
+### Can We Dynamically Determine the Correct `y` Offset?
+
+Yes, we can attempt to determine the correct `y` offset by querying the current
+cursor position in the terminal before rendering the image. If we know the row
+where the cursor is located (i.e., the line just below the last command output),
+we can set the `y` offset to that value, ensuring the image starts rendering
+below the command line. This approach requires interacting with the terminal to
+get the cursor position, which can be done using a library like `crossterm` or
+`termion` in Rust.
+
+Here's how we can achieve this:
+
+1. Use `crossterm` to query the current cursor position before rendering the
+   image.
+2. Set the `y` offset in `viuer::Config` to the current row (or row + a small
+   offset to account for spacing).
+3. Render the image with the adjusted offset.
+
+However, there's a caveat: not all terminals or environments reliably support
+cursor position queries, and `viuer`'s rendering might still override the
+position due to the terminal protocol's behavior (e.g., Kitty or iTerm2 might
+ignore offsets or reposition the cursor). Let's implement this solution and test
+it.
+
+### Updated Code to Dynamically Set `y` Offset
+
+We'll use `crossterm` to get the current cursor position and set the `y` offset
+in `viuer::Config`. If the cursor position query fails or `viuer` ignores the
+offset, we'll fall back to a static offset with manual adjustment.
+
+```rust
+use plotters::prelude::*;
+use image::{DynamicImage, ImageBuffer, Rgba};
+use viuer::{Config, print};
+use crossterm::{
+    cursor,
+    terminal::{size, Clear, ClearType},
+    execute,
+};
+use std::io::stdout;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let width = 640;
+    let height = 480;
+    let mut buffer = vec![0u8; width * height * 4]; // 4 bytes per pixel (RGBA)
+
+    {
+        let root = BitMapBackend::with_buffer(&mut buffer, (width as u32, height as u32)).into_drawing_area();
+        root.fill(&WHITE)?;
+
+        let mut chart = ChartBuilder::on(&root)
+            .caption("y=x^2", ("sans-serif", 50).into_font())
+            .margin(5)
+            .x_label_area_size(30)
+            .y_label_area_size(30)
+            .build_cartesian_2d(-1f32..1f32, -0.1f32..1f32)?;
+
+        chart.configure_mesh().draw()?;
+
+        chart
+            .draw_series(LineSeries::new(
+                (-50..=50).map(|x| x as f32 / 50.0).map(|x| (x, x * x)),
+                &RED,
+            ))?
+            .label("y = x^2")
+            .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
+
+        chart
+            .configure_series_labels()
+            .background_style(&WHITE.mix(0.8))
+            .border_style(&BLACK)
+            .draw()?;
+
+        root.present()?;
+    }
+
+    // Force alpha channel to 255 (fully opaque)
+    for pixel in buffer.chunks_mut(4) {
+        if pixel.len() == 4 {
+            pixel[3] = 255; // Set alpha to fully opaque
+        }
+    }
+
+    // Create ImageBuffer with RGBA format
+    let rgba_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_vec(width as u32, height as u32, buffer)
+        .expect("Failed to create RGBA image buffer");
+
+    // Convert ImageBuffer to DynamicImage
+    let dynamic_img: DynamicImage = DynamicImage::ImageRgba8(rgba_buffer);
+
+    // Get current cursor position to set y offset
+    let cursor_pos = cursor::position().unwrap_or((0, 0));
+    let y_offset = cursor_pos.1 as u16; // Current row as y offset
+
+    // Get terminal size for reference (optional debug)
+    let term_size = size().unwrap_or((80, 24));
+    println!("Cursor position: ({}, {}), Terminal size: ({}, {})", cursor_pos.0, cursor_pos.1, term_size.0, term_size.1);
+    println!("Setting y offset to: {}", y_offset);
+
+    // Configure viuer for terminal display with dynamic y offset
+    let conf = Config {
+        width: Some(80),  // Adjust based on terminal width; optional
+        height: Some(40), // Adjust based on terminal height; optional
+        use_kitty: true,
+        use_iterm: true,
+        use_sixel: true,
+        truecolor: true,
+        x: 0,             // Horizontal offset
+        y: y_offset as i16, // Vertical offset based on current cursor row
+        ..Default::default()
+    };
+
+    // Print some text before the image to see if it gets cleared
+    println!("Text before image rendering. If this disappears, the screen is being cleared.");
+
+    // Display the image in the terminal using viuer
+    print(&dynamic_img, &conf).expect("Failed to display image in terminal");
+
+    // Print text after to see cursor position
+    println!("Text after image rendering. This should appear below the image.");
+
+    Ok(())
+}
+```
+
+### Dependencies
+
+Ensure your `Cargo.toml` includes the necessary dependencies:
+
+```toml
+[dependencies]
+plotters = "0.3"
+image = "0.24"
+viuer = "0.7"
+crossterm = "0.27"
+```
+
+### Explanation of the Code
+
+- **Cursor Position Query**: We use `crossterm::cursor::position()` to get the
+  current cursor coordinates `(x, y)` in the terminal. The `y` value represents
+  the current row, which should be just below the last command output.
+- **Set `y` Offset**: We set the `y` offset in `viuer::Config` to the current
+  row (`cursor_pos.1 as i16`). This should position the image starting at the
+  current cursor row, mimicking normal command output behavior.
+- **Debug Output**: We print the cursor position and terminal size to help
+  diagnose if the offset is being applied correctly or if `viuer`/WezTerm
+  overrides it.
+- **Fallback Handling**: If `cursor::position()` fails (returns an error), it
+  defaults to `(0, 0)`, setting `y` to 0. You can adjust this fallback to a
+  static value if needed.
+
+### Running the Code
+
+Run the program in WezTerm to test the dynamic `y` offset:
+
+```bash
+cargo run
+```
+
+### Potential Issues and Adjustments
+
+1. **Protocol Override**: Some image protocols (e.g., Kitty or iTerm2) or
+   WezTerm itself might ignore the `x` and `y` offsets set in `viuer::Config`,
+   or reset the cursor to the top of the screen regardless of the offset. If
+   this happens, the dynamic `y` value won't take effect.
+2. **Cursor Position Accuracy**: The cursor position query might not always
+   reflect the exact row below the command line, especially if there are
+   asynchronous terminal updates or scrolling. You might need to add a small
+   static offset (e.g., `y_offset + 1`) to account for the command prompt line.
+3. **Terminal Scrolling**: If the terminal scrolls automatically after
+   rendering, the image might still appear offset. WezTerm settings or `viuer`
+   behavior might need further tweaking.
+
+If the dynamic offset doesn't work as expected due to protocol limitations, you
+can experiment with a static `y` offset based on your typical terminal usage.
+For example, if your command prompt is usually near the bottom of a 50-row
+terminal, try setting `y: 40` or similar, and adjust manually:
+
+```rust
+let conf = Config {
+    width: Some(80),
+    height: Some(40),
+    use_kitty: true,
+    use_iterm: true,
+    use_sixel: true,
+    truecolor: true,
+    x: 0,
+    y: 40, // Static value, adjust based on typical cursor position
+    ..Default::default()
+};
+```
+
+### Testing Steps
+
+1. **Run with Dynamic Offset**:
+   - Use the provided code to test if the dynamic `y` offset places the image
+     below the command line.
+   - Check if the "Text before" and "Text after" messages appear in the correct
+     positions relative to the image.
+2. **Adjust Static Offset if Needed**:
+   - If the dynamic offset doesn't work or is inconsistent, modify the `y` value
+     in `Config` to a static number (e.g., start with `y: 10` and increase until
+     the image appears below typical command output).
+3. **Observe Terminal Behavior**:
+   - Note if the screen still appears to clear or if the image jumps to the top
+     despite the offset. This will help determine if `viuer` or WezTerm is
+     overriding the positioning.
+
+### Expected Outcome
+
+Ideally, setting the `y` offset to the current cursor row will position the
+image just below the command line, behaving like normal command output. If
+`viuer` or WezTerm ignores the offset due to the image protocol's behavior, a
+static offset tuned to your terminal size and usage pattern should still achieve
+a similar result.
+
+### Next Steps if It Doesn't Work
+
+If the dynamic or static `y` offset doesn't position the image correctly, or if
+the screen still clears:
+
+- **Check `viuer` Documentation**: Look at the `viuer` GitHub repository or
+  crates.io for any updates or additional options related to positioning or
+  screen clearing.
+- **WezTerm Configuration**: Explore WezTerm's settings (`~/.wezterm.lua`) for
+  options related to image rendering or scroll behavior that might prevent
+  clearing or repositioning.
+- **Fallback to `timg` Piping**: If positioning remains an issue, revert to
+  piping PNG data to `timg`, which you've confirmed doesn't clear the screen:
+  ```bash
+  cargo run | timg -
+  ```
+
+Please test the dynamic offset code and let me know if the image appears below
+the command line as desired. If it doesn't, share details about the behavior
+(e.g., still at top, screen clearing, offset ignored), and I can suggest further
+adjustments or alternative approaches. I'm happy to help fine-tune this until it
+matches your expectations!
+
+# === USER ===
+
+are there any alternatives to viuer that perform only the function of showing
+full-resolution images in the termainal? because viuer also has the feature of
+display block images, which is totally useless for charts, i think goals may not
+be the same as mine. my goal is to display charts, which must be full-resolution
+to be useful.
+
+# === ASSISTANT ===
+
+I'm glad you're focusing on finding a solution tailored to your specific goal
+of displaying full-resolution charts in the terminal. You're right that `viuer`
+supports multiple rendering modes, including block character rendering as a
+fallback, which may not align perfectly with your need for full-resolution image
+display (using protocols like Kitty, iTerm2, or sixel) for charts. Since your
+priority is high-fidelity rendering and `viuer` might include features beyond
+your requirements, let's explore alternative Rust crates or tools that focus on
+full-resolution image display in the terminal.
+
+### Criteria for Alternatives
+
+Given your goal of displaying charts at full resolution:
+- We need a library or tool that prioritizes terminal image protocols (Kitty,
+  iTerm2, sixel) for high-quality rendering.
+- It should ideally avoid fallback to low-resolution block rendering or allow
+  disabling such fallbacks to ensure full-resolution output.
+- It should integrate with our existing workflow (e.g., work with
+  `image::ImageBuffer` or PNG data from `plotters`).
+
+### Alternatives to `viuer` for Full-Resolution Terminal Image Display
+
+Below are some alternatives to `viuer` that focus on full-resolution image
+rendering in the terminal using modern protocols. Note that some of these might
+still have fallback mechanisms, but I'll prioritize options that emphasize
+high-fidelity rendering.
+
+#### 1. `term-img`
+
+- **Description**: `term-img` is a Rust crate specifically designed for
+  displaying images in the terminal using modern protocols like Kitty and
+  iTerm2. It focuses on full-resolution rendering and doesn't emphasize block
+  character fallbacks as much as `viuer`.
+- **Pros**:
+  - Lightweight and focused on image protocol rendering.
+  - Supports Kitty and iTerm2, which are likely supported by WezTerm on macOS.
+  - Can work with raw image data or files.
+- **Cons**:
+  - Less feature-rich than `viuer`, so configuration options might be limited.
+  - May still fall back to block rendering if no protocol is supported, though
+    this can often be disabled or avoided.
+- **Integration**: Works with `image::DynamicImage` or file paths, similar to
+  `viuer`.
+
+**Installation**: Add to `Cargo.toml`:
+```toml
+[dependencies]
+plotters = "0.3"
+image = "0.24"
+term-img = "0.2" # Check latest version on crates.io
+```
+
+**Sample Code**:
+```rust
+use plotters::prelude::*;
+use image::{DynamicImage, ImageBuffer, Rgba};
+use term_img::display_image;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let width = 640;
+    let height = 480;
+    let mut buffer = vec![0u8; width * height * 4]; // 4 bytes per pixel (RGBA)
+
+    {
+        let root = BitMapBackend::with_buffer(&mut buffer, (width as u32, height as u32)).into_drawing_area();
+        root.fill(&WHITE)?;
+
+        let mut chart = ChartBuilder::on(&root)
+            .caption("y=x^2", ("sans-serif", 50).into_font())
+            .margin(5)
+            .x_label_area_size(30)
+            .y_label_area_size(30)
+            .build_cartesian_2d(-1f32..1f32, -0.1f32..1f32)?;
+
+        chart.configure_mesh().draw()?;
+
+        chart
+            .draw_series(LineSeries::new(
+                (-50..=50).map(|x| x as f32 / 50.0).map(|x| (x, x * x)),
+                &RED,
+            ))?
+            .label("y = x^2")
+            .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
+
+        chart
+            .configure_series_labels()
+            .background_style(&WHITE.mix(0.8))
+            .border_style(&BLACK)
+            .draw()?;
+
+        root.present()?;
+    }
+
+    // Force alpha channel to 255 (fully opaque)
+    for pixel in buffer.chunks_mut(4) {
+        if pixel.len() == 4 {
+            pixel[3] = 255; // Set alpha to fully opaque
+        }
+    }
+
+    // Create ImageBuffer with RGBA format
+    let rgba_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_vec(width as u32, height as u32, buffer)
+        .expect("Failed to create RGBA image buffer");
+
+    // Convert ImageBuffer to DynamicImage
+    let dynamic_img: DynamicImage = DynamicImage::ImageRgba8(rgba_buffer);
+
+    // Print some text before the image
+    println!("Text before image rendering.");
+
+    // Display the image in the terminal using term-img
+    display_image(&dynamic_img, width as u32, height as u32).expect("Failed to display image in terminal");
+
+    // Print text after to check positioning
+    println!("Text after image rendering.");
+
+    Ok(())
+}
+```
+
+**Note**: The `term-img` API might differ slightly based on the version. Check
+the documentation on [crates.io](https://crates.io/crates/term-img) for the
+exact function signature. If `display_image` isn't the correct function, it
+might be something like `render_image` or similar—adjust accordingly after
+checking the crate's docs.
+
+**Test**: Run with `cargo run` in WezTerm to see if it renders full-resolution
+images without unnecessary fallbacks.
+
+#### 2. `sixel-rs`
+
+- **Description**: `sixel-rs` is a Rust crate focused on rendering images using
+  the sixel graphics protocol, which is supported by many modern terminals
+  (including WezTerm) and provides full-resolution image display. It doesn't
+  include block character fallbacks, aligning with your goal of high-fidelity
+  rendering.
+- **Pros**:
+  - Focused solely on sixel, a widely supported full-resolution protocol.
+  - No fallback to block rendering, ensuring high-quality output if sixel is
+    supported.
+- **Cons**:
+  - Only works if your terminal supports sixel (WezTerm does, so this should be
+    fine on macOS).
+  - Less flexible than `viuer` or `term-img` (no support for Kitty or iTerm2
+    protocols).
+- **Integration**: Requires converting image data to a format suitable for
+  sixel, often from a file or raw buffer.
+
+**Installation**: Add to `Cargo.toml`:
+```toml
+[dependencies]
+plotters = "0.3"
+image = "0.24"
+sixel-rs = "0.3" # Check latest version on crates.io
+```
+
+**Sample Code**: `sixel-rs` often works with files or raw data, so we might
+need to save a temporary PNG or encode the buffer. Here's an example using a
+temporary file (since direct buffer support might vary):
+
+```rust
+use plotters::prelude::*;
+use image::{ImageBuffer, Rgba};
+use sixel_rs::SixelRenderer;
+use std::fs::File;
+use std::io::Write;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let width = 640;
+    let height = 480;
+    let mut buffer = vec![0u8; width * height * 4]; // 4 bytes per pixel (RGBA)
+
+    {
+        let root = BitMapBackend::with_buffer(&mut buffer, (width as u32, height as u32)).into_drawing_area();
+        root.fill(&WHITE)?;
+
+        let mut chart = ChartBuilder::on(&root)
+            .caption("y=x^2", ("sans-serif", 50).into_font())
+            .margin(5)
+            .x_label_area_size(30)
+            .y_label_area_size(30)
+            .build_cartesian_2d(-1f32..1f32, -0.1f32..1f32)?;
+
+        chart.configure_mesh().draw()?;
+
+        chart
+            .draw_series(LineSeries::new(
+                (-50..=50).map(|x| x as f32 / 50.0).map(|x| (x, x * x)),
+                &RED,
+            ))?
+            .label("y = x^2")
+            .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
+
+        chart
+            .configure_series_labels()
+            .background_style(&WHITE.mix(0.8))
+            .border_style(&BLACK)
+            .draw()?;
+
+        root.present()?;
+    }
+
+    // Force alpha channel to 255 (fully opaque)
+    for pixel in buffer.chunks_mut(4) {
+        if pixel.len() == 4 {
+            pixel[3] = 255; // Set alpha to fully opaque
+        }
+    }
+
+    // Create ImageBuffer with RGBA format
+    let img_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_vec(width as u32, height as u32, buffer)
+        .expect("Failed to create RGBA image buffer");
+
+    // Save to temporary file for sixel rendering
+    let temp_file = "temp_chart.png";
+    img_buffer.save(temp_file).expect("Failed to save temporary image");
+
+    // Print some text before the image
+    println!("Text before image rendering.");
+
+    // Render using sixel-rs
+    let mut renderer = SixelRenderer::new();
+    renderer.render(temp_file).expect("Failed to render image with sixel");
+
+    // Print text after to check positioning
+    println!("Text after image rendering.");
+
+    // Clean up temporary file
+    std::fs::remove_file(temp_file).ok();
+
+    Ok(())
+}
+```
+
+**Note**: If `sixel-rs` supports direct buffer input in the latest version, you
+can avoid the temporary file by passing raw pixel data. Check the documentation
+on [crates.io](https://crates.io/crates/sixel-rs) for updates. Also, ensure
+WezTerm has sixel support enabled (it does by default in recent versions).
+
+**Test**: Run with `cargo run` to test sixel rendering for full-resolution
+output.
+
+#### 3. `timg` Integration (Rust Wrapper or Piping)
+
+- **Description**: Since `timg` works well for full-resolution rendering in your
+  setup (as confirmed earlier) and aligns with your goal of high-quality chart
+  display, you can either pipe PNG data to `timg` (as in your original setup) or
+  look for a Rust wrapper around `timg` if direct integration is preferred.
+  There isn't a widely-used Rust crate wrapping `timg`, but piping is simple and
+  effective.
+- **Pros**:
+  - Proven to work with full-resolution rendering in WezTerm.
+  - No fallback to block rendering; focuses on high-quality output.
+- **Cons**:
+  - Requires an external tool (`timg` must be installed).
+  - Not a pure Rust solution if piping is used.
+- **Integration**: Encode the image to PNG and pipe to `timg` as before.
+
+**Sample Code (Piping to `timg`)**:
+```rust
+use plotters::prelude::*;
+use std::io::Write;
+use image::{ImageBuffer, Rgba};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let width = 640;
+    let height = 480;
+    let mut buffer = vec![0u8; width * height * 4]; // 4 bytes per pixel (RGBA)
+
+    {
+        let root = BitMapBackend::with_buffer(&mut buffer, (width as u32, height as u32)).into_drawing_area();
+        root.fill(&WHITE)?;
+
+        let mut chart = ChartBuilder::on(&root)
+            .caption("y=x^2", ("sans-serif", 50).into_font())
+            .margin(5)
+            .x_label_area_size(30)
+            .y_label_area_size(30)
+            .build_cartesian_2d(-1f32..1f32, -0.1f32..1f32)?;
+
+        chart.configure_mesh().draw()?;
+
+        chart
+            .draw_series(LineSeries::new(
+                (-50..=50).map(|x| x as f32 / 50.0).map(|x| (x, x * x)),
+                &RED,
+            ))?
+            .label("y = x^2")
+            .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
+
+        chart
+            .configure_series_labels()
+            .background_style(&WHITE.mix(0.8))
+            .border_style(&BLACK)
+            .draw()?;
+
+        root.present()?;
+    }
+
+    // Force alpha channel to 255 (fully opaque)
+    for pixel in buffer.chunks_mut(4) {
+        if pixel.len() == 4 {
+            pixel[3] = 255; // Set alpha to fully opaque
+        }
+    }
+
+    // Create ImageBuffer with RGBA format
+    let img_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_vec(width as u32, height as u32, buffer)
+        .expect("Failed to create image buffer from vector");
+
+    // Encode to PNG
+    let mut png_buffer = Vec::new();
+    img_buffer.write_to(&mut std::io::Cursor::new(&mut png_buffer), image::ImageFormat::Png)?;
+
+    // Write to stdout for timg
+    let mut stdout = std::io::stdout();
+    stdout.write_all(&png_buffer)?;
+    stdout.flush()?;
+
+    Ok(())
+}
+```
+
+**Run with `timg`**:
+```bash
+cargo run | timg -
+```
+
+**Test**: This should provide full-resolution rendering without fallback to
+block characters, as you've already confirmed.
+
+#### 4. Custom Implementation with `crossterm` and Terminal Protocols
+
+- **Description**: If no existing crate meets your needs, you can implement a
+  custom solution using `crossterm` to send image data via a specific protocol
+  (e.g., Kitty or iTerm2). This involves manually crafting escape sequences for
+  the terminal protocol, which is complex but ensures focus on full-resolution
+  rendering without fallbacks.
+- **Pros**:
+  - Complete control over rendering behavior.
+  - Can target specific protocols supported by WezTerm (e.g., Kitty).
+- **Cons**:
+  - Significant development effort to implement protocol details.
+  - Requires deep understanding of terminal escape sequences for image rendering.
+- **Integration**: Encode the image to PNG or base64, then send it with
+  appropriate escape sequences.
+
+**Note**: This approach is not recommended unless you're willing to invest time
+in low-level terminal programming. Using `term-img`, `sixel-rs`, or piping to
+`timg` is much simpler.
+
+### Recommendation
+
+Given your goal of full-resolution chart display, I recommend starting with
+`term-img` as the closest alternative to `viuer` with a focus on high-fidelity
+rendering. It supports modern image protocols and should work well in WezTerm on
+macOS. If that doesn't meet your needs or still falls back to block rendering,
+`sixel-rs` is a good next option for sixel-specific rendering, provided WezTerm
+supports sixel (which it does in recent versions). As a reliable fallback,
+piping to `timg` ensures full-resolution output with minimal changes to your
+workflow.
+
+### Testing Steps
+
+1. **Try `term-img`**:
+   - Add `term-img` to your project and test the first sample code.
+   - Run with `cargo run` in WezTerm and check if it renders full-resolution
+     images without fallback.
+2. **Try `sixel-rs`**:
+   - If `term-img` doesn't work as expected, test `sixel-rs` with the second
+     sample code.
+   - Run with `cargo run` to check sixel rendering.
+3. **Fallback to `timg` Piping**:
+   - If neither crate achieves full-resolution rendering, use the third sample
+     code and pipe to `timg` with `cargo run | timg -`.
+
+### Expected Outcome
+
+`term-img` or `sixel-rs` should provide full-resolution rendering similar to
+`viuer` but with a focus on high-quality protocols, avoiding unnecessary
+fallbacks to block rendering. If they don't work as expected, piping to `timg`
+remains a proven solution for your chart display needs.
+
+### Additional Notes
+
+- **Check Terminal Support**: Ensure WezTerm is configured to support the
+  necessary image protocols (Kitty, iTerm2, or sixel). This is usually enabled
+  by default, but you can verify in WezTerm's documentation or settings.
+- **Version Compatibility**: Crate versions and APIs may change, so consult the
+  latest documentation on [crates.io](https://crates.io) for `term-img` or
+  `sixel-rs` if the provided code snippets need adjustment.
+- **Custom Positioning**: If the clearing or positioning issue (from your
+  previous question) persists with these alternatives, we can revisit dynamic
+  cursor positioning with `crossterm` for the chosen crate.
+
+Please test these alternatives and let me know which one works best for
+full-resolution chart display in WezTerm. If none meet your needs, or if you
+encounter issues with rendering or positioning, I'm happy to help debug or
+explore further options. My goal is to ensure your charts are displayed with the
+highest quality possible!
 
 # === USER ===
 
