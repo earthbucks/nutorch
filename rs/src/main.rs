@@ -603,6 +603,12 @@ impl PluginCommand for CommandLinspace {
                 "Data type of the tensor (default: 'float32')",
                 None,
             )
+            .named(
+                "requires_grad",
+                SyntaxShape::Boolean,
+                "Whether the tensor requires gradient tracking for autograd (default: false)",
+                None,
+            )
             .category(Category::Custom("nutorch".into()))
     }
 
@@ -632,7 +638,11 @@ impl PluginCommand for CommandLinspace {
         let kind = get_kind_from_call(call)?;
 
         // Create a PyTorch tensor using tch-rs
-        let tensor = Tensor::linspace(start, end, steps, (kind, device));
+        let mut tensor = Tensor::linspace(start, end, steps, (kind, device));
+
+        // Handle optional requires_grad argument
+        tensor = add_grad_from_call(call, tensor)?;
+
         // Generate a unique ID for the tensor
         let id = Uuid::new_v4().to_string();
         // Store in registry
