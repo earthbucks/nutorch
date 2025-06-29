@@ -1,14 +1,15 @@
+use image::{DynamicImage, ImageBuffer, Rgb, Rgba};
 use plotters::prelude::*;
-use image::{DynamicImage, ImageBuffer, Rgba, Rgb};
-use viuer::{Config, print};
+use viuer::{print, Config};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let width = 640;
-    let height = 480;
+    let width = 800;
+    let height = 800;
     let mut buffer = vec![0u8; width * height * 4]; // 4 bytes per pixel (RGBA)
 
     {
-        let root = BitMapBackend::with_buffer(&mut buffer, (width as u32, height as u32)).into_drawing_area();
+        let root = BitMapBackend::with_buffer(&mut buffer, (width as u32, height as u32))
+            .into_drawing_area();
         root.fill(&WHITE)?;
 
         let mut chart = ChartBuilder::on(&root)
@@ -37,13 +38,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         root.present()?;
     }
 
-    // // Force alpha channel to 255 (fully opaque)
-    // for pixel in buffer.chunks_mut(4) {
-    //     if pixel.len() == 4 {
-    //         pixel[3] = 255; // Set alpha to fully opaque
-    //     }
-    // }
-
     // Create ImageBuffer with RGB format
     let rgb_buffer = ImageBuffer::<Rgb<u8>, Vec<u8>>::from_vec(width as u32, height as u32, buffer)
         .expect("Failed to create RGB image buffer from vector");
@@ -51,19 +45,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Convert RGB to RGBA by adding alpha channel (set to 255 for opacity)
     let mut rgba_data = Vec::with_capacity(width * height * 4);
     for pixel in rgb_buffer.pixels() {
-        rgba_data.extend_from_slice(&[pixel.0[0], pixel.0[1], pixel.0[2], 255]); // R, G, B, A
+        rgba_data.extend_from_slice(&[pixel.0[0], pixel.0[1], pixel.0[2], 255]);
+        // R, G, B, A
     }
-    let rgba_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_vec(width as u32, height as u32, rgba_data)
-        .expect("Failed to create RGBA image buffer");
+    let rgba_buffer =
+        ImageBuffer::<Rgba<u8>, Vec<u8>>::from_vec(width as u32, height as u32, rgba_data)
+            .expect("Failed to create RGBA image buffer");
 
     // Configure viuer for terminal display
     let conf = Config {
-        width: Some(80),  // Adjust based on terminal width; optional
-        height: Some(40), // Adjust based on terminal height; optional
+        width: Some(160), // Adjust based on terminal width; optional
+        height: Some(80), // Adjust based on terminal height; optional
         use_kitty: true,
         use_iterm: true,
         use_sixel: true,
         truecolor: true,
+        x: 20,
+        y: 4,
+        restore_cursor: false,
         ..Default::default()
     };
 
@@ -78,7 +77,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // print(&dynamic_img, &conf).expect("Failed to display image in terminal");
 
     // Optional: Still save for debugging
-    // img_buffer.save("debug_buffer.png").expect("Failed to save debug image");
+    rgb_buffer
+        .save("debug_buffer.png")
+        .expect("Failed to save debug image");
 
     Ok(())
 }
