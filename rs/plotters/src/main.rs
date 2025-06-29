@@ -41,8 +41,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let img_buffer = ImageBuffer::<Rgb<u8>, Vec<u8>>::from_vec(width as u32, height as u32, buffer)
         .expect("Failed to create image buffer from vector");
 
-    // Debug save
-    img_buffer.save("debug_buffer.png").expect("Failed to save debug image");
+    // // Debug save
+    // img_buffer.save("debug_buffer.png").expect("Failed to save debug image");
 
     // Encode to PNG
     let mut png_buffer = Vec::new();
