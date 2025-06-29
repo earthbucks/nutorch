@@ -1004,8 +1004,15 @@ impl PluginCommand for CommandTensor {
         let kind = get_kind_from_call(call)?;
 
         // Convert Nushell Value to tensor
-        let tensor = value_to_tensor(&input_value, kind, device, call.head)?;
+        let mut tensor = value_to_tensor(&input_value, kind, device, call.head)?;
         // Generate a unique ID for the tensor
+
+        // Handle optional requires_grad argument
+        let requires_grad = call.get_flag::<bool>("requires_grad")?.unwrap_or(false);
+        if requires_grad {
+            tensor = tensor.set_requires_grad(true);
+        }
+
         let id = Uuid::new_v4().to_string();
         // Store in registry
         TENSOR_REGISTRY.lock().unwrap().insert(id.clone(), tensor);
