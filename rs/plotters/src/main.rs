@@ -1,11 +1,11 @@
 use plotters::prelude::*;
 use std::io::Write;
-use image::{ImageBuffer, Rgba};
+use image::{ImageBuffer, Rgb};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let width = 640;
     let height = 480;
-    let mut buffer = vec![0u8; width * height * 4];
+    let mut buffer = vec![0u8; width * height * 3]; // 3 bytes per pixel (RGB)
 
     {
         let root = BitMapBackend::with_buffer(&mut buffer, (width as u32, height as u32)).into_drawing_area();
@@ -37,19 +37,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         root.present()?;
     }
 
-    // Transpose the buffer (treat it as height x width instead of width x height)
-    let mut corrected_buffer = Vec::with_capacity(buffer.len());
-    for y in 0..height {
-        for x in 0..width {
-            let orig_idx = (x * height + y) * 4; // Treat as column-major
-            if orig_idx + 3 < buffer.len() {
-                corrected_buffer.extend_from_slice(&buffer[orig_idx..orig_idx + 4]);
-            }
-        }
-    }
-
-    // Create ImageBuffer with original dimensions
-    let img_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_vec(width as u32, height as u32, corrected_buffer)
+    // Create ImageBuffer with RGB format
+    let img_buffer = ImageBuffer::<Rgb<u8>, Vec<u8>>::from_vec(width as u32, height as u32, buffer)
         .expect("Failed to create image buffer from vector");
 
     // Debug save
