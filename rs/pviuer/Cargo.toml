@@ -1,0 +1,12 @@
+[package]
+name = "test_pviuer"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["Ryan X. Charles <ryan@ryanxcharles.com>"]
+
+[dependencies]
+image = "0.25.6"
+plotters = "0.3.7"
+tempfile = "3.20.0"
+viuer = {version = "0.9.2", features = ["sixel"] }
