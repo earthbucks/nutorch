@@ -419,6 +419,12 @@ impl PluginCommand for CommandFull {
                 "Data type of the tensor ('float32', 'float64', 'int32', 'int64', default: 'float32')",
                 None,
             )
+            .named(
+                "requires_grad",
+                SyntaxShape::Boolean,
+                "Whether the tensor requires gradient tracking for autograd (default: false)",
+                None,
+            )
             .input_output_types(vec![(Type::Nothing, Type::String)])
             .category(Category::Custom("nutorch".into()))
     }
@@ -481,7 +487,7 @@ impl PluginCommand for CommandFull {
         // Handle optional dtype argument using convenience method
         let kind = get_kind_from_call(call)?;
 
-        let tensor = match (fill_value, kind) {
+        let mut tensor = match (fill_value, kind) {
             (Number::Int(i), Kind::Int | Kind::Int64) => {
                 // Use integer-specific creation if tch-rs supports it directly
                 // Since Tensor::full may expect f64, we pass as f64 but kind ensures it's stored as int
@@ -500,6 +506,10 @@ impl PluginCommand for CommandFull {
                     .with_label("Invalid data/dtype combo.", call.head));
             }
         };
+
+        // Handle optional requires_grad argument
+        tensor = add_grad_from_call(call, tensor)?;
+
         // Generate a unique ID for the tensor
         let id = Uuid::new_v4().to_string();
         // Store in registry
