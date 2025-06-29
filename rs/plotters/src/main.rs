@@ -3,12 +3,12 @@ use std::io::Write;
 use image::{ImageBuffer, Rgba};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create a buffer to store the raw image data in memory
-    let mut buffer = vec![0u8; 640 * 480 * 4]; // RGBA format (4 bytes per pixel)
+    let width = 640;
+    let height = 480;
+    let mut buffer = vec![0u8; width * height * 4];
 
-    // Scope to limit the lifetime of root and associated references
     {
-        let root = BitMapBackend::with_buffer(&mut buffer, (640, 480)).into_drawing_area();
+        let root = BitMapBackend::with_buffer(&mut buffer, (width as u32, height as u32)).into_drawing_area();
         root.fill(&WHITE)?;
 
         let mut chart = ChartBuilder::on(&root)
@@ -35,17 +35,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .draw()?;
 
         root.present()?;
-    } // root is dropped here, releasing the mutable borrow on buffer
+    }
 
-    // Now buffer can be used since root is dropped
-    let img_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_vec(640, 480, buffer)
+    // Transpose the buffer (treat it as height x width instead of width x height)
+    let mut corrected_buffer = Vec::with_capacity(buffer.len());
+    for y in 0..height {
+        for x in 0..width {
+            let orig_idx = (x * height + y) * 4; // Treat as column-major
+            if orig_idx + 3 < buffer.len() {
+                corrected_buffer.extend_from_slice(&buffer[orig_idx..orig_idx + 4]);
+            }
+        }
+    }
+
+    // Create ImageBuffer with original dimensions
+    let img_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_vec(width as u32, height as u32, corrected_buffer)
         .expect("Failed to create image buffer from vector");
 
-    // Encode the image to PNG in a temporary in-memory buffer
+    // Debug save
+    img_buffer.save("debug_buffer.png").expect("Failed to save debug image");
+
+    // Encode to PNG
     let mut png_buffer = Vec::new();
     img_buffer.write_to(&mut std::io::Cursor::new(&mut png_buffer), image::ImageFormat::Png)?;
 
-    // Write the PNG data to stdout
+    // Write to stdout
     let mut stdout = std::io::stdout();
     stdout.write_all(&png_buffer)?;
     stdout.flush()?;

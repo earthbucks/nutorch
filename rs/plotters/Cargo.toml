@@ -8,3 +8,4 @@ authors = ["Ryan X. Charles <ryan@ryanxcharles.com>"]
 [dependencies]
 image = "0.25.6"
 plotters = "0.3.7"
+tempfile = "3.20.0"
