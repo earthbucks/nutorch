@@ -2,6 +2,31 @@ import torch
 
 torch.manual_seed(42)  # For reproducibility
 
+# Rest of the script remains mostly the same
+def generate_data(n_samples=300, centers=3, cluster_std=0.7, skew_factor=0.3):
+    n_samples_per_class = n_samples // centers
+    X_list = []
+    y_list = []
+
+    blob_centers = [
+        torch.tensor([0.0, 0.0]),
+        torch.tensor([3.0, 0.0]),
+        torch.tensor([1.5, 2.5])
+    ]
+
+    for i in range(centers):
+        points = torch.randn(n_samples_per_class, 2) * cluster_std + blob_centers[i]
+        if i == 1 or i == 2:
+            skew_matrix = torch.tensor([[1.0, skew_factor * (i-1)], [skew_factor * (i-1), 1.0]])
+            points = torch.mm(points - blob_centers[i], skew_matrix) + blob_centers[i]
+        labels = torch.full((n_samples_per_class,), i, dtype=torch.long)
+        X_list.append(points)
+        y_list.append(labels)
+
+    X = torch.cat(X_list, dim=0)
+    y = torch.cat(y_list, dim=0)
+    return X, y
+
 # Simplified two-layer neural network for multi-class classification
 class SimpleNN:
     def __init__(self, input_size=2, hidden_size=20, output_size=3):
@@ -44,31 +69,6 @@ def primitive_cross_entropy_loss(outputs, targets):
         loss -= log_probs[i, targets[i]]
     loss = loss / batch_size
     return loss
-
-# Rest of the script remains mostly the same
-def generate_data(n_samples=300, centers=3, cluster_std=0.7, skew_factor=0.3):
-    n_samples_per_class = n_samples // centers
-    X_list = []
-    y_list = []
-
-    blob_centers = [
-        torch.tensor([0.0, 0.0]),
-        torch.tensor([3.0, 0.0]),
-        torch.tensor([1.5, 2.5])
-    ]
-
-    for i in range(centers):
-        points = torch.randn(n_samples_per_class, 2) * cluster_std + blob_centers[i]
-        if i == 1 or i == 2:
-            skew_matrix = torch.tensor([[1.0, skew_factor * (i-1)], [skew_factor * (i-1), 1.0]])
-            points = torch.mm(points - blob_centers[i], skew_matrix) + blob_centers[i]
-        labels = torch.full((n_samples_per_class,), i, dtype=torch.long)
-        X_list.append(points)
-        y_list.append(labels)
-
-    X = torch.cat(X_list, dim=0)
-    y = torch.cat(y_list, dim=0)
-    return X, y
 
 def train_model(model, X, y, epochs=1000, lr=0.1, record_interval=100):
     optimizer = torch.optim.SGD(model.parameters(), lr=lr)
