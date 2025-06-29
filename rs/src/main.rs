@@ -1008,10 +1008,7 @@ impl PluginCommand for CommandTensor {
         // Generate a unique ID for the tensor
 
         // Handle optional requires_grad argument
-        let requires_grad = call.get_flag::<bool>("requires_grad")?.unwrap_or(false);
-        if requires_grad {
-            tensor = tensor.set_requires_grad(true);
-        }
+        tensor = add_grad_from_call(call, tensor)?;
 
         let id = Uuid::new_v4().to_string();
         // Store in registry
@@ -1019,6 +1016,17 @@ impl PluginCommand for CommandTensor {
         // Return the ID as a string to Nushell, wrapped in PipelineData
         Ok(PipelineData::Value(Value::string(id, call.head), None))
     }
+}
+
+fn add_grad_from_call(
+    call: &nu_plugin::EvaluatedCall,
+    mut tensor: Tensor,
+) -> Result<Tensor, LabeledError> {
+    let requires_grad = call.get_flag::<bool>("requires_grad")?.unwrap_or(false);
+    if requires_grad {
+        tensor = tensor.set_requires_grad(true);
+    }
+    Ok(tensor)
 }
 
 fn get_device_from_call(call: &nu_plugin::EvaluatedCall) -> Result<Device, LabeledError> {
