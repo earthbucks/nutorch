@@ -14,5 +14,9 @@
   "dependencies": {
     "express": "^5.1.0",
     "puppeteer": "^24.11.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.6",
+    "@types/express": "^5.0.3"
   }
 }
