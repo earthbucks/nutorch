@@ -1,14 +1,24 @@
 {
-  "include": ["*.ts", "**/*"],
+  "include": [
+    "*.ts",
+    "**/*",
+    "**/.server/**/*",
+    "**/.client/**/*",
+    ".react-router/types/**/*"
+  ],
   "compilerOptions": {
-    "types": [],
-    "rootDirs": ["."],
+    "types": ["@react-router/node", "vite/client"],
+    "rootDirs": [".", "./.react-router/types"],
+    "paths": {
+      "~app/*": ["./app/*"]
+    },
 
     // Environment setup & latest features
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "target": "ES2022",
     "module": "ES2022",
     "moduleDetection": "force",
+    "jsx": "react-jsx",
     "allowJs": true,
 
     // Bundler mode
