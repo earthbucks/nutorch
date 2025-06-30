@@ -1,6 +1,7 @@
 import { createRequestHandler } from "@react-router/express";
 import express from "express";
 import type { ServerBuild } from "react-router";
+import * as build from "../build/server/index.js";
 
 const app = express();
 
@@ -10,7 +11,7 @@ app.disable("x-powered-by");
 // Vite fingerprints its assets so we can cache forever.
 app.use(
   "/assets",
-  express.static("build/app/client/assets", {
+  express.static("../build/client/assets", {
     immutable: true,
     maxAge: "1y",
   }),
@@ -18,30 +19,14 @@ app.use(
 
 // Everything else (like favicon.ico) is cached for an hour. You may want to be
 // more aggressive with this caching.
-app.use(express.static("build/app/client", { maxAge: "1h" }));
-
-async function getAppBuild() {
-  try {
-    const build = await import("../build/server/index.js");
-
-    return { build: build as unknown as ServerBuild, error: null };
-  } catch (error) {
-    // Catch error and return null to make express happy and avoid an unrecoverable crash
-    console.error("Error creating build:", error);
-    return { error: error, build: null as unknown as ServerBuild };
-  }
-}
+app.use(express.static("../build/client", { maxAge: "1h" }));
 
 // handle SSR requests
 app.all(
   "*",
   createRequestHandler({
     build: async () => {
-      const { error, build } = await getAppBuild();
-      if (error) {
-        throw error;
-      }
-      return build;
+      return build as unknown as ServerBuild;
     },
   }),
 );
