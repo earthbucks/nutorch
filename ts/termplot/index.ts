@@ -4,14 +4,16 @@ import ansiescapes from "ansi-escapes";
 import express from "express";
 import puppeteer from "puppeteer";
 
+const port = process.env.PORT || 3000;
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Set up a simple local server to host the plot
 const app = express();
 app.use(express.static(join(__dirname, "public")));
-const server = app.listen(3000, () =>
-  console.log("Server running on port 3000"),
+const server = app.listen(port, () =>
+  console.log(`Server running on port ${port} (set PORT env var to change)`),
 );
 
 (async () => {
