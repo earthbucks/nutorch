@@ -5,6 +5,7 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
+    "dev": "react-router dev --port 3000",
     "build": "react-router build",
     "typecheck": "react-router typegen && safe-routes typegen && tsc",
     "lint": "biome lint --write --unsafe",
@@ -36,6 +37,7 @@
     "ansi-escapes": "^7.0.0",
     "compression": "^1.8.0",
     "express": "^5.1.0",
+    "isbot": "^5",
     "morgan": "^1.10.0",
     "puppeteer": "^24.11.1",
     "react": "^19.1.0",
