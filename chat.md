@@ -7120,13 +7120,14 @@ the implementation to support this behavior in `nutorch maximum`.
 
 Yes, your understanding is correct. In PyTorch, `torch.max(input, other)` (the
 element-wise comparison mode) does support tensors of different shapes through
-**broadcasting**. Broadcasting in PyTorch allows tensors with fewer dimensions or
-smaller sizes to be expanded to match the shape of the larger tensor before
+**broadcasting**. Broadcasting in PyTorch allows tensors with fewer dimensions
+or smaller sizes to be expanded to match the shape of the larger tensor before
 performing element-wise operations like maximum. The rules for broadcasting are
 similar to NumPy:
 
 - Tensors with fewer dimensions are padded with ones on the left (leading
-  dimensions) until they have the same number of dimensions as the larger tensor.
+  dimensions) until they have the same number of dimensions as the larger
+  tensor.
 - For each dimension, the sizes must either match, or one of them must be 1 (in
   which case the tensor with size 1 is expanded along that dimension to match
   the other tensor's size).
@@ -7295,18 +7296,20 @@ print "Test 2: SUCCESS if result clamps negative values to 0"
 
 ### Next Steps
 
-Let me know if the updated `maximum` command works as expected for
-element-wise comparison with broadcasting. If there are issues (e.g., if `tch-rs`
-doesn't handle broadcasting as anticipated in your version), I'm happy to
-investigate further. Also, if you're ready to proceed to the next component of
-your multi-layer neural network or another PyTorch method for implementation in
+Let me know if the updated `maximum` command works as expected for element-wise
+comparison with broadcasting. If there are issues (e.g., if `tch-rs` doesn't
+handle broadcasting as anticipated in your version), I'm happy to investigate
+further. Also, if you're ready to proceed to the next component of your
+multi-layer neural network or another PyTorch method for implementation in
 `nutorch`, let me know.
 
 Let me know how the test goes or if you have further questions!
 
 # === USER ===
 
-ok, this method is working. now, before i proceed, can you please convert your examples into a test that fails if there is something wrong? i want to be able to test this method later automatically.
+ok, this method is working. now, before i proceed, can you please convert your
+examples into a test that fails if there is something wrong? i want to be able
+to test this method later automatically.
 
 ```nu
 # Test 1: Compute element-wise maximum between two tensors of same shape
@@ -7330,11 +7333,17 @@ print "Test 2: SUCCESS if result clamps negative values to 0"
 
 # === ASSISTANT ===
 
-I'm glad to hear that the `maximum` method is working as expected. Let's convert the examples into a test script for Nushell that will fail if something goes wrong, enabling automatic testing later. I'll adapt the tests to include value comparisons using a helper function for deep equality (similar to previous test scripts) and report success or failure with clear error messages if the results don't match the expected output.
+I'm glad to hear that the `maximum` method is working as expected. Let's convert
+the examples into a test script for Nushell that will fail if something goes
+wrong, enabling automatic testing later. I'll adapt the tests to include value
+comparisons using a helper function for deep equality (similar to previous test
+scripts) and report success or failure with clear error messages if the results
+don't match the expected output.
 
 ### Updated Test Script for `nutorch maximum`
 
-Here's the test script `test-maximum.nu` that checks both test cases and fails if the results are incorrect:
+Here's the test script `test-maximum.nu` that checks both test cases and fails
+if the results are incorrect:
 
 ```nu
 # test-maximum.nu - Test script for nutorch maximum command (element-wise maximum)
@@ -7402,8 +7411,8 @@ print "All tests passed successfully!"
 ### Explanation of the Test Script
 
 - **Helper Function:** Reused the `compare_nested_lists` function from previous
-  test scripts to perform deep equality checks on nested lists, ensuring accurate
-  comparison of tensor values.
+  test scripts to perform deep equality checks on nested lists, ensuring
+  accurate comparison of tensor values.
 - **Test 1:** Checks element-wise maximum between two tensors of the same shape,
   comparing the result against the expected output `[[0, 0, 0], [0, 0, 0]]`. If
   the result doesn't match, it reports failure and exits with an error code for
@@ -7438,4 +7447,492 @@ Let me know how the test script runs or if you have further questions!
 
 # === USER ===
 
+next, one of the many functions we're going to need to run on tensors is called
+`log_softmax`. here is an example use in python:
 
+```python
+log_probs: torch.Tensor = torch.log_softmax(outputs, dim=1)
+```
+
+can you please describe this method first, including the api and whatever
+arguments it has, both in pytorch and in tch-rs, and then implement it in
+`nutorch` as a new command called `CommandLogSoftmax`?
+
+# === ASSISTANT ===
+
+I'm happy to help you implement the `log_softmax` function in your `nutorch`
+plugin as `CommandLogSoftmax`. Let's first describe the `log_softmax` method in
+PyTorch, including its API and arguments, then outline its equivalent in
+`tch-rs`, and finally provide the implementation for `nutorch log_softmax`
+following your established conventions.
+
+### Description of `log_softmax` in PyTorch
+
+**Purpose:** `torch.log_softmax` is a PyTorch function that applies the
+log-softmax operation to an input tensor along a specified dimension. It
+combines the softmax operation (which normalizes the input values into a
+probability distribution) with a logarithm operation. This is commonly used in
+classification tasks to compute log-probabilities for numerical stability in
+loss functions like cross-entropy.
+
+**API in PyTorch:**
+
+```python
+torch.log_softmax(input, dim=None, *, dtype=None) -> Tensor
+```
+
+- **Parameters:**
+  - `input`: (Required) The input tensor. Can be of any shape, but typically 2D
+    or higher for classification tasks (e.g., shape `[batch_size, num_classes]`
+    for logits).
+  - `dim`: (Optional) The dimension along which to compute the log-softmax
+    operation. If `None`, it defaults to the last dimension of the input tensor.
+    For a 2D tensor, `dim=1` is common to compute log-softmax over the class
+    dimension.
+  - `dtype`: (Optional, keyword-only) The desired data type of the output
+    tensor. If `None`, inherits the input tensor's dtype.
+
+- **Return Value:** A tensor of the same shape as the input, containing the
+  log-softmax values. The values along the specified dimension sum to 0 in the
+  log domain (i.e., `exp(log_softmax_values).sum(dim=dim) == 1`).
+
+**Behavior:** For each element along the specified dimension, it computes the
+softmax (normalized exponential) and then takes the natural logarithm. This
+operation is numerically stable compared to computing `log(softmax(x))` directly
+because it avoids potential underflow/overflow issues.
+
+**Example from Your Python Code:**
+
+```python
+log_probs: torch.Tensor = torch.log_softmax(outputs, dim=1)
+```
+
+Here, `outputs` (likely a tensor of shape `[batch_size, num_classes]` containing
+raw logits) is transformed into log-probabilities along `dim=1` (the class
+dimension), resulting in a tensor of the same shape where each row sums to 0 in
+the log domain.
+
+### Equivalent in `tch-rs`
+
+In `tch-rs`, the equivalent functionality is provided by `Tensor::log_softmax`,
+which computes the log-softmax along a specified dimension. The typical
+signature in `tch-rs` (based on common versions like 0.20.0 or similar) is:
+
+```rust
+pub fn log_softmax(&self, dim: i64, dtype: Option<Kind>) -> Tensor
+```
+
+- **Parameters:**
+  - `dim`: The dimension along which to compute log-softmax. Unlike PyTorch,
+    `tch-rs` typically requires specifying the dimension explicitly (no default
+    to last dimension).
+  - `dtype`: An optional `Kind` to specify the output data type. If `None`, it
+    inherits the input tensor's dtype.
+
+- **Return Value:** A new `Tensor` with the same shape as the input, containing
+  the log-softmax values.
+
+### Implementation of `nutorch log_softmax` as `CommandLogSoftmax`
+
+Here's the implementation of `nutorch log_softmax` with the Rust struct
+`CommandLogSoftmax`, following your conventions (e.g., using pipeline input for
+the tensor ID, similar to `CommandMax` for single-tensor operations):
+
+```rust
+struct CommandLogSoftmax;
+
+impl PluginCommand for CommandLogSoftmax {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "nutorch log_softmax"
+    }
+
+    fn description(&self) -> &str {
+        "Compute the log-softmax of a tensor along a specified dimension (similar to torch.log_softmax)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("nutorch log_softmax")
+            .input_output_types(vec![(Type::String, Type::String)])
+            .named(
+                "dim",
+                SyntaxShape::Int,
+                "Dimension along which to compute log-softmax (default: last dimension)",
+                None,
+            )
+            .named(
+                "dtype",
+                SyntaxShape::String,
+                "Data type of the output tensor (default: inherits input dtype)",
+                None,
+            )
+            .category(Category::Custom("nutorch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Compute log-softmax over the last dimension of a tensor",
+                example: "let t1 = (nutorch linspace 0 5 6 | nutorch repeat 2 1); $t1 | nutorch log_softmax | nutorch value",
+                result: None,
+            },
+            Example {
+                description: "Compute log-softmax along a specific dimension",
+                example: "let t1 = (nutorch linspace 0 5 6 | nutorch repeat 2 1); $t1 | nutorch log_softmax --dim 1 | nutorch value",
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Get tensor ID from input (pipeline)
+        let input_value = input.into_value(call.head)?;
+        let tensor_id = input_value.as_str().map(|s| s.to_string()).map_err(|_| {
+            LabeledError::new("Invalid input").with_label("Unable to parse tensor ID from input", call.head)
+        })?;
+
+        // Look up tensor in registry
+        let mut registry = TENSOR_REGISTRY.lock().unwrap();
+        let tensor = registry.get(&tensor_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
+        })?.shallow_clone();
+
+        // Handle optional dtype argument using convenience method if provided
+        let dtype_opt: Option<Kind> = match call.get_flag::<String>("dtype") {
+            Ok(Some(dtype_str)) => {
+                Some(match dtype_str.to_lowercase().as_str() {
+                    "float32" | "float" => Kind::Float,
+                    "float64" | "double" => Kind::Double,
+                    "int32" | "int" => Kind::Int,
+                    "int64" | "long" => Kind::Int64,
+                    _ => return Err(LabeledError::new("Invalid dtype")
+                        .with_label("Data type must be 'float32', 'float64', 'int32', or 'int64'", call.head)),
+                })
+            },
+            Ok(None) => None,
+            Err(e) => return Err(LabeledError::new("Invalid dtype").with_label(e.to_string(), call.head)),
+        };
+
+        // Handle optional dim argument (default to last dimension)
+        let dim: i64 = match call.get_flag::<i64>("dim")? {
+            Some(d) => {
+                let num_dims = tensor.size().len() as i64;
+                if d < 0 || d >= num_dims {
+                    return Err(LabeledError::new("Invalid dimension")
+                        .with_label(format!("Dimension {} out of bounds for tensor with {} dimensions", d, num_dims), call.head));
+                }
+                d
+            },
+            None => {
+                // Default to last dimension
+                (tensor.size().len() as i64) - 1
+            },
+        };
+
+        // Compute log-softmax using tch-rs
+        let result_tensor = tensor.log_softmax(dim, dtype_opt);
+
+        // Store result in registry with new ID
+        let new_id = Uuid::new_v4().to_string();
+        registry.insert(new_id.clone(), result_tensor);
+        // Return new ID wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```
+
+### Update to `NutorchPlugin` to Include `CommandLogSoftmax`
+
+Make sure to add the `CommandLogSoftmax` command to the list of commands in your
+plugin's `commands()` method:
+
+```rust
+impl Plugin for NutorchPlugin {
+    fn commands(&self) -> Vec<Box<dyn PluginCommand<Plugin = Self>>> {
+        vec![
+            Box::new(CommandNutorch),
+            Box::new(CommandManualSeed),
+            Box::new(CommandRandn),
+            Box::new(CommandDevices),
+            Box::new(CommandLinspace),
+            Box::new(CommandRepeat),
+            Box::new(CommandSin),
+            Box::new(CommandValue),
+            Box::new(CommandTensor),
+            Box::new(CommandMm),
+            Box::new(CommandFull),
+            Box::new(CommandCat),
+            Box::new(CommandMax),
+            Box::new(CommandMaximum),
+            Box::new(CommandLogSoftmax), // Added CommandLogSoftmax command
+        ]
+    }
+
+    fn version(&self) -> std::string::String {
+        "0.0.1".to_string()
+    }
+}
+```
+
+### Explanation of the Implementation
+
+- **Naming Convention:** Named the struct `CommandLogSoftmax` following your
+  convention of prefixing command structs with `Command`.
+- **API Similarity to PyTorch:** Designed the command to mirror
+  `torch.log_softmax` by taking a single tensor ID via pipeline input and
+  supporting an optional `dim` parameter for the dimension along which to
+  compute log-softmax (defaulting to the last dimension). Also included an
+  optional `dtype` parameter to specify the output data type, aligning with
+  PyTorch's API.
+- **Input Handling:** Takes the tensor ID via pipeline input (consistent with
+  other single-tensor operations like `max`), with no additional required
+  arguments.
+- **Dimension Handling:** Retrieves the `dim` parameter, defaulting to the last
+  dimension of the tensor if not specified. Validates that the specified `dim`
+  is within bounds.
+- **Dtype Handling:** Supports an optional `dtype` argument to set the output
+  tensor's data type, mapping it to `Kind` if provided, otherwise passing `None`
+  to inherit the input tensor's dtype.
+- **Functionality:** Uses `tensor.log_softmax(dim, dtype_opt)` from `tch-rs` to
+  compute the log-softmax along the specified dimension.
+- **Storage and Output:** Stores the result in `TENSOR_REGISTRY` with a new UUID
+  and returns the ID as a string, consistent with other tensor operation
+  commands.
+- **Error Handling:** Includes validation for tensor ID, dimension bounds, and
+  dtype values, providing clear error messages.
+
+### Build and Test
+
+After adding the `CommandLogSoftmax` command as shown, rebuild your plugin:
+
+```bash
+cd /Users/ryan/dev/nutorch/rs
+cargo build --release
+```
+
+Re-add the plugin to Nushell:
+
+```nu
+plugin rm nutorch
+plugin add /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_nutorch
+```
+
+Test the `log_softmax` command to ensure it computes log-softmax correctly:
+
+```nu
+# Test 1: Compute log-softmax over the last dimension of a 2D tensor
+let t1 = (nutorch linspace 0 5 6 | nutorch repeat 2 1)  # Shape: [2, 6], values from 0 to 5
+$t1 | nutorch value  # Should show [[0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4, 5]]
+let result1 = ($t1 | nutorch log_softmax | nutorch value)
+$result1  # Expected: log-softmax along dim=1 (last dimension), values sum to 0 in log domain per row
+print "Test 1: SUCCESS if result is computed (manual check for log-softmax values)"
+
+# Test 2: Compute log-softmax along a specific dimension
+let result2 = ($t1 | nutorch log_softmax --dim 0 | nutorch value)
+$result2  # Expected: log-softmax along dim=0, values sum to 0 in log domain per column
+print "Test 2: SUCCESS if result is computed (manual check for log-softmax values)"
+
+# Test 3: Error case - invalid dimension
+let t3 = (nutorch full 1 5)  # Shape: [5]
+$t3 | nutorch log_softmax --dim 1 | nutorch value
+# Expected: Error due to dimension out of bounds
+```
+
+### Additional Notes
+
+- **Default Dimension:** Defaulting to the last dimension
+  (`dim = tensor.size().len() - 1`) aligns with PyTorch's behavior, though
+  PyTorch uses `None` to indicate this. Since `tch-rs` requires a specific
+  `dim`, we compute the last dimension explicitly.
+- **Value Checking:** The test script doesn't include strict value comparisons
+  since log-softmax outputs depend on exact numerical values, which are harder
+  to predict manually. You can extend the test with a helper to check if
+  `exp(result).sum(dim=dim)` approximates 1 per slice if needed for automation.
+- **Dtype Inheritance:** If `dtype` is not specified, the output inherits the
+  input tensor's dtype, matching PyTorch's default behavior.
+
+### Next Steps
+
+Let me know if the `log_softmax` command works as expected for computing
+log-softmax along the specified dimension. If there are issues or if you'd like
+to proceed to the next component of your multi-layer neural network (e.g.,
+autograd operations, layers, or loss functions), I'm ready to assist.
+
+Let me know how the test goes or if you have further questions!
+
+# === USER ===
+
+i'm not not really sure how to make sense of the log max "over the last
+dimension". in this output, it looks like both dimensions have been altered. if
+the log_softmax is "over the last dimension", should every value be altered or
+not? because every value is being altered.
+
+```nu
+nutorch: (nutorch linspace 0 5 6 | nutorch repeat 2 1) | nutorch value
+╭───┬──────────────╮
+│ 0 │ ╭───┬──────╮ │
+│   │ │ 0 │ 0.00 │ │
+│   │ │ 1 │ 1.00 │ │
+│   │ │ 2 │ 2.00 │ │
+│   │ │ 3 │ 3.00 │ │
+│   │ │ 4 │ 4.00 │ │
+│   │ │ 5 │ 5.00 │ │
+│   │ ╰───┴──────╯ │
+│ 1 │ ╭───┬──────╮ │
+│   │ │ 0 │ 0.00 │ │
+│   │ │ 1 │ 1.00 │ │
+│   │ │ 2 │ 2.00 │ │
+│   │ │ 3 │ 3.00 │ │
+│   │ │ 4 │ 4.00 │ │
+│   │ │ 5 │ 5.00 │ │
+│   │ ╰───┴──────╯ │
+╰───┴──────────────╯
+nutorch: ((nutorch linspace 0 5 6 | nutorch repeat 2 1) | nutorch log_softmax | nutorch value)
+╭───┬───────────────╮
+│ 0 │ ╭───┬───────╮ │
+│   │ │ 0 │ -5.46 │ │
+│   │ │ 1 │ -4.46 │ │
+│   │ │ 2 │ -3.46 │ │
+│   │ │ 3 │ -2.46 │ │
+│   │ │ 4 │ -1.46 │ │
+│   │ │ 5 │ -0.46 │ │
+│   │ ╰───┴───────╯ │
+│ 1 │ ╭───┬───────╮ │
+│   │ │ 0 │ -5.46 │ │
+│   │ │ 1 │ -4.46 │ │
+│   │ │ 2 │ -3.46 │ │
+│   │ │ 3 │ -2.46 │ │
+│   │ │ 4 │ -1.46 │ │
+│   │ │ 5 │ -0.46 │ │
+│   │ ╰───┴───────╯ │
+╰───┴───────────────╯
+```
+
+# === ASSISTANT ===
+
+Thank you for sharing the output and raising this question about the behavior
+of `log_softmax` in your `nutorch` plugin. I understand your confusion
+regarding the phrase "over the last dimension" and why it appears that all
+values in the tensor are altered when applying `log_softmax`. Let's clarify what
+"over the last dimension" means in the context of `log_softmax` and explain why
+every value in the tensor is indeed expected to be altered, addressing your
+concern.
+
+### Understanding `log_softmax` and "Over the Last Dimension"
+
+In PyTorch (and similarly in `tch-rs`), `log_softmax(input, dim)` computes the
+log-softmax operation **along** or **over** a specified dimension, which means:
+
+- For each "slice" or "sub-tensor" along the specified dimension, the operation
+  normalizes the values in that slice independently, transforming them into
+  log-probabilities.
+- Specifically, for a given dimension `dim`, the operation considers each
+  sub-tensor obtained by fixing the indices of all other dimensions, and applies
+  the log-softmax to the values along `dim`.
+- **Every value is altered** because the log-softmax operation recalculates each
+  element in the tensor relative to the other elements in the same slice along
+  the specified dimension. It's not that only one dimension's values are changed;
+  rather, the values along the specified dimension are normalized together for
+  each position in the other dimensions.
+
+**Mathematical Explanation:**
+
+- Log-softmax combines softmax and logarithm:
+  - Softmax for an element `x_i` along dimension `dim` is `exp(x_i) / sum(exp(x_j))` for all `j` in that dimension's slice.
+  - Log-softmax is `log(softmax(x_i)) = x_i - log(sum(exp(x_j)))`, adjusting each value by subtracting the log of the sum of exponentials over the dimension.
+- This adjustment ensures that the exponentials of the output values along the
+  specified dimension sum to 1 (i.e., they form a probability distribution in
+  the log domain), which means **every element** in the tensor is modified to
+  satisfy this property for its corresponding slice.
+
+**In Your Output:**
+
+- Input tensor shape: `[2, 6]` (from `nutorch linspace 0 5 6 | nutorch repeat 2
+  1`).
+- `log_softmax` with default `dim=1` (last dimension) computes log-softmax over
+  the last dimension (size 6) for each of the 2 rows independently.
+- For each row (fixed index in dimension 0), the 6 values along dimension 1 are
+  transformed into log-probabilities:
+  - Original row: `[0, 1, 2, 3, 4, 5]`
+  - Log-softmax row: `[-5.46, -4.46, -3.46, -2.46, -1.46, -0.46]` (approx)
+  - If you compute `exp` of these values and sum them, it should approximate 1
+    (e.g., `exp(-5.46) + exp(-4.46) + ... + exp(-0.46) ≈ 1`), confirming the
+    softmax property.
+- Both rows are identical in the input, so both rows have the same
+  log-softmax output. Every value is altered because each value is part of a
+  slice along `dim=1` that gets normalized.
+
+**Why All Values Are Altered:**
+
+- Yes, every value in the tensor is altered because log-softmax is a
+  normalization operation across the specified dimension. For each slice along
+  `dim=1`, the entire set of values in that slice (row in this case) is
+  transformed to satisfy the log-probability condition. It's not that only one
+  dimension or specific values change; the operation re-computes all values
+  relative to their peers in the specified dimension.
+
+**Clarification on "Over the Last Dimension":**
+
+- The phrase "over the last dimension" means the operation is applied
+  **across** or **along** the last dimension, normalizing the values in each
+  slice defined by fixing indices of other dimensions. For a 2D tensor with
+  `dim=1`, it processes each row independently; for `dim=0`, it processes each
+  column independently. Every value is involved because each belongs to a slice
+  that gets normalized.
+
+### Verification of Correctness
+
+Your output looks correct based on the expected behavior of `log_softmax`. For
+the input `[0, 1, 2, 3, 4, 5]` along `dim=1`, the log-softmax values decreasing
+from `-5.46` to `-0.46` are consistent with the increasing input values, as
+higher inputs result in higher (less negative) log-probabilities. The fact that
+both rows show the same output is also correct since both rows have identical
+input values.
+
+### Next Steps (No Code Change Needed)
+
+The implementation of `CommandLogSoftmax` in the previous response is correct
+and matches PyTorch's behavior. There's no need for changes unless you want to
+adjust the default dimension or add further validation. If you're satisfied with
+this explanation and the behavior, let me know if you'd like to proceed to the
+next component of your multi-layer neural network or another PyTorch method for
+implementation in `nutorch`. If you’d like a test script to verify
+`log_softmax` outputs more rigorously (e.g., checking if `exp(result).sum(dim)`
+approximates 1), I can help with that.
+
+Let me know your thoughts or if you have further questions!
+
+# === USER ===
+
+i've decided to make an important change. while the project is still called "nutorch", from now on the plugin is called "nu_plugin_torch", similar to other nu plugins, and the command name is just "torch", not "nutorch".
+
+for instance, here is a recent command:
+
+```nu
+>: ((torch linspace 0 5 6 | torch repeat 2 1) | torch log_softmax | torch value)
+╭───┬───────────────╮
+│ 0 │ ╭───┬───────╮ │
+│   │ │ 0 │ -5.46 │ │
+│   │ │ 1 │ -4.46 │ │
+│   │ │ 2 │ -3.46 │ │
+│   │ │ 3 │ -2.46 │ │
+│   │ │ 4 │ -1.46 │ │
+│   │ │ 5 │ -0.46 │ │
+│   │ ╰───┴───────╯ │
+│ 1 │ ╭───┬───────╮ │
+│   │ │ 0 │ -5.46 │ │
+│   │ │ 1 │ -4.46 │ │
+│   │ │ 2 │ -3.46 │ │
+│   │ │ 3 │ -2.46 │ │
+│   │ │ 4 │ -1.46 │ │
+│   │ │ 5 │ -0.46 │ │
+│   │ ╰───┴───────╯ │
+╰───┴───────────────╯
+```
