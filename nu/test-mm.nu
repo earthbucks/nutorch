@@ -1,4 +1,4 @@
-# test-mm.nu - Test script for nutorch mm command (matrix multiplication)
+# test-mm.nu - Test script for torch mm command (matrix multiplication)
 
 # Helper function to compare two nested lists for strict equality
 def compare_nested_lists [actual: list, expected: list] {
@@ -25,27 +25,27 @@ def compare_nested_lists [actual: list, expected: list] {
 print "Running Test 1: 2x3 * 3x3 = 2x3 matrix multiplication (integers)"
 
 # Create a 1D tensor of length 3 with integer values
-let base1 = (nutorch linspace 0 2 3 --dtype int32)  # Shape: [3], values [0, 1, 2]
+let base1 = (torch linspace 0 2 3 --dtype int32)  # Shape: [3], values [0, 1, 2]
 # print "Base1 tensor:"
-# $base1 | nutorch value
+# $base1 | torch value
 
 # Use repeat to create a 2x3 matrix (repeat 2 times along a new leading dimension)
-let t1 = ($base1 | nutorch repeat 2 1)  # Shape: [2, 3]
+let t1 = ($base1 | torch repeat 2 1)  # Shape: [2, 3]
 # print "Tensor 1 (2x3):"
-# $t1 | nutorch value  # Expected: [[0, 1, 2], [0, 1, 2]]
+# $t1 | torch value  # Expected: [[0, 1, 2], [0, 1, 2]]
 
 # Create a 1D tensor of length 3 with integer values
-let base2 = (nutorch linspace 1 3 3 --dtype int32)  # Shape: [3], values [1, 2, 3]
+let base2 = (torch linspace 1 3 3 --dtype int32)  # Shape: [3], values [1, 2, 3]
 # print "Base2 tensor:"
-# $base2 | nutorch value
+# $base2 | torch value
 
 # Use repeat to create a 3x3 matrix (repeat 3 times along a new leading dimension)
-let t2 = ($base2 | nutorch repeat 3 1)  # Shape: [3, 3]
+let t2 = ($base2 | torch repeat 3 1)  # Shape: [3, 3]
 # print "Tensor 2 (3x3):"
-# $t2 | nutorch value  # Expected: [[1, 2, 3], [1, 2, 3], [1, 2, 3]]
+# $t2 | torch value  # Expected: [[1, 2, 3], [1, 2, 3], [1, 2, 3]]
 
 # Perform matrix multiplication: (2x3) * (3x3) = (2x3)
-let result = (nutorch mm $t1 $t2 | nutorch value)
+let result = (torch mm $t1 $t2 | torch value)
 # print "Result of 2x3 * 3x3:"
 # $result
 
@@ -67,27 +67,27 @@ if (compare_nested_lists $result $expected) {
 print "Running Test 2: 3x2 * 2x4 = 3x4 matrix multiplication (integers)"
 
 # Create a 1D tensor of length 2 with integer values
-let base3 = (nutorch linspace 1 2 2 --dtype int32)  # Shape: [2], values [1, 2]
+let base3 = (torch linspace 1 2 2 --dtype int32)  # Shape: [2], values [1, 2]
 # print "Base3 tensor:"
-# $base3 | nutorch value
+# $base3 | torch value
 
 # Use repeat to create a 3x2 matrix (repeat 3 times along a new leading dimension)
-let t3 = ($base3 | nutorch repeat 3 1)  # Shape: [3, 2]
+let t3 = ($base3 | torch repeat 3 1)  # Shape: [3, 2]
 # print "Tensor 3 (3x2):"
-# $t3 | nutorch value  # Expected: [[1, 2], [1, 2], [1, 2]]
+# $t3 | torch value  # Expected: [[1, 2], [1, 2], [1, 2]]
 
 # Create a 1D tensor of length 4 with integer values
-let base4 = (nutorch linspace 0 3 4 --dtype int32)  # Shape: [4], values [0, 1, 2, 3]
+let base4 = (torch linspace 0 3 4 --dtype int32)  # Shape: [4], values [0, 1, 2, 3]
 # print "Base4 tensor:"
-# $base4 | nutorch value
+# $base4 | torch value
 
 # Use repeat to create a 2x4 matrix (repeat 2 times along a new leading dimension)
-let t4 = ($base4 | nutorch repeat 2 1)  # Shape: [2, 4]
+let t4 = ($base4 | torch repeat 2 1)  # Shape: [2, 4]
 # print "Tensor 4 (2x4):"
-# $t4 | nutorch value  # Expected: [[0, 1, 2, 3], [0, 1, 2, 3]]
+# $t4 | torch value  # Expected: [[0, 1, 2, 3], [0, 1, 2, 3]]
 
 # Perform matrix multiplication: (3x2) * (2x4) = (3x4)
-let result2 = (nutorch mm $t3 $t4 | nutorch value)
+let result2 = (torch mm $t3 $t4 | torch value)
 # print "Result of 3x2 * 2x4:"
 # $result2
 
