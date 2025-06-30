@@ -929,20 +929,7 @@ impl PluginCommand for CommandLogSoftmax {
         })?.shallow_clone();
 
         // Handle optional dtype argument using convenience method if provided
-        let dtype_opt: Option<Kind> = match call.get_flag::<String>("dtype") {
-            Ok(Some(dtype_str)) => {
-                Some(match dtype_str.to_lowercase().as_str() {
-                    "float32" | "float" => Kind::Float,
-                    "float64" | "double" => Kind::Double,
-                    "int32" | "int" => Kind::Int,
-                    "int64" | "long" => Kind::Int64,
-                    _ => return Err(LabeledError::new("Invalid dtype")
-                        .with_label("Data type must be 'float32', 'float64', 'int32', or 'int64'", call.head)),
-                })
-            },
-            Ok(None) => None,
-            Err(e) => return Err(LabeledError::new("Invalid dtype").with_label(e.to_string(), call.head)),
-        };
+        let kind = get_kind_from_call(call)?;
 
         // Handle optional dim argument (default to last dimension)
         let dim: i64 = match call.get_flag::<i64>("dim")? {
@@ -961,7 +948,7 @@ impl PluginCommand for CommandLogSoftmax {
         };
 
         // Compute log-softmax using tch-rs
-        let result_tensor = tensor.log_softmax(dim, dtype_opt);
+        let result_tensor = tensor.log_softmax(dim, kind);
 
         // Store result in registry with new ID
         let new_id = Uuid::new_v4().to_string();
