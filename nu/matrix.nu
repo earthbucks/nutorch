@@ -1,3 +1,13 @@
+def record_from_list [data: list] {
+  mut my_record = {}
+  for i in 0..( ($data | length) - 1) {
+    let item = $data | get $i
+    let name = $i | into string
+    $my_record = $my_record | merge { $name: $item }
+  }
+  $my_record
+}
+
 def table_from_list [data: list<list>] {
   mut my_table = [[]; []]
   let num_rows = $data | length
