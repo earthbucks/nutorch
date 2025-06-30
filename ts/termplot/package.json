@@ -1,6 +1,6 @@
 {
-  "name": "termplot",
-  "version": "1.0.0",
+  "name": "@termplot/termplot",
+  "version": "0.0.1",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -8,6 +8,6 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "packageManager": "pnpm@10.12.4"
 }
