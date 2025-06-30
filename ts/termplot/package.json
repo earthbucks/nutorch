@@ -12,8 +12,10 @@
   "license": "MIT",
   "packageManager": "pnpm@10.12.4",
   "dependencies": {
+    "ansi-escapes": "^7.0.0",
     "express": "^5.1.0",
-    "puppeteer": "^24.11.1"
+    "puppeteer": "^24.11.1",
+    "term-img": "^7.0.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.6",
