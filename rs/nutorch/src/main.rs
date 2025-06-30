@@ -32,6 +32,7 @@ impl Plugin for NutorchPlugin {
             Box::new(CommandRandn),
             Box::new(CommandRepeat),
             Box::new(CommandSin),
+            Box::new(CommandLogSoftmax),
             Box::new(CommandTensor),
             Box::new(CommandValue),
         ]
@@ -854,6 +855,114 @@ impl PluginCommand for CommandMm {
 
         // Perform matrix multiplication
         let result_tensor = tensor1.mm(&tensor2);
+        // Store result in registry with new ID
+        let new_id = Uuid::new_v4().to_string();
+        registry.insert(new_id.clone(), result_tensor);
+        // Return new ID wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+
+struct CommandLogSoftmax;
+
+impl PluginCommand for CommandLogSoftmax {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "nutorch log_softmax"
+    }
+
+    fn description(&self) -> &str {
+        "Compute the log-softmax of a tensor along a specified dimension (similar to torch.log_softmax)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("nutorch log_softmax")
+            .input_output_types(vec![(Type::String, Type::String)])
+            .named(
+                "dim",
+                SyntaxShape::Int,
+                "Dimension along which to compute log-softmax (default: last dimension)",
+                None,
+            )
+            .named(
+                "dtype",
+                SyntaxShape::String,
+                "Data type of the output tensor (default: inherits input dtype)",
+                None,
+            )
+            .category(Category::Custom("nutorch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Compute log-softmax over the last dimension of a tensor",
+                example: "let t1 = (nutorch linspace 0 5 6 | nutorch repeat 2 1); $t1 | nutorch log_softmax | nutorch value",
+                result: None,
+            },
+            Example {
+                description: "Compute log-softmax along a specific dimension",
+                example: "let t1 = (nutorch linspace 0 5 6 | nutorch repeat 2 1); $t1 | nutorch log_softmax --dim 1 | nutorch value",
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Get tensor ID from input (pipeline)
+        let input_value = input.into_value(call.head)?;
+        let tensor_id = input_value.as_str().map(|s| s.to_string()).map_err(|_| {
+            LabeledError::new("Invalid input").with_label("Unable to parse tensor ID from input", call.head)
+        })?;
+
+        // Look up tensor in registry
+        let mut registry = TENSOR_REGISTRY.lock().unwrap();
+        let tensor = registry.get(&tensor_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
+        })?.shallow_clone();
+
+        // Handle optional dtype argument using convenience method if provided
+        let dtype_opt: Option<Kind> = match call.get_flag::<String>("dtype") {
+            Ok(Some(dtype_str)) => {
+                Some(match dtype_str.to_lowercase().as_str() {
+                    "float32" | "float" => Kind::Float,
+                    "float64" | "double" => Kind::Double,
+                    "int32" | "int" => Kind::Int,
+                    "int64" | "long" => Kind::Int64,
+                    _ => return Err(LabeledError::new("Invalid dtype")
+                        .with_label("Data type must be 'float32', 'float64', 'int32', or 'int64'", call.head)),
+                })
+            },
+            Ok(None) => None,
+            Err(e) => return Err(LabeledError::new("Invalid dtype").with_label(e.to_string(), call.head)),
+        };
+
+        // Handle optional dim argument (default to last dimension)
+        let dim: i64 = match call.get_flag::<i64>("dim")? {
+            Some(d) => {
+                let num_dims = tensor.size().len() as i64;
+                if d < 0 || d >= num_dims {
+                    return Err(LabeledError::new("Invalid dimension")
+                        .with_label(format!("Dimension {} out of bounds for tensor with {} dimensions", d, num_dims), call.head));
+                }
+                d
+            },
+            None => {
+                // Default to last dimension
+                (tensor.size().len() as i64) - 1
+            },
+        };
+
+        // Compute log-softmax using tch-rs
+        let result_tensor = tensor.log_softmax(dim, dtype_opt);
+
         // Store result in registry with new ID
         let new_id = Uuid::new_v4().to_string();
         registry.insert(new_id.clone(), result_tensor);
