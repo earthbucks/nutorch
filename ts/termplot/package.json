@@ -35,7 +35,6 @@
     "@types/react": "^19.1.5",
     "@types/react-dom": "^19.1.5",
     "ansi-escapes": "^7.0.0",
-    "compression": "^1.8.0",
     "express": "^5.1.0",
     "isbot": "^5",
     "puppeteer": "^24.11.1",
