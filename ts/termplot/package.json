@@ -26,7 +26,12 @@
     "puppeteer": "^24.11.1"
   },
   "devDependencies": {
+    "@react-router/dev": "7.6.0",
+    "@types/react": "^19.1.5",
+    "@types/react-dom": "^19.1.5",
     "@biomejs/biome": "^2.0.6",
-    "@types/express": "^5.0.3"
+    "@types/express": "^5.0.3",
+    "vite": "^6.3.5",
+    "vite-tsconfig-paths": "^5.1.4"
   }
 }
