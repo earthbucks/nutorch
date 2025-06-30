@@ -13,7 +13,7 @@ const __dirname = dirname(__filename);
 const app = express();
 app.use(express.static(join(__dirname, "public")));
 const server = app.listen(port, () =>
-  console.log(`Server running on port ${port} (set PORT env var to change)`),
+  console.log(`Server running on port ${port} (set PORT env var at start to change)`),
 );
 
 (async () => {
