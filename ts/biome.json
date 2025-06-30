@@ -1,14 +1,16 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.8.3/schema.json",
+  "root": false,
+  "$schema": "https://biomejs.dev/schemas/2.0.6/schema.json",
   "formatter": {
-    "ignore": [
-      "**/node_modules/**",
-      "**/src/rs-*/**",
-      "**/dist/**",
-      "**/build/**",
-      "**/public/**",
-      "**/.react-router/**",
-      "*types.ts"
+    "includes": [
+      "**",
+      "!**/node_modules/**",
+      "!**/src/rs-*/**",
+      "!**/dist/**",
+      "!**/build/**",
+      "!**/public/**",
+      "!**/.react-router/**",
+      "!**/*types.ts"
     ],
     "enabled": true,
     "formatWithErrors": false,
@@ -18,15 +20,16 @@
     "lineWidth": 80,
     "attributePosition": "auto"
   },
-  "organizeImports": { "enabled": true },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
   "linter": {
-    "ignore": [
-      "**/node_modules/**",
-      "**/src/rs-*/**",
-      "**/dist/**",
-      "**/build/**",
-      "**/.react-router/**",
-      "trpc-router-types.ts"
+    "includes": [
+      "**",
+      "!**/node_modules/**",
+      "!**/src/rs-*/**",
+      "!**/dist/**",
+      "!**/build/**",
+      "!**/.react-router/**",
+      "!**/trpc-router-types.ts"
     ],
     "enabled": true,
     "rules": {
@@ -42,11 +45,10 @@
         "useSimpleNumberKeys": "info",
         "noBannedTypes": "error",
         "noExtraBooleanCast": "error",
-        "noMultipleSpacesInRegularExpressionLiterals": "error",
         "noUselessCatch": "error",
         "noUselessThisAlias": "error",
         "noUselessTypeConstraint": "error",
-        "noWith": "error"
+        "noAdjacentSpacesInRegex": "error"
       },
       "correctness": {
         "useImportExtensions": "error",
@@ -57,7 +59,6 @@
         "noEmptyPattern": "error",
         "noGlobalObjectCalls": "error",
         "noInvalidConstructorSuper": "error",
-        "noInvalidNewBuiltin": "error",
         "noNonoctalDecimalEscape": "error",
         "noPrecisionLoss": "error",
         "noSelfAssign": "error",
@@ -71,21 +72,30 @@
         "noUnusedLabels": "error",
         "noUnusedPrivateClassMembers": "error",
         "noUnusedVariables": "off",
-        "useArrayLiterals": "off",
         "useIsNan": "error",
         "useValidForDirection": "error",
-        "useYield": "error"
+        "useYield": "error",
+        "noInvalidBuiltinInstantiation": "error",
+        "useValidTypeof": "error"
       },
       "style": {
         "useImportType": "off",
         "useNodejsImportProtocol": "off",
         "noNamespace": "error",
         "noNonNullAssertion": "off",
-        "noVar": "error",
         "useAsConstAssertion": "error",
         "useBlockStatements": "info",
         "useConst": "error",
-        "noParameterProperties": "error"
+        "noParameterProperties": "error",
+        "useDefaultParameterLast": "error",
+        "useEnumInitializers": "error",
+        "useSelfClosingElements": "error",
+        "useSingleVarDeclarator": "error",
+        "noUnusedTemplateLiteral": "error",
+        "useNumberNamespace": "error",
+        "noInferrableTypes": "error",
+        "noUselessElse": "error",
+        "useArrayLiterals": "off"
       },
       "suspicious": {
         "noArrayIndexKey": "off",
@@ -115,8 +125,9 @@
         "noUnsafeDeclarationMerging": "error",
         "noUnsafeNegation": "error",
         "useGetterReturn": "error",
-        "useValidTypeof": "error",
-        "noConstEnum": "error"
+        "noConstEnum": "error",
+        "noWith": "error",
+        "noVar": "error"
       }
     }
   },
@@ -260,24 +271,21 @@
   },
   "overrides": [
     {
-      "include": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
+      "includes": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
       "linter": {
         "rules": {
           "correctness": {
             "noConstAssign": "off",
             "noGlobalObjectCalls": "off",
             "noInvalidConstructorSuper": "off",
-            "noInvalidNewBuiltin": "off",
-            "noNewSymbol": "off",
             "noSetterReturn": "off",
             "noUndeclaredVariables": "off",
             "noUnreachable": "off",
-            "noUnreachableSuper": "off"
+            "noUnreachableSuper": "off",
+            "noInvalidBuiltinInstantiation": "off"
           },
           "style": {
             "useNodejsImportProtocol": "off",
-            "noArguments": "error",
-            "noVar": "error",
             "useConst": "error",
             "noParameterAssign": "off"
           },
@@ -289,7 +297,11 @@
             "noImportAssign": "off",
             "noRedeclare": "off",
             "noUnsafeNegation": "off",
-            "useGetterReturn": "off"
+            "useGetterReturn": "off",
+            "noVar": "error"
+          },
+          "complexity": {
+            "noArguments": "error"
           }
         }
       }
