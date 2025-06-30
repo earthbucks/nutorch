@@ -38,3 +38,13 @@ if (viteDevServer) {
     }),
   );
 }
+
+// Everything else (like favicon.ico) is cached for an hour. You may want to be
+// more aggressive with this caching.
+app.use(express.static("build/app/client", { maxAge: "1h" }));
+
+if (process.env.NODE_ENV === "development") {
+  app.use(morgan("dev")); // Logs with color in the console
+} else {
+  // app.use(morgan("combined")); // No color, standard format for production
+}
