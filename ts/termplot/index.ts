@@ -32,9 +32,6 @@ const server = app.listen(port, () =>
     await browser.close();
     server.close();
 
-    // TODO: Display the image in the terminal (focus of this discussion)
-    console.log("Screenshot saved as plot-screenshot.png");
-
     // Display the image in the terminal
     console.log(ansiescapes.image(imageBuffer, {}));
   } catch (error) {
