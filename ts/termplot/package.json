@@ -11,7 +11,7 @@
     "lint": "biome lint --write --unsafe",
     "format": "biome format --write",
     "fix": "pnpm run typecheck && pnpm run lint && pnpm run format",
-    "start": "ENV=production node server/server.ts",
+    "start": "NODE_ENV=production PORT=3000 node server/server.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "engines": {
@@ -38,7 +38,6 @@
     "compression": "^1.8.0",
     "express": "^5.1.0",
     "isbot": "^5",
-    "morgan": "^1.10.0",
     "puppeteer": "^24.11.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
