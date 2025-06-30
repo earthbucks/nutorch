@@ -1,4 +1,4 @@
-def to_row [] {
+def "into row" [] {
     let data = $in  # Capture input from pipeline
     mut my_record = {}
     for i in 0..( ($data | length) - 1) {
@@ -9,7 +9,7 @@ def to_row [] {
     $my_record
 }
 
-def to_matrix [] {
+def "into matrix" [] {
     let data = $in  # Capture input from pipeline
     
     # Check if input is empty
@@ -19,13 +19,13 @@ def to_matrix [] {
     
     # Initialize table to first row
     mut my_table = []
-    $my_table = ($data | get 0 | to_row)
+    $my_table = ($data | get 0 | into row)
 
     # Then merge every row starting with the second row
     let num_rows = $data | length
     for i in 1..($num_rows - 1) {
         let row = $data | get $i
-        let my_record = $row | to_row
+        let my_record = $row | into row
         $my_table = $my_table | append $my_record
     }
     $my_table
