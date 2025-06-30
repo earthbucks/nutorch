@@ -5,6 +5,12 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
+    "build": "react-router build",
+    "typecheck": "react-router typegen && safe-routes typegen && tsc",
+    "lint": "biome lint --write --unsafe",
+    "format": "biome format --write",
+    "fix": "pnpm run typecheck && pnpm run lint && pnpm run format",
+    "start": "ENV=production node server/server.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "engines": {
