@@ -6,7 +6,7 @@ edition = "2021"
 license = "MIT"
 
 [[bin]]
-name = "nu_plugin_nutorch"
+name = "nu_plugin_torch"
 path = "src/main.rs"
 
 [dependencies]

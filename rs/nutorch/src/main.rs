@@ -50,11 +50,11 @@ impl PluginCommand for CommandNutorch {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch"
+        "torch"
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch").category(Category::Custom("nutorch".into()))
+        Signature::build("torch").category(Category::Custom("torch".into()))
     }
 
     fn description(&self) -> &str {
@@ -63,10 +63,10 @@ impl PluginCommand for CommandNutorch {
 
     fn examples(&self) -> Vec<Example> {
         vec![Example {
-            description: "Run the nutorch command to test the plugin".into(),
-            example: "nutorch".into(),
+            description: "Run the torch command to test the plugin".into(),
+            example: "torch".into(),
             result: Some(Value::string(
-                "Welcome to Nutorch. Type `nutorch --help` for more information.",
+                "Welcome to Nutorch. Type `torch --help` for more information.",
                 nu_protocol::Span::unknown(),
             )),
         }]
@@ -81,7 +81,7 @@ impl PluginCommand for CommandNutorch {
     ) -> Result<PipelineData, LabeledError> {
         Ok(PipelineData::Value(
             Value::string(
-                "Welcome to Nutorch. Type `nutorch --help` for more information.",
+                "Welcome to Nutorch. Type `torch --help` for more information.",
                 call.head,
             ),
             None,
@@ -95,7 +95,7 @@ impl PluginCommand for CommandCat {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch cat"
+        "torch cat"
     }
 
     fn description(&self) -> &str {
@@ -103,7 +103,7 @@ impl PluginCommand for CommandCat {
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch cat")
+        Signature::build("torch cat")
             .rest(
                 "tensor_ids",
                 SyntaxShape::String,
@@ -116,19 +116,19 @@ impl PluginCommand for CommandCat {
                 None,
             )
             .input_output_types(vec![(Type::Nothing, Type::String)])
-            .category(Category::Custom("nutorch".into()))
+            .category(Category::Custom("torch".into()))
     }
 
     fn examples(&self) -> Vec<Example> {
         vec![
             Example {
                 description: "Concatenate two 2x3 tensors along dimension 0",
-                example: "let t1 = (nutorch full 1 2 3); let t2 = (nutorch full 2 2 3); nutorch cat $t1 $t2 --dim 0 | nutorch value",
+                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); torch cat $t1 $t2 --dim 0 | torch value",
                 result: None,
             },
             Example {
                 description: "Concatenate three 2x3 tensors along dimension 1",
-                example: "let t1 = (nutorch full 1 2 3); let t2 = (nutorch full 2 2 3); let t3 = (nutorch full 3 2 3); nutorch cat $t1 $t2 $t3 --dim 1 | nutorch value",
+                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); let t3 = (torch full 3 2 3); torch cat $t1 $t2 $t3 --dim 1 | torch value",
                 result: None,
             }
         ]
@@ -245,7 +245,7 @@ impl PluginCommand for CommandManualSeed {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch manual_seed"
+        "torch manual_seed"
     }
 
     fn description(&self) -> &str {
@@ -253,20 +253,20 @@ impl PluginCommand for CommandManualSeed {
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch manual_seed")
+        Signature::build("torch manual_seed")
             .required(
                 "seed",
                 SyntaxShape::Int,
                 "The seed value for the random number generator",
             )
             .input_output_types(vec![(Type::Nothing, Type::Nothing)])
-            .category(Category::Custom("nutorch".into()))
+            .category(Category::Custom("torch".into()))
     }
 
     fn examples(&self) -> Vec<Example> {
         vec![Example {
             description: "Set the random seed to 42 for reproducibility",
-            example: "nutorch manual_seed 42",
+            example: "torch manual_seed 42",
             result: None,
         }]
     }
@@ -293,7 +293,7 @@ impl PluginCommand for CommandRandn {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch randn"
+        "torch randn"
     }
 
     fn description(&self) -> &str {
@@ -301,7 +301,7 @@ impl PluginCommand for CommandRandn {
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch randn")
+        Signature::build("torch randn")
             .rest("dims", SyntaxShape::Int, "Dimensions of the tensor (e.g., 2 3 for a 2x3 tensor)")
             .named(
                 "device",
@@ -322,20 +322,20 @@ impl PluginCommand for CommandRandn {
                 None,
             )
             .input_output_types(vec![(Type::Nothing, Type::String)])
-            .category(Category::Custom("nutorch".into()))
+            .category(Category::Custom("torch".into()))
     }
 
     fn examples(&self) -> Vec<Example> {
         vec![
             Example {
                 description: "Generate a 2x3 tensor with random values from a normal distribution",
-                example: "nutorch randn 2 3 | nutorch tovalue",
+                example: "torch randn 2 3 | torch tovalue",
                 result: None,
             },
             Example {
                 description:
                     "Generate a 1D tensor of size 5 with a specific seed for reproducibility",
-                example: "nutorch manual_seed 42; nutorch randn 5 | nutorch tovalue",
+                example: "torch manual_seed 42; torch randn 5 | torch tovalue",
                 result: None,
             },
         ]
@@ -399,7 +399,7 @@ impl PluginCommand for CommandFull {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch full"
+        "torch full"
     }
 
     fn description(&self) -> &str {
@@ -407,7 +407,7 @@ impl PluginCommand for CommandFull {
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch full")
+        Signature::build("torch full")
             .required("value", SyntaxShape::Number, "The value to fill the tensor with")
             .rest("dims", SyntaxShape::Int, "Dimensions of the tensor (e.g., 2 3 for a 2x3 tensor)")
             .named(
@@ -429,19 +429,19 @@ impl PluginCommand for CommandFull {
                 None,
             )
             .input_output_types(vec![(Type::Nothing, Type::String)])
-            .category(Category::Custom("nutorch".into()))
+            .category(Category::Custom("torch".into()))
     }
 
     fn examples(&self) -> Vec<Example> {
         vec![
             Example {
                 description: "Create a 1D tensor of length 5 filled with value 7",
-                example: "nutorch full 7 5 | nutorch value",
+                example: "torch full 7 5 | torch value",
                 result: None,
             },
             Example {
                 description: "Create a 2x3 tensor filled with value 0.5 with float64 dtype on CPU",
-                example: "nutorch full 0.5 2 3 --dtype float64 --device cpu | nutorch value",
+                example: "torch full 0.5 2 3 --dtype float64 --device cpu | torch value",
                 result: None,
             },
         ]
@@ -529,7 +529,7 @@ impl PluginCommand for CommandDevices {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch devices"
+        "torch devices"
     }
 
     fn description(&self) -> &str {
@@ -537,15 +537,15 @@ impl PluginCommand for CommandDevices {
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch devices")
+        Signature::build("torch devices")
             .input_output_types(vec![(Type::Nothing, Type::List(Box::new(Type::String)))])
-            .category(Category::Custom("nutorch".into()))
+            .category(Category::Custom("torch".into()))
     }
 
     fn examples(&self) -> Vec<Example> {
         vec![Example {
             description: "List available devices for tensor operations",
-            example: "nutorch devices",
+            example: "torch devices",
             result: None,
         }]
     }
@@ -582,7 +582,7 @@ impl PluginCommand for CommandLinspace {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch linspace"
+        "torch linspace"
     }
 
     fn description(&self) -> &str {
@@ -590,7 +590,7 @@ impl PluginCommand for CommandLinspace {
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch linspace")
+        Signature::build("torch linspace")
             .required("start", SyntaxShape::Float, "Start value")
             .required("end", SyntaxShape::Float, "End value")
             .required("steps", SyntaxShape::Int, "Number of steps")
@@ -612,13 +612,13 @@ impl PluginCommand for CommandLinspace {
                 "Whether the tensor requires gradient tracking for autograd (default: false)",
                 None,
             )
-            .category(Category::Custom("nutorch".into()))
+            .category(Category::Custom("torch".into()))
     }
 
     fn examples(&self) -> Vec<Example> {
         vec![Example {
             description: "Create a tensor from 0.0 to 1.0 with 4 steps",
-            example: "nutorch linspace 0.0 1.0 4",
+            example: "torch linspace 0.0 1.0 4",
             result: None,
         }]
     }
@@ -662,7 +662,7 @@ impl PluginCommand for CommandRepeat {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch repeat"
+        "torch repeat"
     }
 
     fn description(&self) -> &str {
@@ -670,26 +670,26 @@ impl PluginCommand for CommandRepeat {
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch repeat")
+        Signature::build("torch repeat")
             .rest(
                 "sizes",
                 SyntaxShape::Int,
                 "Number of times to repeat along each dimension",
             )
             .input_output_types(vec![(Type::String, Type::String)])
-            .category(Category::Custom("nutorch".into()))
+            .category(Category::Custom("torch".into()))
     }
 
     fn examples(&self) -> Vec<Example> {
         vec![
             Example {
                 description: "Repeat a tensor 3 times along the first dimension",
-                example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 3 | nutorch value",
+                example: "torch linspace 0.0 1.0 4 | torch repeat 3 | torch value",
                 result: None,
             },
             Example {
                 description: "Repeat a tensor 2 times along first dim and 2 times along second dim (creates new dim if needed)",
-                example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 2 2 | nutorch value",
+                example: "torch linspace 0.0 1.0 4 | torch repeat 2 2 | torch value",
                 result: None,
             }
         ]
@@ -765,7 +765,7 @@ impl PluginCommand for CommandMm {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch mm"
+        "torch mm"
     }
 
     fn description(&self) -> &str {
@@ -773,7 +773,7 @@ impl PluginCommand for CommandMm {
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch mm")
+        Signature::build("torch mm")
             .required(
                 "tensor1_id",
                 SyntaxShape::String,
@@ -785,14 +785,14 @@ impl PluginCommand for CommandMm {
                 "ID of the second tensor for matrix multiplication",
             )
             .input_output_types(vec![(Type::Nothing, Type::String)])
-            .category(Category::Custom("nutorch".into()))
+            .category(Category::Custom("torch".into()))
     }
 
     fn examples(&self) -> Vec<Example> {
         vec![
             Example {
                 description: "Perform matrix multiplication between two tensors",
-                example: "let t1 = (nutorch linspace 0 5 6 | nutorch repeat 2); let t2 = (nutorch linspace 0 2 3 | nutorch repeat 2); nutorch mm $t1 $t2 | nutorch value",
+                example: "let t1 = (torch linspace 0 5 6 | torch repeat 2); let t2 = (torch linspace 0 2 3 | torch repeat 2); torch mm $t1 $t2 | torch value",
                 result: None,
             }
         ]
@@ -869,7 +869,7 @@ impl PluginCommand for CommandLogSoftmax {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch log_softmax"
+        "torch log_softmax"
     }
 
     fn description(&self) -> &str {
@@ -877,7 +877,7 @@ impl PluginCommand for CommandLogSoftmax {
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch log_softmax")
+        Signature::build("torch log_softmax")
             .input_output_types(vec![(Type::String, Type::String)])
             .named(
                 "dim",
@@ -891,19 +891,19 @@ impl PluginCommand for CommandLogSoftmax {
                 "Data type of the output tensor (default: inherits input dtype)",
                 None,
             )
-            .category(Category::Custom("nutorch".into()))
+            .category(Category::Custom("torch".into()))
     }
 
     fn examples(&self) -> Vec<Example> {
         vec![
             Example {
                 description: "Compute log-softmax over the last dimension of a tensor",
-                example: "let t1 = (nutorch linspace 0 5 6 | nutorch repeat 2 1); $t1 | nutorch log_softmax | nutorch value",
+                example: "let t1 = (torch linspace 0 5 6 | torch repeat 2 1); $t1 | torch log_softmax | torch value",
                 result: None,
             },
             Example {
                 description: "Compute log-softmax along a specific dimension",
-                example: "let t1 = (nutorch linspace 0 5 6 | nutorch repeat 2 1); $t1 | nutorch log_softmax --dim 1 | nutorch value",
+                example: "let t1 = (torch linspace 0 5 6 | torch repeat 2 1); $t1 | torch log_softmax --dim 1 | torch value",
                 result: None,
             }
         ]
@@ -965,7 +965,7 @@ impl PluginCommand for CommandSin {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch sin"
+        "torch sin"
     }
 
     fn description(&self) -> &str {
@@ -973,7 +973,7 @@ impl PluginCommand for CommandSin {
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch sin").category(Category::Custom("nutorch".into()))
+        Signature::build("torch sin").category(Category::Custom("torch".into()))
     }
 
     fn run(
@@ -1010,7 +1010,7 @@ impl PluginCommand for CommandMaximum {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch maximum"
+        "torch maximum"
     }
 
     fn description(&self) -> &str {
@@ -1018,23 +1018,23 @@ impl PluginCommand for CommandMaximum {
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch maximum")
+        Signature::build("torch maximum")
             .required("tensor1_id", SyntaxShape::String, "ID of the first tensor")
             .required("tensor2_id", SyntaxShape::String, "ID of the second tensor")
             .input_output_types(vec![(Type::Nothing, Type::String)])
-            .category(Category::Custom("nutorch".into()))
+            .category(Category::Custom("torch".into()))
     }
 
     fn examples(&self) -> Vec<Example> {
         vec![
             Example {
                 description: "Compute element-wise maximum between two tensors of same shape",
-                example: "let t1 = (nutorch full 1 2 3); let t2 = (nutorch full 2 2 3); nutorch maximum $t1 $t2 | nutorch value",
+                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); torch maximum $t1 $t2 | torch value",
                 result: None,
             },
             Example {
                 description: "Clamp a tensor to a minimum value using a scalar tensor (broadcasting)",
-                example: "let t1 = (nutorch full 0 1); let t2 = (nutorch linspace -2 2 5); nutorch maximum $t1 $t2 | nutorch value",
+                example: "let t1 = (torch full 0 1); let t2 = (torch linspace -2 2 5); torch maximum $t1 $t2 | torch value",
                 result: None,
             }
         ]
@@ -1083,7 +1083,7 @@ impl PluginCommand for CommandMax {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch max"
+        "torch max"
     }
 
     fn description(&self) -> &str {
@@ -1091,7 +1091,7 @@ impl PluginCommand for CommandMax {
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch max")
+        Signature::build("torch max")
             .input_output_types(vec![(Type::String, Type::String)])
             .named(
                 "dim",
@@ -1105,19 +1105,19 @@ impl PluginCommand for CommandMax {
                 "Whether to keep the reduced dimension as size 1 (default: false)",
                 None,
             )
-            .category(Category::Custom("nutorch".into()))
+            .category(Category::Custom("torch".into()))
     }
 
     fn examples(&self) -> Vec<Example> {
         vec![
             Example {
                 description: "Compute maximum value over all elements of a tensor",
-                example: "let t1 = (nutorch full 5 2 3); $t1 | nutorch max | nutorch value",
+                example: "let t1 = (torch full 5 2 3); $t1 | torch max | torch value",
                 result: None,
             },
             Example {
                 description: "Compute maximum along a specific dimension with keepdim",
-                example: "let t1 = (nutorch full 5 2 3); $t1 | nutorch max --dim 1 --keepdim true | nutorch value",
+                example: "let t1 = (torch full 5 2 3); $t1 | torch max --dim 1 --keepdim true | torch value",
                 result: None,
             }
         ]
@@ -1182,7 +1182,7 @@ impl PluginCommand for CommandValue {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch value"
+        "torch value"
     }
 
     fn description(&self) -> &str {
@@ -1190,21 +1190,21 @@ impl PluginCommand for CommandValue {
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch value")
+        Signature::build("torch value")
             .input_output_types(vec![(Type::String, Type::Any)])
-            .category(Category::Custom("nutorch".into()))
+            .category(Category::Custom("torch".into()))
     }
 
     fn examples(&self) -> Vec<Example> {
         vec![
             Example {
                 description: "Convert a 1D tensor to a Nushell Value (list)",
-                example: "nutorch linspace 0.0 1.0 4 | nutorch value",
+                example: "torch linspace 0.0 1.0 4 | torch value",
                 result: None,
             },
             Example {
                 description: "Convert a 2D or higher dimensional tensor to nested Values",
-                example: "nutorch linspace 0.0 1.0 4 | nutorch repeat 2 2 | nutorch value",
+                example: "torch linspace 0.0 1.0 4 | torch repeat 2 2 | torch value",
                 result: None,
             },
         ]
@@ -1241,7 +1241,7 @@ impl PluginCommand for CommandTensor {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
-        "nutorch tensor"
+        "torch tensor"
     }
 
     fn description(&self) -> &str {
@@ -1249,7 +1249,7 @@ impl PluginCommand for CommandTensor {
     }
 
     fn signature(&self) -> Signature {
-        Signature::build("nutorch tensor")
+        Signature::build("torch tensor")
             .input_output_types(vec![(Type::Any, Type::String)])
             .named(
                 "device",
@@ -1269,19 +1269,19 @@ impl PluginCommand for CommandTensor {
                 "Whether the tensor requires gradient tracking for autograd (default: false)",
                 None,
             )
-            .category(Category::Custom("nutorch".into()))
+            .category(Category::Custom("torch".into()))
     }
 
     fn examples(&self) -> Vec<Example> {
         vec![
             Example {
                 description: "Convert a 1D list to a tensor",
-                example: "[0.0, 1.0, 2.0, 3.0] | nutorch tensor",
+                example: "[0.0, 1.0, 2.0, 3.0] | torch tensor",
                 result: None,
             },
             Example {
                 description: "Convert a 2D nested list to a tensor with specific device and dtype",
-                example: "[[0.0, 1.0], [2.0, 3.0]] | nutorch tensor --device cpu --dtype float64",
+                example: "[[0.0, 1.0], [2.0, 3.0]] | torch tensor --device cpu --dtype float64",
                 result: None,
             },
         ]
