@@ -27,6 +27,7 @@ impl Plugin for NutorchPlugin {
             Box::new(CommandLinspace),
             Box::new(CommandManualSeed),
             Box::new(CommandMax),
+            Box::new(CommandMaximum),
             Box::new(CommandMm),
             Box::new(CommandRandn),
             Box::new(CommandRepeat),
@@ -899,6 +900,79 @@ impl PluginCommand for CommandSin {
             .shallow_clone();
         // Apply sine operation
         let result_tensor = tensor.sin();
+        // Store result in registry with new ID
+        let new_id = Uuid::new_v4().to_string();
+        registry.insert(new_id.clone(), result_tensor);
+        // Return new ID wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+
+struct CommandMaximum;
+
+impl PluginCommand for CommandMaximum {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "nutorch maximum"
+    }
+
+    fn description(&self) -> &str {
+        "Compute the element-wise maximum between two tensors with broadcasting (similar to torch.max comparison mode)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("nutorch maximum")
+            .required("tensor1_id", SyntaxShape::String, "ID of the first tensor")
+            .required("tensor2_id", SyntaxShape::String, "ID of the second tensor")
+            .input_output_types(vec![(Type::Nothing, Type::String)])
+            .category(Category::Custom("nutorch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Compute element-wise maximum between two tensors of same shape",
+                example: "let t1 = (nutorch full 1 2 3); let t2 = (nutorch full 2 2 3); nutorch maximum $t1 $t2 | nutorch value",
+                result: None,
+            },
+            Example {
+                description: "Clamp a tensor to a minimum value using a scalar tensor (broadcasting)",
+                example: "let t1 = (nutorch full 0 1); let t2 = (nutorch linspace -2 2 5); nutorch maximum $t1 $t2 | nutorch value",
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        _input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Get tensor1 ID from first required argument
+        let tensor1_id = call.nth(0).unwrap().as_str().map(|s| s.to_string()).map_err(|_| {
+            LabeledError::new("Invalid input").with_label("Unable to parse tensor1 ID", call.head)
+        })?;
+
+        // Get tensor2 ID from second required argument
+        let tensor2_id = call.nth(1).unwrap().as_str().map(|s| s.to_string()).map_err(|_| {
+            LabeledError::new("Invalid input").with_label("Unable to parse tensor2 ID", call.head)
+        })?;
+
+        // Look up tensors in registry
+        let mut registry = TENSOR_REGISTRY.lock().unwrap();
+        let tensor1 = registry.get(&tensor1_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid tensor1 ID", call.head)
+        })?.shallow_clone();
+        let tensor2 = registry.get(&tensor2_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid tensor2 ID", call.head)
+        })?.shallow_clone();
+
+        // Perform element-wise maximum using tch-rs, relying on broadcasting
+        let result_tensor = tensor1.maximum(&tensor2);
+
         // Store result in registry with new ID
         let new_id = Uuid::new_v4().to_string();
         registry.insert(new_id.clone(), result_tensor);
