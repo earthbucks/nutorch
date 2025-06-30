@@ -1,4 +1,3 @@
-import fs from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import ansiescapes from "ansi-escapes";
@@ -25,7 +24,7 @@ const server = app.listen(3000, () =>
     await page.goto("http://localhost:3000", { waitUntil: "networkidle2" });
 
     // Take a screenshot
-    await page.screenshot({ path: "plot-screenshot.png", fullPage: true });
+    const imageBuffer = await page.screenshot({ fullPage: true });
 
     // Close the browser and server
     await browser.close();
@@ -33,9 +32,6 @@ const server = app.listen(3000, () =>
 
     // TODO: Display the image in the terminal (focus of this discussion)
     console.log("Screenshot saved as plot-screenshot.png");
-
-    // read in image
-    const imageBuffer = await fs.readFile("plot-screenshot.png");
 
     // Display the image in the terminal
     console.log(ansiescapes.image(imageBuffer, {}));
