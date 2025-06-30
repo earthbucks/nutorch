@@ -3,7 +3,6 @@ import { fileURLToPath } from "node:url";
 import fs from "node:fs/promises";
 import express from "express";
 import puppeteer from "puppeteer";
-import terminalImage from "term-img";
 import ansiescapes from "ansi-escapes";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -35,18 +34,11 @@ const server = app.listen(3000, () =>
     // TODO: Display the image in the terminal (focus of this discussion)
     console.log("Screenshot saved as plot-screenshot.png");
 
-    // function fallback() {
-    //   // if it can't be displayed
-    // }
-
     // read in image
     const imageBuffer = await fs.readFile("plot-screenshot.png");
 
     // Display the image in the terminal
-
     console.log(ansiescapes.image(imageBuffer, {}));
-
-    // console.log(terminalImage("plot-screenshot.png", { fallback }));
   } catch (error) {
     console.error("Error:", error);
   }
