@@ -10,7 +10,7 @@
   "author": "",
   "license": "MIT",
   "packageManager": "pnpm@10.12.4",
-  "devDependencies": {
+  "dependencies": {
     "puppeteer": "^24.11.1"
   }
 }
