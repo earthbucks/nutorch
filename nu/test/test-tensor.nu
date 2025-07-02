@@ -7,7 +7,7 @@ def print_success [message: string] {
 
 # Function to print FAILURE in red with an uncolored message
 def print_failure [message: string] {
-  print ((ansi red) + "FAILURE" + (ansi reset) + " - " + $message)
+  print ((ansi red) + "FAILURE" + (ansi reset) + " - test-tensor - " + $message)
 }
 
 # Test 1: Convert a 1D list to a tensor via pipeline
