@@ -20,14 +20,15 @@ impl Plugin for NutorchPlugin {
         vec![
             // Top-level Nutorch command
             Box::new(CommandNutorch),
-            // Individual commands for tensor operations and utilities
+            // Configuration and other non-tensor commands
+            Box::new(CommandManualSeed),
+            // Tensor operations
             Box::new(CommandCat),
             Box::new(CommandDevices),
             Box::new(CommandExp),
             Box::new(CommandFull),
             Box::new(CommandLinspace),
             Box::new(CommandLogSoftmax),
-            Box::new(CommandManualSeed),
             Box::new(CommandMax),
             Box::new(CommandMaximum),
             Box::new(CommandMean),
