@@ -1463,10 +1463,6 @@ impl PluginCommand for CommandTensor {
         let pipeline_input = match input {
             PipelineData::Empty => None,
             PipelineData::Value(val, _) => Some(val),
-            PipelineData::ListStream(_, _) => {
-                return Err(LabeledError::new("Unsupported input")
-                    .with_label("ListStream input is not supported", call.head));
-            }
             _ => {
                 return Err(LabeledError::new("Unsupported input")
                     .with_label("Only Value or Empty input is supported", call.head));
