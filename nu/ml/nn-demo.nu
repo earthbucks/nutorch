@@ -14,7 +14,12 @@ def generate_data [
   let X_list: list<string> = [] # nutorch tensors are represented as strings in nu
   let y_list: list<string> = [] # nutorch tensors are represented as strings in nu
 
-  let blob_centers = [([0.0 0.0] | torch tensor) ([3.0 0.0] | torch tensor) ([1.5 2.5] | torch tensor)]
+  # let blob_centers = [([0.0 0.0] | torch tensor) ([3.0 0.0] | torch tensor) ([1.5 2.5] | torch tensor)]
+  let blob_centers = [
+    (torch tensor [0.0 0.0])
+    (torch tensor [3.0 0.0])
+    (torch tensor [1.5 2.5])
+  ]
   return 5
 }
 
