@@ -1405,6 +1405,7 @@ impl PluginCommand for CommandTensor {
     fn signature(&self) -> Signature {
         Signature::build("torch tensor")
             .input_output_types(vec![(Type::Any, Type::String)])
+            .optional("data", SyntaxShape::Any, "Data to convert to a tensor (list or nested list)")
             .named(
                 "device",
                 SyntaxShape::String,
@@ -1429,15 +1430,25 @@ impl PluginCommand for CommandTensor {
     fn examples(&self) -> Vec<Example> {
         vec![
             Example {
-                description: "Convert a 1D list to a tensor",
+                description: "Convert a 1D list to a tensor via pipeline",
                 example: "[0.0, 1.0, 2.0, 3.0] | torch tensor",
                 result: None,
             },
             Example {
-                description: "Convert a 2D nested list to a tensor with specific device and dtype",
+                description: "Convert a 2D nested list to a tensor with specific device and dtype via pipeline",
                 example: "[[0.0, 1.0], [2.0, 3.0]] | torch tensor --device cpu --dtype float64",
                 result: None,
             },
+            Example {
+                description: "Convert a 1D list to a tensor via argument",
+                example: "torch tensor [0.0, 1.0, 2.0, 3.0]",
+                result: None,
+            },
+            Example {
+                description: "Convert a 2D nested list to a tensor with specific device via argument",
+                example: "torch tensor [[0.0, 1.0], [2.0, 3.0]] --device cpu",
+                result: None,
+            }
         ]
     }
 
@@ -1448,7 +1459,42 @@ impl PluginCommand for CommandTensor {
         call: &nu_plugin::EvaluatedCall,
         input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
-        let input_value = input.into_value(call.head)?;
+        // Check for pipeline input
+        let pipeline_input = match input {
+            PipelineData::Empty => None,
+            PipelineData::Value(val, _) => Some(val),
+            PipelineData::ListStream(_, _) => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("ListStream input is not supported", call.head));
+            }
+            _ => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Value or Empty input is supported", call.head));
+            }
+        };
+
+        // Check for positional argument input
+        let arg_input = call.nth(0);
+
+        // Validate that exactly one data source is provided
+        match (&pipeline_input, &arg_input) {
+            (None, None) => {
+                return Err(LabeledError::new("Missing input")
+                    .with_label("Data must be provided via pipeline or as an argument", call.head));
+            }
+            (Some(_), Some(_)) => {
+                return Err(LabeledError::new("Conflicting input")
+                    .with_label("Data cannot be provided both via pipeline and as an argument", call.head));
+            }
+            (Some(input_val), None) => input_val,
+            (None, Some(arg_val)) => arg_val,
+        };
+
+        let input_value = match (pipeline_input, arg_input) {
+            (Some(input_val), None) => input_val,
+            (None, Some(arg_val)) => arg_val,
+            _ => unreachable!("Validation above ensures one source is provided"),
+        };
 
         // Handle optional device argument
         let device = get_device_from_call(call)?;

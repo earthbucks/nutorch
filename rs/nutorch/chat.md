@@ -3990,4 +3990,349 @@ Let me know how the test goes or if you have further questions!
 
 # === USER ===
 
+i'm working on creating my nu code that uses this plugin, and i've decided it's
+important to make the nu code good. this means our api should be very useful and
+intuitive.
+
+let's take the `torch tensor` command.
+
+currently, it works like this:
+
+```nu
+[1 2 3] | torch tensor
+```
+
+that creates a torch tensor. however, it would also be convenient to support
+this syntax:
+
+```nu
+torch tensor [1 2 3]
+```
+
+this means the data should either be passed into the pipeline, OR be the first
+argument to the command.
+
+while this code is not perfectly analagous to python, as python does not have
+pipes, it makes a lot of sense to do it like this in nu. i'd like to start by
+adding support to our tensor command for this syntax. we will also add analagous
+to support to other commands in the future where it makes sense.
+
+can you please rewrite this `CommandTensor` code to support the additional
+option?
+
+my theory is that the way it should work is that the command should require at
+least one source of data: either the pipeline data OR the first argument. if
+either one of these are available, then the command proceeds. if neither are
+available, or both are available, then an error is returned.
+
+```rust
+// Command to convert Nushell data structure to tensor (tensor)
+struct CommandTensor;
+
+impl PluginCommand for CommandTensor {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "torch tensor"
+    }
+
+    fn description(&self) -> &str {
+        "Convert a Nushell Value (nested list structure) to a tensor"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch tensor")
+            .input_output_types(vec![(Type::Any, Type::String)])
+            .named(
+                "device",
+                SyntaxShape::String,
+                "Device to create the tensor on (default: 'cpu')",
+                None,
+            )
+            .named(
+                "dtype",
+                SyntaxShape::String,
+                "Data type of the tensor (default: 'float32')",
+                None,
+            )
+            .named(
+                "requires_grad",
+                SyntaxShape::Boolean,
+                "Whether the tensor requires gradient tracking for autograd (default: false)",
+                None,
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Convert a 1D list to a tensor",
+                example: "[0.0, 1.0, 2.0, 3.0] | torch tensor",
+                result: None,
+            },
+            Example {
+                description: "Convert a 2D nested list to a tensor with specific device and dtype",
+                example: "[[0.0, 1.0], [2.0, 3.0]] | torch tensor --device cpu --dtype float64",
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        let input_value = input.into_value(call.head)?;
+
+        // Handle optional device argument
+        let device = get_device_from_call(call)?;
+
+        // Handle optional dtype argument
+        let kind = get_kind_from_call(call)?;
+
+        // Convert Nushell Value to tensor
+        let mut tensor = value_to_tensor(&input_value, kind, device, call.head)?;
+
+        // Handle optional requires_grad argument
+        tensor = add_grad_from_call(call, tensor)?;
+
+        let id = Uuid::new_v4().to_string();
+        // Store in registry
+        TENSOR_REGISTRY.lock().unwrap().insert(id.clone(), tensor);
+        // Return the ID as a string to Nushell, wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(id, call.head), None))
+    }
+}
+```
+
+# === ASSISTANT ===
+
+I'm glad to hear you're focusing on making the Nushell API for your `torch`
+plugin intuitive and user-friendly. Your idea to support both pipeline input and
+positional argument input for the `torch tensor` command is a great enhancement,
+as it aligns with Nushell's flexible design and caters to different user
+preferences. I agree with your theory that the command should require exactly
+one source of data—either from the pipeline or as the first argument—and return
+an error if neither or both are provided. Let's update the `CommandTensor` code
+to handle this dual-input approach.
+
+### Updated `CommandTensor` to Support Pipeline and Argument Input
+
+Here's the revised `CommandTensor` code to support creating a tensor from either
+pipeline input or a positional argument, with validation to ensure exactly one
+data source is provided:
+
+```rust
+// Command to convert Nushell data structure to tensor (tensor)
+struct CommandTensor;
+
+impl PluginCommand for CommandTensor {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "torch tensor"
+    }
+
+    fn description(&self) -> &str {
+        "Convert a Nushell Value (nested list structure) to a tensor"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch tensor")
+            .input_output_types(vec![(Type::Any, Type::String)])
+            .optional("data", SyntaxShape::Any, "Data to convert to a tensor (list or nested list)")
+            .named(
+                "device",
+                SyntaxShape::String,
+                "Device to create the tensor on (default: 'cpu')",
+                None,
+            )
+            .named(
+                "dtype",
+                SyntaxShape::String,
+                "Data type of the tensor (default: 'float32')",
+                None,
+            )
+            .named(
+                "requires_grad",
+                SyntaxShape::Boolean,
+                "Whether the tensor requires gradient tracking for autograd (default: false)",
+                None,
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Convert a 1D list to a tensor via pipeline",
+                example: "[0.0, 1.0, 2.0, 3.0] | torch tensor",
+                result: None,
+            },
+            Example {
+                description: "Convert a 2D nested list to a tensor with specific device and dtype via pipeline",
+                example: "[[0.0, 1.0], [2.0, 3.0]] | torch tensor --device cpu --dtype float64",
+                result: None,
+            },
+            Example {
+                description: "Convert a 1D list to a tensor via argument",
+                example: "torch tensor [0.0, 1.0, 2.0, 3.0]",
+                result: None,
+            },
+            Example {
+                description: "Convert a 2D nested list to a tensor with specific device via argument",
+                example: "torch tensor [[0.0, 1.0], [2.0, 3.0]] --device cpu",
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Check for pipeline input
+        let pipeline_input = match input {
+            PipelineData::Empty => None,
+            PipelineData::Value(val, _) => Some(val),
+            PipelineData::ListStream(_, _) => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("ListStream input is not supported", call.head));
+            }
+        };
+
+        // Check for positional argument input
+        let arg_input = call.nth(0);
+
+        // Validate that exactly one data source is provided
+        match (pipeline_input, arg_input) {
+            (None, None) => {
+                return Err(LabeledError::new("Missing input")
+                    .with_label("Data must be provided via pipeline or as an argument", call.head));
+            }
+            (Some(_), Some(_)) => {
+                return Err(LabeledError::new("Conflicting input")
+                    .with_label("Data cannot be provided both via pipeline and as an argument", call.head));
+            }
+            (Some(input_val), None) => input_val,
+            (None, Some(arg_val)) => arg_val,
+        };
+
+        let input_value = match (pipeline_input, arg_input) {
+            (Some(input_val), None) => input_val,
+            (None, Some(arg_val)) => arg_val,
+            _ => unreachable!("Validation above ensures one source is provided"),
+        };
+
+        // Handle optional device argument
+        let device = get_device_from_call(call)?;
+
+        // Handle optional dtype argument
+        let kind = get_kind_from_call(call)?;
+
+        // Convert Nushell Value to tensor
+        let mut tensor = value_to_tensor(&input_value, kind, device, call.head)?;
+
+        // Handle optional requires_grad argument
+        tensor = add_grad_from_call(call, tensor)?;
+
+        let id = Uuid::new_v4().to_string();
+        // Store in registry
+        TENSOR_REGISTRY.lock().unwrap().insert(id.clone(), tensor);
+        // Return the ID as a string to Nushell, wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(id, call.head), None))
+    }
+}
+```
+
+### Explanation of the Update
+
+- **Signature Update:** Added an optional positional argument `data` of type
+  `SyntaxShape::Any` to accept input data directly as an argument (e.g.,
+  `torch tensor [1, 2, 3]`). Kept the `input_output_types` as `(Type::Any,
+  Type::String)` to reflect that pipeline input is still supported.
+- **Examples Update:** Added new examples demonstrating both pipeline input and
+  positional argument input styles, ensuring users see both options.
+- **Input Validation:** Implemented logic in `run()` to check for data from both
+  pipeline input (`PipelineData`) and the first positional argument (`call.nth(0)`).
+  - If neither is provided, returns an error ("Missing input").
+  - If both are provided, returns an error ("Conflicting input").
+  - If exactly one is provided, uses that as the input value for tensor
+    conversion.
+- **Preserved Functionality:** Kept the rest of the logic (device, dtype,
+  requires_grad handling, tensor conversion, and registry storage) unchanged,
+  ensuring the core functionality remains intact.
+
+### Build and Test
+
+After updating `CommandTensor` as shown, rebuild your plugin:
+
+```bash
+cd /Users/ryan/dev/nutorch/rs
+cargo build --release
+```
+
+Re-add the plugin to Nushell (assuming the binary name is now
+`nu_plugin_torch` as per your earlier naming change):
+
+```nu
+plugin rm torch
+plugin add /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_torch
+```
+
+Test the updated `tensor` command to ensure it supports both input methods and
+handles errors correctly:
+
+```nu
+# Test 1: Convert a 1D list to a tensor via pipeline
+let result1 = ([1.0, 2.0, 3.0] | torch tensor | torch value)
+$result1  # Expected: [1, 2, 3]
+print "Test 1: SUCCESS if result is [1, 2, 3]"
+
+# Test 2: Convert a 1D list to a tensor via argument
+let result2 = (torch tensor [1.0, 2.0, 3.0] | torch value)
+$result2  # Expected: [1, 2, 3]
+print "Test 2: SUCCESS if result is [1, 2, 3]"
+
+# Test 3: Error case - no input provided
+torch tensor
+# Expected: Error "Missing input"
+
+# Test 4: Error case - both pipeline and argument provided
+[1.0, 2.0, 3.0] | torch tensor [4.0, 5.0, 6.0]
+# Expected: Error "Conflicting input"
+```
+
+### Additional Notes
+
+- **Error Handling:** The validation ensures that users don't accidentally
+  provide conflicting inputs, maintaining clarity in how data is passed to the
+  command.
+- **Future Commands:** As you mentioned, this dual-input approach can be applied
+  to other commands where it makes sense.
+- **Nushell Intuition:** Supporting both pipeline and argument input aligns well
+  with Nushell's design, where pipelines are common but direct arguments are
+  also intuitive for quick commands. This flexibility enhances usability.
+- **Edge Cases:** The code assumes `PipelineData::ListStream` is unsupported (as
+  in the original). If you want to support streaming input in the future, we can
+  adjust the logic to handle it.
+
+### Next Steps
+
+Let me know if this updated `CommandTensor` works as expected for both pipeline
+and argument input. If there are issues or if you'd like to apply this
+dual-input pattern to other commands immediately, or proceed to the next PyTorch
+method or component of your neural network, I'm ready to assist.
+
+Let me know how the test goes or if you have further questions!
+
+# === USER ===
+
 
