@@ -10,6 +10,7 @@ def generate_data [
   --skew_factor: float = 0.3 # Skew factor for data distribution
 ] {
   # Your logic here (currently returns 5 as placeholder)
+  let n_samples_per_class: int = ($n_samples // $centers)
   return 5
 }
 
