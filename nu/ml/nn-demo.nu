@@ -11,15 +11,23 @@ def generate_data [
 ] {
   # Your logic here (currently returns 5 as placeholder)
   let n_samples_per_class: int = ($n_samples // $centers)
-  let X_list: list<string> = [] # nutorch tensors are represented as strings in nu
-  let y_list: list<string> = [] # nutorch tensors are represented as strings in nu
+  let X_list: list<string> = [] # nutorch tensors have string ids
+  let y_list: list<string> = [] # nutorch tensors have string ids
 
   # let blob_centers = [([0.0 0.0] | torch tensor) ([3.0 0.0] | torch tensor) ([1.5 2.5] | torch tensor)]
-  let blob_centers = [
+  let blob_centers: list<string> = [
     (torch tensor [0.0 0.0])
     (torch tensor [3.0 0.0])
     (torch tensor [1.5 2.5])
   ]
+
+  for i in (seq 0 $centers) {
+    let points: string = (torch randn $n_samples_per_class 2)
+    # points: torch.Tensor = (
+    #     torch.randn(n_samples_per_class, 2) * cluster_std + blob_centers[i]
+    # )
+  }
+
   return 5
 }
 
