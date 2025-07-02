@@ -1,7 +1,5 @@
 # Nutorch
 
-<img src="./raw-images/nutorch-3d.png" width="200" height="200" alt="Nutorch" />
-
 **GPU-powered AI / ML on the command line.**
 
 ## Garbage Collection
