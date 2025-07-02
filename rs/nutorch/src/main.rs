@@ -314,7 +314,7 @@ impl PluginCommand for CommandRandn {
             .named(
                 "dtype",
                 SyntaxShape::String,
-                "Data type of the tensor ('float32', 'float64', 'int32', 'int64', default: 'float32')",
+                "Data type of the tensor ('float32', 'float64', 'int32', 'int64')",
                 None,
             )
             .named(
@@ -421,7 +421,7 @@ impl PluginCommand for CommandFull {
             .named(
                 "dtype",
                 SyntaxShape::String,
-                "Data type of the tensor ('float32', 'float64', 'int32', 'int64', default: 'float32')",
+                "Data type of the tensor ('float32', 'float64', 'int32', 'int64')",
                 None,
             )
             .named(
@@ -1150,7 +1150,7 @@ impl PluginCommand for CommandMean {
             .named(
                 "dim",
                 SyntaxShape::Int,
-                "Dimension along which to compute meanimum (default: over all elements)",
+                "Dimension along which to compute mean (default: over all elements)",
                 None,
             )
             .named(
@@ -1202,7 +1202,7 @@ impl PluginCommand for CommandMean {
 
         let kind = get_kind_from_call(call)?;
 
-        // Single tensor mode (meanimum over dimension or entire tensor)
+        // Single tensor mode (mean over dimension or entire tensor)
         let dim_opt: Option<i64> = call.get_flag("dim")?;
         let keepdim = call.get_flag::<bool>("keepdim")?.unwrap_or(false);
         let result_tensor: Tensor = match dim_opt {
@@ -1216,7 +1216,7 @@ impl PluginCommand for CommandMean {
                         call.head,
                     ));
                 }
-                // Use mean_dim for dimension-specific meanimum
+                // Use mean_dim for dimension-specific mean
                 tensor1.mean_dim(dim, keepdim, kind)
             }
             None => tensor1.mean(kind) // Meanimum over all elements
