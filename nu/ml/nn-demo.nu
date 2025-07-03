@@ -22,11 +22,12 @@ def generate_data [
   ]
 
   for i in (seq 0 ($centers - 1)) {
-    let points: string = (torch randn $n_samples_per_class 2) | torch mul (torch tensor $cluster_std) | torch add ($blob_centers | get $i)
-    if i == 1 or i == 2 {
-      let skew_matrix: string = (torch tensor [[1.0 (skew_factor * (i - 1))] [(skew_factor * (i - 1)) 1.0]])
+    mut points: string = (torch randn $n_samples_per_class 2) | torch mul (torch tensor $cluster_std) | torch add ($blob_centers | get $i)
+    if $i == 1 or $i == 2 {
+      let skew_matrix: string = (torch tensor [[1.0 ($skew_factor * ($i - 1))] [($skew_factor * ($i - 1)) 1.0]])
+      $points = (torch mm $points $skew_matrix)
     }
-      # points = torch mm ((points 
+    # points = torch mm ((points 
     # points: torch.Tensor = (
     #     torch.randn(n_samples_per_class, 2) * cluster_std + blob_centers[i]
     # )
