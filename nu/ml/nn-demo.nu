@@ -27,6 +27,7 @@ def generate_data [
       let skew_matrix: string = (torch tensor [[1.0 ($skew_factor * ($i - 1))] [($skew_factor * ($i - 1)) 1.0]])
       $points = (torch mm $points $skew_matrix)
     }
+    let labels: string = torch full [$n_samples_per_class] $i --dtype 'int64'
     # points = torch mm ((points 
     # points: torch.Tensor = (
     #     torch.randn(n_samples_per_class, 2) * cluster_std + blob_centers[i]
