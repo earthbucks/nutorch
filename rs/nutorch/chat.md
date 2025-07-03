@@ -4392,12 +4392,15 @@ torch.add(input, other, *, alpha=1, out=None) -> Tensor
 - **Return Value:** A tensor of the same shape as the broadcasted result,
   containing the element-wise sum of the two tensors.
 
-**Equivalent in `tch-rs`:** The equivalent operation is `Tensor::add(&self,
-other: &Tensor) -> Tensor` or `Tensor::add_scalar(&self, scalar: impl
-Into<Scalar>) -> Tensor` for tensor-scalar addition. Broadcasting is handled
-automatically if shapes are compatible. There’s also support for `alpha` via
-methods like `Tensor::add_scaled(&self, other: &Tensor, alpha: f64) -> Tensor`
-in some versions, which we’ll include as an optional parameter.
+**Equivalent in `tch-rs`:** The equivalent operation is
+`Tensor::add(&self,
+other: &Tensor) -> Tensor` or
+`Tensor::add_scalar(&self, scalar: impl
+Into<Scalar>) -> Tensor` for
+tensor-scalar addition. Broadcasting is handled automatically if shapes are
+compatible. There’s also support for `alpha` via methods like
+`Tensor::add_scaled(&self, other: &Tensor, alpha: f64) -> Tensor` in some
+versions, which we’ll include as an optional parameter.
 
 ### Implementation of `torch add` as `CommandAdd`
 
@@ -4581,19 +4584,19 @@ impl Plugin for NutorchPlugin {
   the `+` operator in PyTorch, supporting element-wise addition of two tensors
   with broadcasting. Included an optional `alpha` parameter to scale the second
   tensor before addition, matching PyTorch's functionality.
-- **Input Configurations:** Supports two configurations for providing exactly two
-  tensors:
+- **Input Configurations:** Supports two configurations for providing exactly
+  two tensors:
   - Pipeline input for the first tensor and one argument for the second tensor.
   - Two arguments for both tensors (no pipeline input).
-  - Validates that exactly two tensors are provided, returning errors for invalid
-    configurations (e.g., too few or too many inputs).
-- **Signature:** Defined `input_output_types` to support both `(Type::String,
-  Type::String)` (pipeline input) and `(Type::Nothing, Type::String)` (no
-  pipeline input), with two optional arguments for tensor IDs since they can be
-  provided in different ways.
+  - Validates that exactly two tensors are provided, returning errors for
+    invalid configurations (e.g., too few or too many inputs).
+- **Signature:** Defined `input_output_types` to support both
+  `(Type::String,
+  Type::String)` (pipeline input) and
+  `(Type::Nothing, Type::String)` (no pipeline input), with two optional
+  arguments for tensor IDs since they can be provided in different ways.
 - **Alpha Handling:** Retrieves the `alpha` parameter as a float (defaulting to
-  1.0), using `add_scaled` if `alpha != 1.0` or `add` otherwise for
-  efficiency.
+  1.0), using `add_scaled` if `alpha != 1.0` or `add` otherwise for efficiency.
 - **Functionality:** Uses `tensor1.add(&tensor2)` or
   `tensor1.add_scaled(&tensor2, alpha)` from `tch-rs` to perform element-wise
   addition, relying on `tch-rs` to handle broadcasting for compatible shapes.
@@ -4653,11 +4656,10 @@ $t1 | torch add $t2 $t1
 
 ### Additional Notes
 
-- **Broadcasting:** The implementation relies on `tch-rs` to handle
-  broadcasting automatically for tensors of different but compatible shapes
-  (e.g., adding a scalar tensor to a 2D tensor). If shapes are incompatible,
-  `tch-rs` will raise a runtime error, which will be propagated as a
-  `LabeledError`.
+- **Broadcasting:** The implementation relies on `tch-rs` to handle broadcasting
+  automatically for tensors of different but compatible shapes (e.g., adding a
+  scalar tensor to a 2D tensor). If shapes are incompatible, `tch-rs` will raise
+  a runtime error, which will be propagated as a `LabeledError`.
 - **Alpha Parameter:** Included support for `alpha` to match PyTorch's
   functionality, using `add_scaled` when `alpha` is not 1.0. If your version of
   `tch-rs` does not support `add_scaled`, we can adjust to use
@@ -4669,14 +4671,428 @@ $t1 | torch add $t2 $t1
 
 ### Next Steps
 
-Let me know if the `add` command works as expected for both input
-configurations and handles tensor addition correctly. If there are issues or if
-you'd like to proceed to implement `torch mul` for multiplication (tensor with
-tensor or tensor with scalar), or move to another PyTorch method or component of
+Let me know if the `add` command works as expected for both input configurations
+and handles tensor addition correctly. If there are issues or if you'd like to
+proceed to implement `torch mul` for multiplication (tensor with tensor or
+tensor with scalar), or move to another PyTorch method or component of your
+neural network, I'm ready to assist.
+
+Let me know how the test goes or if you have further questions!
+
+# === USER ===
+
+that almost worked. i had to fix the operations. tch-rs does not have `.add` or
+`.add_scaled`. instead, it just has the `+` and `*` operators, which work in
+these cases.
+
+also, there is another problem. for consistency, it is important we always
+support tensors in these operations. so the scale parmater should actually be a
+tensor, like the other inputs/arguments. now, it would be cool to support both.
+but let's start with just one. can you please fix this code to turn the scale
+argument into a tensor? that means the input type should be
+`SyntaxShape::String`, just like our tensors, and then we should retrieve the
+value from the registry, if it is not "none".
+
+```rust
+impl PluginCommand for CommandAdd {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "torch add"
+    }
+
+    fn description(&self) -> &str {
+        "Compute the element-wise sum of two tensors with broadcasting (similar to torch.add or + operator)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch add")
+            .input_output_types(vec![(Type::String, Type::String), (Type::Nothing, Type::String)])
+            .optional("tensor1_id", SyntaxShape::String, "ID of the first tensor (if not using pipeline input)")
+            .optional("tensor2_id", SyntaxShape::String, "ID of the second tensor")
+            .named(
+                "alpha",
+                SyntaxShape::Float,
+                "Scalar multiplier for the second tensor before addition (default: 1.0)",
+                None,
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Add two tensors using pipeline and argument",
+                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); $t1 | torch add $t2 | torch value",
+                result: None,
+            },
+            Example {
+                description: "Add two tensors using arguments only",
+                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); torch add $t1 $t2 | torch value",
+                result: None,
+            },
+            Example {
+                description: "Add two tensors with alpha scaling on the second tensor",
+                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); $t1 | torch add $t2 --alpha 0.5 | torch value",
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Check for pipeline input
+        let pipeline_input = match input {
+            PipelineData::Empty => None,
+            PipelineData::Value(val, _) => Some(val),
+            _ => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Empty or Value inputs are supported", call.head));
+            }
+        };
+
+        // Check for positional argument inputs
+        let arg1 = call.nth(0);
+        let arg2 = call.nth(1);
+
+        // Validate the number of tensor inputs (exactly 2 tensors required)
+        let pipeline_count = if pipeline_input.is_some() { 1 } else { 0 };
+        let arg_count = if arg1.is_some() { 1 } else { 0 } + if arg2.is_some() { 1 } else { 0 };
+        let total_count = pipeline_count + arg_count;
+
+        if total_count != 2 {
+            return Err(LabeledError::new("Invalid input count")
+                .with_label("Exactly two tensors must be provided via pipeline and/or arguments", call.head));
+        }
+
+        // Determine the two tensor IDs based on input sources
+        let (tensor1_id, tensor2_id) = match (pipeline_input, arg1, arg2) {
+            (Some(input_val), Some(arg_val), None) => {
+                let input_id = input_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input").with_label("Unable to parse tensor ID from pipeline input", call.head)
+                })?;
+                let arg_id = arg_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input").with_label("Unable to parse tensor ID from argument", call.head)
+                })?;
+                (input_id, arg_id)
+            }
+            (None, Some(arg1_val), Some(arg2_val)) => {
+                let arg1_id = arg1_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input").with_label("Unable to parse first tensor ID from argument", call.head)
+                })?;
+                let arg2_id = arg2_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input").with_label("Unable to parse second tensor ID from argument", call.head)
+                })?;
+                (arg1_id, arg2_id)
+            }
+            _ => {
+                return Err(LabeledError::new("Invalid input configuration")
+                    .with_label("Must provide exactly two tensors via pipeline and/or arguments", call.head));
+            }
+        };
+
+        // Look up tensors in registry
+        let mut registry = TENSOR_REGISTRY.lock().unwrap();
+        let tensor1 = registry.get(&tensor1_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid first tensor ID", call.head)
+        })?.shallow_clone();
+        let tensor2 = registry.get(&tensor2_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid second tensor ID", call.head)
+        })?.shallow_clone();
+
+        // Handle optional alpha argument
+        let alpha: f64 = call.get_flag("alpha")?.unwrap_or(1.0);
+
+        // Perform element-wise addition with broadcasting using tch-rs
+        let result_tensor = if alpha == 1.0 {
+            tensor1 + &tensor2
+        } else {
+            tensor1 + (alpha * tensor2)
+        };
+
+        // Store result in registry with new ID
+        let new_id = Uuid::new_v4().to_string();
+        registry.insert(new_id.clone(), result_tensor);
+        // Return new ID wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```
+
+# === ASSISTANT ===
+
+Thank you for the update on the `tch-rs` API regarding the absence of `.add` and
+`.add_scaled`, and for confirming that the `+` and `*` operators are used
+instead for tensor addition and multiplication. I’m also glad to adjust the
+`alpha` parameter to be a tensor ID (instead of a scalar float) for consistency
+with other tensor operations in your `torch` plugin. As you’ve requested, we'll
+focus on supporting `alpha` as a tensor input from the registry, ensuring all
+inputs are tensor IDs. Let's update the `CommandAdd` code to reflect these
+changes.
+
+### Updated `CommandAdd` with Tensor `alpha` and Operator Usage
+
+Here's the revised `CommandAdd` code, replacing the scalar `alpha` with a tensor
+ID input (optional, defaulting to a tensor representing 1.0 if not provided),
+and using the `+` and `*` operators as per `tch-rs`:
+
+```rust
+impl PluginCommand for CommandAdd {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "torch add"
+    }
+
+    fn description(&self) -> &str {
+        "Compute the element-wise sum of two tensors with broadcasting (similar to torch.add or + operator)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch add")
+            .input_output_types(vec![(Type::String, Type::String), (Type::Nothing, Type::String)])
+            .optional("tensor1_id", SyntaxShape::String, "ID of the first tensor (if not using pipeline input)")
+            .optional("tensor2_id", SyntaxShape::String, "ID of the second tensor")
+            .named(
+                "alpha",
+                SyntaxShape::String,
+                "ID of a tensor to use as a multiplier for the second tensor before addition (default: tensor with value 1.0)",
+                None,
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Add two tensors using pipeline and argument",
+                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); $t1 | torch add $t2 | torch value",
+                result: None,
+            },
+            Example {
+                description: "Add two tensors using arguments only",
+                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); torch add $t1 $t2 | torch value",
+                result: None,
+            },
+            Example {
+                description: "Add two tensors with alpha scaling tensor on the second tensor",
+                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); let alpha = (torch full 0.5 1); $t1 | torch add $t2 --alpha $alpha | torch value",
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Check for pipeline input
+        let pipeline_input = match input {
+            PipelineData::Empty => None,
+            PipelineData::Value(val, _) => Some(val),
+            _ => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Empty or Value inputs are supported", call.head));
+            }
+        };
+
+        // Check for positional argument inputs
+        let arg1 = call.nth(0);
+        let arg2 = call.nth(1);
+
+        // Validate the number of tensor inputs (exactly 2 tensors required for addition)
+        let pipeline_count = if pipeline_input.is_some() { 1 } else { 0 };
+        let arg_count = if arg1.is_some() { 1 } else { 0 } + if arg2.is_some() { 1 } else { 0 };
+        let total_count = pipeline_count + arg_count;
+
+        if total_count != 2 {
+            return Err(LabeledError::new("Invalid input count")
+                .with_label("Exactly two tensors must be provided via pipeline and/or arguments", call.head));
+        }
+
+        // Determine the two tensor IDs based on input sources
+        let (tensor1_id, tensor2_id) = match (pipeline_input, arg1, arg2) {
+            (Some(input_val), Some(arg_val), None) => {
+                let input_id = input_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input").with_label("Unable to parse tensor ID from pipeline input", call.head)
+                })?;
+                let arg_id = arg_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input").with_label("Unable to parse tensor ID from argument", call.head)
+                })?;
+                (input_id, arg_id)
+            }
+            (None, Some(arg1_val), Some(arg2_val)) => {
+                let arg1_id = arg1_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input").with_label("Unable to parse first tensor ID from argument", call.head)
+                })?;
+                let arg2_id = arg2_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input").with_label("Unable to parse second tensor ID from argument", call.head)
+                })?;
+                (arg1_id, arg2_id)
+            }
+            _ => {
+                return Err(LabeledError::new("Invalid input configuration")
+                    .with_label("Must provide exactly two tensors via pipeline and/or arguments", call.head));
+            }
+        };
+
+        // Look up tensors in registry
+        let mut registry = TENSOR_REGISTRY.lock().unwrap();
+        let tensor1 = registry.get(&tensor1_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid first tensor ID", call.head)
+        })?.shallow_clone();
+        let tensor2 = registry.get(&tensor2_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid second tensor ID", call.head)
+        })?.shallow_clone();
+
+        // Handle optional alpha argument (as a tensor ID)
+        let alpha_tensor = match call.get_flag::<String>("alpha")? {
+            Some(alpha_id) => {
+                registry.get(&alpha_id).ok_or_else(|| {
+                    LabeledError::new("Tensor not found").with_label("Invalid alpha tensor ID", call.head)
+                })?.shallow_clone()
+            }
+            None => {
+                // Default to a scalar tensor with value 1.0
+                Tensor::of_slice(&[1.0f64]).to_kind(Kind::Double)
+            }
+        };
+
+        // Perform element-wise addition with broadcasting using tch-rs operators
+        let result_tensor = if alpha_tensor.numel() == 1 && alpha_tensor.double_value(&[]).unwrap_or(1.0) == 1.0 {
+            tensor1 + &tensor2
+        } else {
+            tensor1 + (alpha_tensor * tensor2)
+        };
+
+        // Store result in registry with new ID
+        let new_id = Uuid::new_v4().to_string();
+        registry.insert(new_id.clone(), result_tensor);
+        // Return new ID wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```
+
+### Explanation of the Updates
+
+- **Operator Usage:** Replaced `.add()` and `.add_scaled()` with the `+` and `*`
+  operators as per your feedback on the `tch-rs` API. For addition, used
+  `tensor1 + &tensor2`, and for scaling, used `(alpha_tensor * tensor2)` before
+  adding to `tensor1`.
+- **Alpha as Tensor ID:** Changed the `alpha` parameter from
+  `SyntaxShape::Float` to `SyntaxShape::String` to accept a tensor ID from the
+  registry. If not provided, it defaults to a scalar tensor with value `1.0`
+  created on the fly using `Tensor::of_slice(&[1.0f64])`. If provided, it
+  retrieves the tensor from the registry.
+- **Alpha Logic:** Checks if `alpha_tensor` is a scalar with value `1.0` to
+  optimize by skipping multiplication and directly adding `tensor1 + &tensor2`.
+  Otherwise, applies scaling with `alpha_tensor * tensor2` before addition.
+- **Signature and Examples:** Updated the description of `alpha` in the
+  signature to reflect that it’s a tensor ID, and adjusted the example to show
+  usage with a tensor ID for `alpha`.
+- **Preserved Input Configurations:** Kept the dual input configurations
+  (pipeline + argument or two arguments) for the two main tensors, ensuring
+  exactly two tensors are provided for addition.
+
+### Build and Test
+
+After updating `CommandAdd` as shown, rebuild your plugin:
+
+```bash
+cd /Users/ryan/dev/nutorch/rs
+cargo build --release
+```
+
+Re-add the plugin to Nushell:
+
+```nu
+plugin rm torch
+plugin add /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_torch
+```
+
+Test the updated `add` command to ensure it handles tensor addition with a
+tensor `alpha` correctly:
+
+```nu
+# Test 1: Add two tensors using pipeline and argument (default alpha=1.0)
+let t1 = (torch full 1 2 3)  # Shape: [2, 3], filled with 1
+$t1 | torch value  # Should show [[1, 1, 1], [1, 1, 1]]
+let t2 = (torch full 2 2 3)  # Shape: [2, 3], filled with 2
+$t2 | torch value  # Should show [[2, 2, 2], [2, 2, 2]]
+let result1 = ($t1 | torch add $t2 | torch value)
+$result1  # Expected shape [2, 3]: [[3, 3, 3], [3, 3, 3]]
+print "Test 1: SUCCESS if result is all 3s"
+
+# Test 2: Add two tensors using arguments only (default alpha=1.0)
+let result2 = (torch add $t1 $t2 | torch value)
+$result2  # Expected shape [2, 3]: [[3, 3, 3], [3, 3, 3]]
+print "Test 2: SUCCESS if result is all 3s"
+
+# Test 3: Add two tensors with alpha scaling tensor
+let alpha = (torch full 0.5 1)  # Scalar tensor with value 0.5
+$alpha | torch value  # Should show 0.5
+let result3 = ($t1 | torch add $t2 --alpha $alpha | torch value)
+$result3  # Expected shape [2, 3]: [[2, 2, 2], [2, 2, 2]] (1 + 0.5*2 = 2)
+print "Test 3: SUCCESS if result is all 2s"
+
+# Test 4: Error case - invalid alpha tensor ID
+$t1 | torch add $t2 --alpha "invalid_id"
+# Expected: Error "Tensor not found"
+```
+
+### Additional Notes
+
+- **Tensor Alpha:** Using a tensor for `alpha` ensures consistency with other
+  operations in your plugin, as all inputs are now tensor IDs from the registry.
+  This approach also supports broadcasting if `alpha` is a tensor of compatible
+  shape, not just a scalar.
+- **Default Alpha:** Defaulting to a tensor with value `1.0` matches PyTorch's
+  default behavior for `torch.add` (where `alpha=1` by default).
+- **Future Support for Scalar Alpha:** If you’d like to support both scalar
+  floats and tensor IDs for `alpha` in the future, we can add logic to detect
+  the input type (e.g., try parsing as a float first, then fall back to tensor
+  ID). Let me know if you want to explore this now.
+- **Operator Compatibility:** The use of `+` and `*` operators should work in
+  `tch-rs` for tensor operations with broadcasting. If your version of `tch-rs`
+  behaves differently, let me know, and we can adjust accordingly.
+
+### Next Steps
+
+Let me know if this updated `CommandAdd` works as expected for tensor addition
+with a tensor `alpha`. If there are issues or if you'd like to proceed to
+implement `torch mul` for multiplication (supporting tensor-tensor and
+tensor-scalar operations), or move to another PyTorch method or component of
 your neural network, I'm ready to assist.
 
 Let me know how the test goes or if you have further questions!
 
 # === USER ===
 
+some of the methods you used did not work.
 
+the corrected code is this:
+
+```rust
+// Handle optional alpha argument (as a tensor ID)
+let result_tensor = match call.get_flag::<String>("alpha")? {
+    Some(alpha_id) => {
+        let alpha_tensor = registry.get(&alpha_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid alpha tensor ID", call.head)
+        })?.shallow_clone();
+        tensor1 + (alpha_tensor * tensor2)
+    }
+    None => {
+        // Default to a scalar tensor with value 1.0
+        tensor1 + tensor2
+    }
+};
+```

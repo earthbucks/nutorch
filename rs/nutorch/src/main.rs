@@ -113,8 +113,8 @@ impl PluginCommand for CommandAdd {
             .optional("tensor2_id", SyntaxShape::String, "ID of the second tensor")
             .named(
                 "alpha",
-                SyntaxShape::Float,
-                "Scalar multiplier for the second tensor before addition (default: 1.0)",
+                SyntaxShape::String,
+                "ID of a tensor to use as a multiplier for the second tensor before addition (default: tensor with value 1.0)",
                 None,
             )
             .category(Category::Custom("torch".into()))
@@ -133,8 +133,8 @@ impl PluginCommand for CommandAdd {
                 result: None,
             },
             Example {
-                description: "Add two tensors with alpha scaling on the second tensor",
-                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); $t1 | torch add $t2 --alpha 0.5 | torch value",
+                description: "Add two tensors with alpha scaling tensor on the second tensor",
+                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); let alpha = (torch full 0.5 1); $t1 | torch add $t2 --alpha $alpha | torch value",
                 result: None,
             }
         ]
@@ -161,7 +161,7 @@ impl PluginCommand for CommandAdd {
         let arg1 = call.nth(0);
         let arg2 = call.nth(1);
 
-        // Validate the number of tensor inputs (exactly 2 tensors required)
+        // Validate the number of tensor inputs (exactly 2 tensors required for addition)
         let pipeline_count = if pipeline_input.is_some() { 1 } else { 0 };
         let arg_count = if arg1.is_some() { 1 } else { 0 } + if arg2.is_some() { 1 } else { 0 };
         let total_count = pipeline_count + arg_count;
@@ -206,14 +206,18 @@ impl PluginCommand for CommandAdd {
             LabeledError::new("Tensor not found").with_label("Invalid second tensor ID", call.head)
         })?.shallow_clone();
 
-        // Handle optional alpha argument
-        let alpha: f64 = call.get_flag("alpha")?.unwrap_or(1.0);
-
-        // Perform element-wise addition with broadcasting using tch-rs
-        let result_tensor = if alpha == 1.0 {
-            tensor1 + &tensor2
-        } else {
-            tensor1 + (alpha * tensor2)
+        // Handle optional alpha argument (as a tensor ID)
+        let result_tensor = match call.get_flag::<String>("alpha")? {
+            Some(alpha_id) => {
+                let alpha_tensor = registry.get(&alpha_id).ok_or_else(|| {
+                    LabeledError::new("Tensor not found").with_label("Invalid alpha tensor ID", call.head)
+                })?.shallow_clone();
+                tensor1 + (alpha_tensor * tensor2)
+            }
+            None => {
+                // Default to a scalar tensor with value 1.0
+                tensor1 + tensor2
+            }
         };
 
         // Store result in registry with new ID
