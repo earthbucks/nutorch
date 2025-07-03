@@ -18,8 +18,8 @@ struct NutorchPlugin;
 impl Plugin for NutorchPlugin {
     fn commands(&self) -> Vec<Box<dyn PluginCommand<Plugin = Self>>> {
         vec![
-            // Top-level Nutorch command
-            Box::new(CommandNutorch),
+            // Top-level Torch command
+            Box::new(CommandTorch),
             // Configuration and other global commands
             Box::new(CommandManualSeed),
             Box::new(CommandDevices),
@@ -50,9 +50,9 @@ impl Plugin for NutorchPlugin {
 }
 
 // New top-level Nutorch command
-struct CommandNutorch;
+struct CommandTorch;
 
-impl PluginCommand for CommandNutorch {
+impl PluginCommand for CommandTorch {
     type Plugin = NutorchPlugin;
 
     fn name(&self) -> &str {
