@@ -4379,3 +4379,179 @@ this code is valid nu code and works:
 ```nu
 let n_samples_per_class: int = ($n_samples // $centers)
 ```
+
+---
+
+on another note, i have a question. we have been using uuidv4 to represent the
+id of the tensors. however, seeing as we are using 64 bit memory, and tesors are
+identified with a pointer, can't we just use the 64 bit pointer that references
+each tensor as the id? wouldn't that be more efficient? can that be done in
+rust?
+
+# === ASSISTANT ===
+
+I'm glad to hear that integer division with `//` works in Nushell as you
+demonstrated with:
+
+```nu
+let n_samples_per_class: int = ($n_samples // $centers)
+```
+
+I apologize for my earlier misstatement about division behavior in Nushell. It's
+great to confirm that `//` performs integer division as in Python, and that
+single division (`/`) may not behave the same way for integers. Thanks for
+clarifying this, and I'll ensure future suggestions align with Nushell's actual
+behavior.
+
+Now, let's address your question about using a 64-bit pointer as the ID for
+tensors instead of UUIDv4 in your `nu_plugin_torch` project, considering
+efficiency and whether this can be done in Rust.
+
+### Can We Use a 64-bit Pointer as Tensor ID Instead of UUIDv4?
+
+Yes, it is technically possible in Rust to use a pointer (e.g., a 64-bit memory
+address) as an identifier for tensors instead of generating a UUIDv4 string.
+However, there are significant considerations and potential pitfalls to evaluate
+before making this change. Let's explore the idea, its efficiency, feasibility,
+and whether it's a good approach for your plugin.
+
+#### What is a Pointer as an ID?
+
+- A pointer is a memory address (typically 64-bit on modern systems, represented
+  as a `u64` in Rust) that references the location of an object in memory, such
+  as a `Tensor` struct from `tch-rs`.
+- In Rust, you can obtain a pointer to an object using `as_ptr()` on a reference
+  or by casting with `as *const _ as u64` (for a raw pointer value).
+- Using this pointer as an ID would mean storing the memory address of each
+  `Tensor` in your `TENSOR_REGISTRY` (likely a `HashMap<u64, Tensor>` instead of
+  `HashMap<String, Tensor>`), and passing this `u64` value as the ID to Nushell
+  instead of a UUID string.
+
+#### Efficiency Considerations
+
+- **Pros of Using Pointers for Efficiency:**
+  - **Smaller Size:** A `u64` (8 bytes) is much smaller than a UUIDv4 string
+    (36 characters as a string, or 16 bytes as raw data), reducing memory
+    overhead for storing and passing IDs.
+  - **Faster Generation:** Obtaining a pointer value is essentially free (just a
+    memory address lookup), whereas generating a UUIDv4 involves random number
+    generation or other computation.
+  - **Direct Reference:** In theory, a pointer directly references the object,
+    potentially simplifying lookups if used carefully (though this isn't
+    necessarily safe or practical, as we'll see).
+
+- **Cons and Overhead:**
+  - The efficiency gain is likely negligible in the context of a Nushell plugin
+    dealing with tensor operations. The bottleneck in your application is more
+    likely to be tensor computations (via `tch-rs`) or data transfer between
+    Rust and Nushell, not the generation or storage of IDs.
+  - UUIDs, while larger, are still trivial in terms of memory usage compared to
+    the size of tensor data (often kilobytes or megabytes).
+
+#### Feasibility in Rust
+
+Yes, you can use a pointer as a `u64` ID in Rust. Here's a conceptual example
+of how you might modify your tensor storage to use pointers as IDs:
+
+```rust
+use std::collections::HashMap;
+use tch::Tensor;
+use std::sync::Mutex;
+
+// Global registry using pointer (u64) as ID instead of String
+lazy_static::lazy_static! {
+    static ref TENSOR_REGISTRY: Mutex<HashMap<u64, Tensor>> = Mutex::new(HashMap::new());
+}
+
+// Example of storing a tensor with pointer as ID
+fn store_tensor(tensor: Tensor) -> u64 {
+    let ptr = &tensor as *const Tensor as u64; // Get pointer as u64
+    let mut registry = TENSOR_REGISTRY.lock().unwrap();
+    registry.insert(ptr, tensor);
+    ptr
+}
+
+// Example of retrieving a tensor by pointer ID
+fn get_tensor(ptr_id: u64) -> Option<Tensor> {
+    let registry = TENSOR_REGISTRY.lock().unwrap();
+    registry.get(&ptr_id).map(|t| t.shallow_clone())
+}
+```
+
+However, there are **serious issues** with this approach that make it
+impractical and unsafe for your use case.
+
+#### Why Using Pointers as IDs is Not Recommended
+
+1. **Pointer Safety and Lifetime Issues:**
+   - In Rust, pointers (memory addresses) are not guaranteed to be stable or
+     unique over the lifetime of a program. If a `Tensor` is moved in memory
+     (e.g., due to reallocation in a `Vec` or other data structure), its pointer
+     changes, invalidating the ID.
+   - `Tensor` objects in `tch-rs` might be managed by LibTorch's memory
+     allocator, and their addresses could change or become invalid if the tensor
+     is dropped or reallocated, leading to dangling pointers or undefined
+     behavior when used as IDs.
+   - Rust's ownership and borrowing rules mean that storing raw pointers as IDs
+     risks violating safety guarantees, especially in a multi-threaded context
+     like a plugin with a global registry.
+
+2. **Uniqueness Problem:**
+   - Pointers are not inherently unique over time. Memory addresses can be
+     reused by the allocator after an object is dropped, meaning a new `Tensor`
+     could have the same pointer value as a previously freed one, causing ID
+     collisions in your registry.
+   - UUIDv4, while not guaranteed unique, has an extremely low collision
+     probability due to its 128-bit random value space.
+
+3. **Interfacing with Nushell:**
+   - Passing a `u64` pointer value to Nushell as a string or integer means the
+     user could accidentally or maliciously provide an invalid or arbitrary
+     `u64`, leading to undefined behavior when looking up in the registry.
+   - UUID strings are more opaque and less likely to be tampered with or
+     misinterpreted by users or scripts.
+
+4. **Debugging and Readability:**
+   - UUIDs, as strings, are human-readable and can be logged or inspected
+     easily for debugging. Raw pointer values (`u64`) are less meaningful to
+     users and harder to track in logs.
+   - UUIDs provide a clear, external identifier detached from internal memory
+     management.
+
+5. **No Significant Efficiency Gain:**
+   - The overhead of UUID generation and string handling is trivial compared to
+     tensor operations. For a plugin interfacing with Nushell, the cost of
+     serializing data or executing PyTorch operations dwarfs any savings from
+     using `u64` over UUID strings.
+   - HashMap lookups by `u64` vs. `String` have negligible performance
+     differences for the typical number of tensors managed in a session.
+
+#### Recommendation: Stick with UUIDv4
+
+Given the safety, uniqueness, and usability concerns, I strongly recommend
+continuing to use UUIDv4 strings as tensor IDs in your `nu_plugin_torch` project.
+The potential efficiency gain from using pointers is outweighed by the risks of
+memory safety issues, ID collisions, and complexity in handling pointer values
+across the Rust-Nushell boundary. UUIDv4 provides a robust, safe, and
+user-friendly way to identify tensors uniquely without tying them to volatile
+memory addresses.
+
+If you're concerned about UUID generation overhead or string size, you could
+consider shorter unique identifiers (e.g., incremental `u64` counters with a
+global `AtomicU64` for ID generation), but even this is unnecessary unless
+you're managing millions of tensors simultaneously. UUIDv4 remains the best
+balance of simplicity and reliability for your use case.
+
+#### Next Steps
+
+Let me know if you have further questions about tensor ID strategies or if
+you're satisfied with continuing to use UUIDv4. If you'd like to proceed with
+additional components of your neural network demo in `nn-test.nu`, implement
+more `torch` plugin methods, or address other aspects of your project, I'm ready
+to assist.
+
+Let me know your thoughts or if you have more questions!
+
+# === USER ===
+
+
