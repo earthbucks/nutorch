@@ -11,8 +11,8 @@ def generate_data [
 ] {
   # Your logic here (currently returns 5 as placeholder)
   let n_samples_per_class: int = ($n_samples // $centers)
-  let X_list: list<string> = [] # nutorch tensors have string ids
-  let y_list: list<string> = [] # nutorch tensors have string ids
+  mut X_list: list<string> = [] # nutorch tensors have string ids
+  mut y_list: list<string> = [] # nutorch tensors have string ids
 
   # let blob_centers = [([0.0 0.0] | torch tensor) ([3.0 0.0] | torch tensor) ([1.5 2.5] | torch tensor)]
   let blob_centers: list<string> = [
@@ -28,11 +28,12 @@ def generate_data [
       $points = (torch mm $points $skew_matrix)
     }
     let labels: string = torch full [$n_samples_per_class] $i --dtype 'int64'
-    # points = torch mm ((points 
-    # points: torch.Tensor = (
-    #     torch.randn(n_samples_per_class, 2) * cluster_std + blob_centers[i]
-    # )
+    $X_list = $X_list | append $points
+    $y_list = $y_list | append $labels
   }
+
+  # let X: string = $X_list | torch cat --dim 0
+  # let y: string = $y_list | torch cat --dim 0
 
   return 5
 }
