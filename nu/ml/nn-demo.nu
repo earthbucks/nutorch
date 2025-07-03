@@ -21,8 +21,8 @@ def generate_data [
     (torch tensor [1.5 2.5])
   ]
 
-  for i in (seq 0 $centers) {
-    let points: string = (torch randn $n_samples_per_class 2)
+  for i in (seq 0 ($centers - 1)) {
+    let points: string = (torch randn $n_samples_per_class 2) | torch mul (torch tensor $cluster_std) | torch add ($blob_centers | get $i)
     # points: torch.Tensor = (
     #     torch.randn(n_samples_per_class, 2) * cluster_std + blob_centers[i]
     # )
