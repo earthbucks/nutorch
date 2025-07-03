@@ -14,24 +14,24 @@ let result1 = ([1] | torch tensor) | torch sub ([2] | torch tensor) | torch valu
 if ($result1 == -1) {
   print_success "Subtraction test passed"
 } else {
-  print_failure "Subtraction test failed: Expected 3, got $result1"
-  error make {msg: "Subtraction test failed: Expected 3, got $result1"}
+  print_failure "Subtraction test failed: Expected -1, got $result1"
+  error make {msg: "Subtraction test failed: Expected -1, got $result1"}
 }
 
 let result2 = torch sub ([1] | torch tensor) ([2] | torch tensor) | torch value | get 0
 if ($result2 == -1) {
   print_success "Subtraction with tensors test passed"
 } else {
-  print_failure "Subtraction with tensors test failed: Expected 3, got $result2"
-  error make {msg: "Subtraction with tensors test failed: Expected 3, got $result2"}
+  print_failure "Subtraction with tensors test failed: Expected -1, got $result2"
+  error make {msg: "Subtraction with tensors test failed: Expected -1, got $result2"}
 }
 
 let result3 = ([1 2 3] | torch tensor) | torch sub ([4 5 6] | torch tensor) | torch value | get 2
 if ($result3 == -3) {
   print_success "Subtraction with list input test passed"
 } else {
-  print_failure "Subtraction with list input test failed: Expected 9, got $result3"
-  error make {msg: "Subtraction with list input test failed: Expected 9, got $result3"}
+  print_failure "Subtraction with list input test failed: Expected -3, got $result3"
+  error make {msg: "Subtraction with list input test failed: Expected -3, got $result3"}
 }
 
 
