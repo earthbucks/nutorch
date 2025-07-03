@@ -5424,4 +5424,329 @@ Let me know how the test goes or if you have further questions!
 
 # === USER ===
 
+ok, we've done add... and mul... now we need sub! can you implement `CommandSub`?
+
+# === ASSISTANT ===
+
+I'm happy to implement the `CommandSub` for tensor subtraction in your `torch`
+plugin, following the same pattern as `CommandAdd` and `CommandMul`. This will
+support element-wise subtraction of two tensors (mirroring the `-` operator in
+PyTorch for tensor-tensor subtraction) with the same input configurations:
+either one tensor via pipeline input and one as an argument, or both tensors as
+arguments. We'll also include an optional `alpha` parameter as a tensor ID for
+scaling the second tensor before subtraction, consistent with the previous
+commands.
+
+### Description of Tensor Subtraction in PyTorch
+
+**Purpose:** In PyTorch, the `-` operator (or `torch.sub`) performs element-wise
+subtraction of two tensors, with broadcasting support for tensors of different
+but compatible shapes.
+
+**API in PyTorch:**
+
+```python
+torch.sub(input, other, *, alpha=1, out=None) -> Tensor
+# Or equivalently: input - other
+```
+
+- **Parameters:**
+  - `input`: (Required) The first tensor.
+  - `other`: (Required) The second tensor to subtract from the first.
+  - `alpha`: (Optional, default=1) A scalar multiplier for `other` before
+    subtraction (i.e., `result = input - alpha * other`).
+  - `out`: (Optional) An existing tensor to store the result in.
+- **Return Value:** A tensor of the same shape as the broadcasted result,
+  containing the element-wise difference of the two tensors.
+
+**Equivalent in `tch-rs`:** The equivalent operation is the `-` operator, as in
+`tensor1 - tensor2` for tensor-tensor subtraction. Broadcasting is handled
+automatically if shapes are compatible.
+
+### Implementation of `torch sub` as `CommandSub`
+
+Here's the implementation of `CommandSub` to support tensor subtraction with
+two input configurations (pipeline + argument or two arguments), ensuring
+exactly two tensors are provided for the operation, and including an optional
+`alpha` tensor for scaling:
+
+```rust
+struct CommandSub;
+
+impl PluginCommand for CommandSub {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "torch sub"
+    }
+
+    fn description(&self) -> &str {
+        "Compute the element-wise difference of two tensors with broadcasting (similar to torch.sub or - operator)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch sub")
+            .input_output_types(vec![(Type::String, Type::String), (Type::Nothing, Type::String)])
+            .optional("tensor1_id", SyntaxShape::String, "ID of the first tensor (if not using pipeline input)")
+            .optional("tensor2_id", SyntaxShape::String, "ID of the second tensor")
+            .named(
+                "alpha",
+                SyntaxShape::String,
+                "ID of a tensor to use as a multiplier for the second tensor before subtraction (default: tensor with value 1.0)",
+                None,
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Subtract two tensors using pipeline and argument",
+                example: "let t1 = (torch full 5 2 3); let t2 = (torch full 2 2 3); $t1 | torch sub $t2 | torch value",
+                result: None,
+            },
+            Example {
+                description: "Subtract two tensors using arguments only",
+                example: "let t1 = (torch full 5 2 3); let t2 = (torch full 2 2 3); torch sub $t1 $t2 | torch value",
+                result: None,
+            },
+            Example {
+                description: "Subtract two tensors with alpha scaling tensor on the second tensor",
+                example: "let t1 = (torch full 5 2 3); let t2 = (torch full 2 2 3); let alpha = (torch full 0.5 1); $t1 | torch sub $t2 --alpha $alpha | torch value",
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Check for pipeline input
+        let pipeline_input = match input {
+            PipelineData::Empty => None,
+            PipelineData::Value(val, _) => Some(val),
+            _ => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Empty or Value inputs are supported", call.head));
+            }
+        };
+
+        // Check for positional argument inputs
+        let arg1 = call.nth(0);
+        let arg2 = call.nth(1);
+
+        // Validate the number of tensor inputs (exactly 2 tensors required for subtraction)
+        let pipeline_count = if pipeline_input.is_some() { 1 } else { 0 };
+        let arg_count = if arg1.is_some() { 1 } else { 0 } + if arg2.is_some() { 1 } else { 0 };
+        let total_count = pipeline_count + arg_count;
+
+        if total_count != 2 {
+            return Err(LabeledError::new("Invalid input count")
+                .with_label("Exactly two tensors must be provided via pipeline and/or arguments", call.head));
+        }
+
+        // Determine the two tensor IDs based on input sources
+        let (tensor1_id, tensor2_id) = match (pipeline_input, arg1, arg2) {
+            (Some(input_val), Some(arg_val), None) => {
+                let input_id = input_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input").with_label("Unable to parse tensor ID from pipeline input", call.head)
+                })?;
+                let arg_id = arg_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input").with_label("Unable to parse tensor ID from argument", call.head)
+                })?;
+                (input_id, arg_id)
+            }
+            (None, Some(arg1_val), Some(arg2_val)) => {
+                let arg1_id = arg1_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input").with_label("Unable to parse first tensor ID from argument", call.head)
+                })?;
+                let arg2_id = arg2_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input").with_label("Unable to parse second tensor ID from argument", call.head)
+                })?;
+                (arg1_id, arg2_id)
+            }
+            _ => {
+                return Err(LabeledError::new("Invalid input configuration")
+                    .with_label("Must provide exactly two tensors via pipeline and/or arguments", call.head));
+            }
+        };
+
+        // Look up tensors in registry
+        let mut registry = TENSOR_REGISTRY.lock().unwrap();
+        let tensor1 = registry.get(&tensor1_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid first tensor ID", call.head)
+        })?.shallow_clone();
+        let tensor2 = registry.get(&tensor2_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid second tensor ID", call.head)
+        })?.shallow_clone();
+
+        // Handle optional alpha argument (as a tensor ID)
+        let result_tensor = match call.get_flag::<String>("alpha")? {
+            Some(alpha_id) => {
+                let alpha_tensor = registry.get(&alpha_id).ok_or_else(|| {
+                    LabeledError::new("Tensor not found").with_label("Invalid alpha tensor ID", call.head)
+                })?.shallow_clone();
+                tensor1 - (alpha_tensor * tensor2)
+            }
+            None => {
+                // No alpha scaling, just subtract the two tensors
+                tensor1 - tensor2
+            }
+        };
+
+        // Store result in registry with new ID
+        let new_id = Uuid::new_v4().to_string();
+        registry.insert(new_id.clone(), result_tensor);
+        // Return new ID wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```
+
+### Update to `NutorchPlugin` to Include `CommandSub`
+
+Make sure to add the `CommandSub` command to the list of commands in your
+plugin's `commands()` method:
+
+```rust
+impl Plugin for NutorchPlugin {
+    fn commands(&self) -> Vec<Box<dyn PluginCommand<Plugin = Self>>> {
+        vec![
+            Box::new(CommandNutorch), // Or update to CommandTorch if renamed
+            Box::new(CommandManualSeed),
+            Box::new(CommandRandn),
+            Box::new(CommandDevices),
+            Box::new(CommandLinspace),
+            Box::new(CommandRepeat),
+            Box::new(CommandSin),
+            Box::new(CommandValue),
+            Box::new(CommandTensor),
+            Box::new(CommandMm),
+            Box::new(CommandFull),
+            Box::new(CommandCat),
+            Box::new(CommandMax),
+            Box::new(CommandMaximum),
+            Box::new(CommandLogSoftmax),
+            Box::new(CommandMean),
+            Box::new(CommandAdd),
+            Box::new(CommandMul),
+            Box::new(CommandSub), // Added CommandSub command
+        ]
+    }
+
+    fn version(&self) -> std::string::String {
+        "0.0.1".to_string()
+    }
+}
+```
+
+### Explanation of the Implementation
+
+- **Naming Convention:** Named the struct `CommandSub` following your convention
+  of prefixing command structs with `Command`.
+- **API Similarity to PyTorch:** Designed the command to mirror `torch.sub` or
+  the `-` operator in PyTorch, supporting element-wise subtraction of two
+  tensors with broadcasting. Included an optional `alpha` parameter as a tensor
+  ID for scaling the second tensor before subtraction, consistent with
+  `CommandAdd` and `CommandMul`.
+- **Input Configurations:** Supports two configurations for providing exactly
+  two tensors:
+  - Pipeline input for the first tensor and one argument for the second tensor.
+  - Two arguments for both tensors (no pipeline input).
+  - Validates that exactly two tensors are provided for subtraction, returning
+    errors for invalid configurations.
+- **Signature:** Defined `input_output_types` to support both
+  `(Type::String, Type::String)` (pipeline input) and
+  `(Type::Nothing, Type::String)` (no pipeline input), with two optional
+  arguments for tensor IDs since they can be provided in different ways.
+- **Alpha Handling:** Retrieves the `alpha` parameter as a tensor ID (defaulting
+  to no scaling if not provided). If provided, applies `alpha_tensor * tensor2`
+  before subtracting from `tensor1`.
+- **Functionality:** Uses the `-` operator from `tch-rs` to perform element-wise
+  subtraction, relying on `tch-rs` to handle broadcasting for compatible
+  shapes.
+- **Error Handling:** Includes validation for tensor IDs and input count,
+  providing clear error messages for incorrect usage.
+- **Storage and Output:** Stores the result in `TENSOR_REGISTRY` with a new UUID
+  and returns the ID as a string, consistent with other tensor operation
+  commands.
+
+### Build and Test
+
+After adding the `CommandSub` command as shown, rebuild your plugin:
+
+```bash
+cd /Users/ryan/dev/nutorch/rs
+cargo build --release
+```
+
+Re-add the plugin to Nushell:
+
+```nu
+plugin rm torch
+plugin add /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_torch
+```
+
+Test the `sub` command to ensure it handles tensor subtraction with an optional
+`alpha` tensor correctly:
+
+```nu
+# Test 1: Subtract two tensors using pipeline and argument (no alpha)
+let t1 = (torch full 5 2 3)  # Shape: [2, 3], filled with 5
+$t1 | torch value  # Should show [[5, 5, 5], [5, 5, 5]]
+let t2 = (torch full 2 2 3)  # Shape: [2, 3], filled with 2
+$t2 | torch value  # Should show [[2, 2, 2], [2, 2, 2]]
+let result1 = ($t1 | torch sub $t2 | torch value)
+$result1  # Expected shape [2, 3]: [[3, 3, 3], [3, 3, 3]]
+print "Test 1: SUCCESS if result is all 3s"
+
+# Test 2: Subtract two tensors using arguments only (no alpha)
+let result2 = (torch sub $t1 $t2 | torch value)
+$result2  # Expected shape [2, 3]: [[3, 3, 3], [3, 3, 3]]
+print "Test 2: SUCCESS if result is all 3s"
+
+# Test 3: Subtract two tensors with alpha scaling tensor
+let alpha = (torch full 0.5 1)  # Scalar tensor with value 0.5
+$alpha | torch value  # Should show 0.5
+let result3 = ($t1 | torch sub $t2 --alpha $alpha | torch value)
+$result3  # Expected shape [2, 3]: [[4, 4, 4], [4, 4, 4]] (5 - (0.5 * 2) = 4)
+print "Test 3: SUCCESS if result is all 4s"
+
+# Test 4: Error case - no tensors provided
+torch sub
+# Expected: Error "Invalid input count"
+
+# Test 5: Error case - invalid alpha tensor ID
+$t1 | torch sub $t2 --alpha "invalid_id"
+# Expected: Error "Tensor not found"
+```
+
+### Additional Notes
+
+- **Broadcasting:** The implementation relies on `tch-rs` to handle broadcasting
+  automatically for tensors of different but compatible shapes (e.g.,
+  subtracting a scalar tensor from a 2D tensor). If shapes are incompatible,
+  `tch-rs` will raise a runtime error, which will be propagated as a
+  `LabeledError`.
+- **Alpha Parameter:** Consistent with `CommandAdd` and `CommandMul`, `alpha` is
+  implemented as an optional tensor ID for scaling the second tensor before
+  subtraction. If not provided, no additional scaling is applied.
+- **Operator Usage:** Used the `-` operator for tensor subtraction and `*` for
+  scaling with `alpha`, as per your feedback on `tch-rs` API conventions.
+
+### Next Steps
+
+Let me know if the `sub` command works as expected for tensor subtraction with
+an optional `alpha` tensor. If there are issues or if you'd like to proceed to
+another PyTorch method or component of your neural network for implementation
+in `torch`, I'm ready to assist.
+
+Let me know how the test goes or if you have further questions!
+
+# === USER ===
+
 
