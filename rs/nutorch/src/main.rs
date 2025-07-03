@@ -960,14 +960,14 @@ impl PluginCommand for CommandFull {
     fn signature(&self) -> Signature {
         Signature::build("torch full")
             .required(
-                "value",
+                "size",
+                SyntaxShape::List(Box::new(SyntaxShape::Int)),
+                "The shape of the tensor as a list of dimensions (e.g., [2, 3] for a 2x3 tensor)",
+            )
+            .required(
+                "fill_value",
                 SyntaxShape::Number,
                 "The value to fill the tensor with",
-            )
-            .rest(
-                "dims",
-                SyntaxShape::Int,
-                "Dimensions of the tensor (e.g., 2 3 for a 2x3 tensor)",
             )
             .named(
                 "device",
@@ -995,12 +995,12 @@ impl PluginCommand for CommandFull {
         vec![
             Example {
                 description: "Create a 1D tensor of length 5 filled with value 7",
-                example: "torch full 7 5 | torch value",
+                example: "torch full [5] 7 | torch value",
                 result: None,
             },
             Example {
                 description: "Create a 2x3 tensor filled with value 0.5 with float64 dtype on CPU",
-                example: "torch full 0.5 2 3 --dtype float64 --device cpu | torch value",
+                example: "torch full [2, 3] 0.5 --dtype float64 --device cpu | torch value",
                 result: None,
             },
         ]
@@ -1013,35 +1013,33 @@ impl PluginCommand for CommandFull {
         call: &nu_plugin::EvaluatedCall,
         _input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
-        // Get the fill value (try as int first, then float)
-        let fill_value_val = call.nth(0).unwrap();
-        let fill_value_result = match fill_value_val.as_int() {
-            Ok(int_val) => Ok(Number::Int(int_val)),
-            Err(_) => fill_value_val.as_float().map(Number::Float).map_err(|_| {
-                LabeledError::new("Invalid input")
-                    .with_label("Value must be a number (integer or float)", call.head)
-            }),
-        };
-        let fill_value = fill_value_result?;
-
-        // Get dimensions for the tensor shape
-        let dims: Vec<i64> = call
-            .rest(1)
-            .map_err(|_| {
-                LabeledError::new("Invalid input")
-                    .with_label("Unable to parse dimensions", call.head)
-            })?
-            .into_iter()
-            .map(|v: Value| v.as_int())
+        // Get the size (list of dimensions)
+        let size_val = call.nth(0).unwrap();
+        let dims: Vec<i64> = size_val.as_list().map_err(|_| {
+            LabeledError::new("Invalid input")
+                .with_label("Size must be a list of integers", call.head)
+        })?.iter()
+            .map(|v| v.as_int())
             .collect::<Result<Vec<i64>, _>>()?;
         if dims.is_empty() {
             return Err(LabeledError::new("Invalid input")
-                .with_label("At least one dimension must be provided", call.head));
+                .with_label("At least one dimension must be provided in size list", call.head));
         }
         if dims.iter().any(|&d| d < 1) {
             return Err(LabeledError::new("Invalid input")
                 .with_label("All dimensions must be positive", call.head));
         }
+
+        // Get the fill value (try as int first, then float)
+        let fill_value_val = call.nth(1).unwrap();
+        let fill_value_result = match fill_value_val.as_int() {
+            Ok(int_val) => Ok(Number::Int(int_val)),
+            Err(_) => fill_value_val.as_float().map(Number::Float).map_err(|_| {
+                LabeledError::new("Invalid input")
+                    .with_label("Fill value must be a number (integer or float)", call.head)
+            }),
+        };
+        let fill_value = fill_value_result?;
 
         // Handle optional device argument using convenience method
         let device = get_device_from_call(call)?;

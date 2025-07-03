@@ -6082,4 +6082,468 @@ Let me know how the test goes or if you have further questions!
 
 # === USER ===
 
+i believe our api for `torch full` does not match python.
+
+look at this python code:
+
+```python
+        labels: torch.Tensor = torch.full((n_samples_per_class,), i, dtype=torch.long)
+```
+
+according to my lsp information, the `full` command takes a `size` first, which can be a list, a touple, or a `Size`. and the second argument is the fill value.
+
+however, in our code it is different.
+
+we do it like this:
+
+```nu
+torch full $fill_value $dim1 $dim2...
+```
+
+we put the fill value first, followed by "rest" arguments specifying the dimensions.
+
+we should change this to:
+
+```nu
+torch full $[dim1 $dim2 ...] $fill_value
+```
+
+in other words, taking in a list of dimensions as the first argument (the `size`), and the fill value as the second argument.
+
+can you analyze this our rust code and determine, first, if i am correct that we have th wrong api (compared to python), and second, to fix the code?
+
+```rust
+struct CommandFull;
+
+impl PluginCommand for CommandFull {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "torch full"
+    }
+
+    fn description(&self) -> &str {
+        "Create a tensor of specified shape filled with a given value (similar to torch.full)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch full")
+            .required(
+                "value",
+                SyntaxShape::Number,
+                "The value to fill the tensor with",
+            )
+            .rest(
+                "dims",
+                SyntaxShape::Int,
+                "Dimensions of the tensor (e.g., 2 3 for a 2x3 tensor)",
+            )
+            .named(
+                "device",
+                SyntaxShape::String,
+                "Device to create the tensor on ('cpu', 'cuda', 'mps', default: 'cpu')",
+                None,
+            )
+            .named(
+                "dtype",
+                SyntaxShape::String,
+                "Data type of the tensor ('float32', 'float64', 'int32', 'int64')",
+                None,
+            )
+            .named(
+                "requires_grad",
+                SyntaxShape::Boolean,
+                "Whether the tensor requires gradient tracking for autograd (default: false)",
+                None,
+            )
+            .input_output_types(vec![(Type::Nothing, Type::String)])
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Create a 1D tensor of length 5 filled with value 7",
+                example: "torch full 7 5 | torch value",
+                result: None,
+            },
+            Example {
+                description: "Create a 2x3 tensor filled with value 0.5 with float64 dtype on CPU",
+                example: "torch full 0.5 2 3 --dtype float64 --device cpu | torch value",
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        _input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Get the fill value (try as int first, then float)
+        let fill_value_val = call.nth(0).unwrap();
+        let fill_value_result = match fill_value_val.as_int() {
+            Ok(int_val) => Ok(Number::Int(int_val)),
+            Err(_) => fill_value_val.as_float().map(Number::Float).map_err(|_| {
+                LabeledError::new("Invalid input")
+                    .with_label("Value must be a number (integer or float)", call.head)
+            }),
+        };
+        let fill_value = fill_value_result?;
+
+        // Get dimensions for the tensor shape
+        let dims: Vec<i64> = call
+            .rest(1)
+            .map_err(|_| {
+                LabeledError::new("Invalid input")
+                    .with_label("Unable to parse dimensions", call.head)
+            })?
+            .into_iter()
+            .map(|v: Value| v.as_int())
+            .collect::<Result<Vec<i64>, _>>()?;
+        if dims.is_empty() {
+            return Err(LabeledError::new("Invalid input")
+                .with_label("At least one dimension must be provided", call.head));
+        }
+        if dims.iter().any(|&d| d < 1) {
+            return Err(LabeledError::new("Invalid input")
+                .with_label("All dimensions must be positive", call.head));
+        }
+
+        // Handle optional device argument using convenience method
+        let device = get_device_from_call(call)?;
+
+        // Handle optional dtype argument using convenience method
+        let kind = get_kind_from_call(call)?;
+
+        let mut tensor = match (fill_value, kind) {
+            (Number::Int(i), Kind::Int | Kind::Int64) => {
+                // Use integer-specific creation if tch-rs supports it directly
+                // Since Tensor::full may expect f64, we pass as f64 but kind ensures it's stored as int
+                Tensor::full(&dims, i, (kind, device))
+            }
+            (Number::Int(i), Kind::Float | Kind::Double) => {
+                // Safe to cast int to float for float dtype
+                Tensor::full(&dims, i, (kind, device))
+            }
+            (Number::Float(f), Kind::Float | Kind::Double) => {
+                // Direct float usage
+                Tensor::full(&dims, f, (kind, device))
+            }
+            _ => {
+                return Err(LabeledError::new("Invalid dtype")
+                    .with_label("Invalid data/dtype combo.", call.head));
+            }
+        };
+
+        // Handle optional requires_grad argument
+        tensor = add_grad_from_call(call, tensor)?;
+
+        // Generate a unique ID for the tensor
+        let id = Uuid::new_v4().to_string();
+        // Store in registry
+        TENSOR_REGISTRY.lock().unwrap().insert(id.clone(), tensor);
+        // Return the ID as a string to Nushell, wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(id, call.head), None))
+    }
+}
+```
+
+# === ASSISTANT ===
+
+Thank you for bringing up the discrepancy between the API of `torch full` in
+your Nushell plugin and the PyTorch API. Let's analyze your current Rust code
+for `CommandFull` to confirm whether it differs from PyTorch's `torch.full`, and
+then update it to match the Python API more closely by changing the argument
+order to accept a list of dimensions (`size`) as the first argument followed by
+the fill value as the second argument, as you've proposed.
+
+### Analysis of Current `CommandFull` API vs. PyTorch API
+
+**PyTorch API for `torch.full` (from your LSP information and Python code):**
+
+```python
+torch.full(size, fill_value, *, out=None, dtype=None, layout=torch.strided, device=None, requires_grad=False) -> Tensor
+```
+
+- **Parameters:**
+  - `size`: (Required) The shape of the tensor, provided as a tuple, list, or
+    `torch.Size` object (e.g., `(n_samples_per_class,)` in your Python example).
+  - `fill_value`: (Required) The scalar value to fill the tensor with.
+  - Additional optional parameters like `dtype`, `device`, and `requires_grad`.
+- **Example from Your Python Code:**
+  ```python
+  labels: torch.Tensor = torch.full((n_samples_per_class,), i, dtype=torch.long)
+  ```
+  Here, the size is `(n_samples_per_class,)` (a tuple), and the fill value is
+  `i`.
+
+**Current Nushell API for `torch full` (from your Rust code):**
+
+```nu
+torch full $fill_value $dim1 $dim2...
+```
+
+- **Parameters (as per `signature()`):**
+  - `value`: (Required) The fill value as the first argument.
+  - `dims`: (Rest) A variable number of integer arguments specifying individual
+    dimensions (e.g., `2 3` for a 2x3 tensor).
+  - Additional named parameters like `device`, `dtype`, and `requires_grad`.
+- **Example from Your Code:**
+  ```nu
+  torch full 0.5 2 3 --dtype float64 --device cpu
+  ```
+  Here, the fill value is `0.5`, and the dimensions are provided as separate
+  arguments `2 3`.
+
+**Conclusion of Analysis:** Yes, you are correct that the current API for
+`torch full` in your Nushell plugin does not match the PyTorch API. In PyTorch,
+the first argument is `size` (a single collection of dimensions like a tuple or
+list), followed by `fill_value`. In contrast, your current implementation takes
+`fill_value` first, followed by individual dimensions as separate arguments.
+This mismatch can make the API less intuitive for users familiar with PyTorch.
+Your proposed change to:
+
+```nu
+torch full [$dim1 $dim2 ...] $fill_value
+```
+
+is a good solution, as it aligns more closely with PyTorch by taking a single
+list of dimensions (`size`) as the first argument, followed by the fill value.
+
+### Updated `CommandFull` to Match PyTorch API
+
+Let's update the `CommandFull` code to accept a list of dimensions as the first
+argument (representing `size`) and the fill value as the second argument,
+ensuring compatibility with PyTorch's API structure.
+
+```rust
+struct CommandFull;
+
+impl PluginCommand for CommandFull {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "torch full"
+    }
+
+    fn description(&self) -> &str {
+        "Create a tensor of specified shape filled with a given value (similar to torch.full)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch full")
+            .required(
+                "size",
+                SyntaxShape::List(Box::new(SyntaxShape::Int)),
+                "The shape of the tensor as a list of dimensions (e.g., [2, 3] for a 2x3 tensor)",
+            )
+            .required(
+                "fill_value",
+                SyntaxShape::Number,
+                "The value to fill the tensor with",
+            )
+            .named(
+                "device",
+                SyntaxShape::String,
+                "Device to create the tensor on ('cpu', 'cuda', 'mps', default: 'cpu')",
+                None,
+            )
+            .named(
+                "dtype",
+                SyntaxShape::String,
+                "Data type of the tensor ('float32', 'float64', 'int32', 'int64')",
+                None,
+            )
+            .named(
+                "requires_grad",
+                SyntaxShape::Boolean,
+                "Whether the tensor requires gradient tracking for autograd (default: false)",
+                None,
+            )
+            .input_output_types(vec![(Type::Nothing, Type::String)])
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Create a 1D tensor of length 5 filled with value 7",
+                example: "torch full [5] 7 | torch value",
+                result: None,
+            },
+            Example {
+                description: "Create a 2x3 tensor filled with value 0.5 with float64 dtype on CPU",
+                example: "torch full [2, 3] 0.5 --dtype float64 --device cpu | torch value",
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        _input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Get the size (list of dimensions)
+        let size_val = call.nth(0).unwrap();
+        let dims: Vec<i64> = size_val.as_list().map_err(|_| {
+            LabeledError::new("Invalid input")
+                .with_label("Size must be a list of integers", call.head)
+        })?.iter()
+            .map(|v| v.as_int())
+            .collect::<Result<Vec<i64>, _>>()?;
+        if dims.is_empty() {
+            return Err(LabeledError::new("Invalid input")
+                .with_label("At least one dimension must be provided in size list", call.head));
+        }
+        if dims.iter().any(|&d| d < 1) {
+            return Err(LabeledError::new("Invalid input")
+                .with_label("All dimensions must be positive", call.head));
+        }
+
+        // Get the fill value (try as int first, then float)
+        let fill_value_val = call.nth(1).unwrap();
+        let fill_value_result = match fill_value_val.as_int() {
+            Ok(int_val) => Ok(Number::Int(int_val)),
+            Err(_) => fill_value_val.as_float().map(Number::Float).map_err(|_| {
+                LabeledError::new("Invalid input")
+                    .with_label("Fill value must be a number (integer or float)", call.head)
+            }),
+        };
+        let fill_value = fill_value_result?;
+
+        // Handle optional device argument using convenience method
+        let device = get_device_from_call(call)?;
+
+        // Handle optional dtype argument using convenience method
+        let kind = get_kind_from_call(call)?;
+
+        let mut tensor = match (fill_value, kind) {
+            (Number::Int(i), Kind::Int | Kind::Int64) => {
+                // Use integer-specific creation if tch-rs supports it directly
+                // Since Tensor::full may expect f64, we pass as f64 but kind ensures it's stored as int
+                Tensor::full(&dims, i, (kind, device))
+            }
+            (Number::Int(i), Kind::Float | Kind::Double) => {
+                // Safe to cast int to float for float dtype
+                Tensor::full(&dims, i, (kind, device))
+            }
+            (Number::Float(f), Kind::Float | Kind::Double) => {
+                // Direct float usage
+                Tensor::full(&dims, f, (kind, device))
+            }
+            _ => {
+                return Err(LabeledError::new("Invalid dtype")
+                    .with_label("Invalid data/dtype combo.", call.head));
+            }
+        };
+
+        // Handle optional requires_grad argument
+        tensor = add_grad_from_call(call, tensor)?;
+
+        // Generate a unique ID for the tensor
+        let id = Uuid::new_v4().to_string();
+        // Store in registry
+        TENSOR_REGISTRY.lock().unwrap().insert(id.clone(), tensor);
+        // Return the ID as a string to Nushell, wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(id, call.head), None))
+    }
+}
+```
+
+### Update to `NutorchPlugin` to Include `CommandFull`
+
+No changes are needed here since `CommandFull` is presumably already included in
+your plugin's command list. If not, ensure it's added as in previous responses.
+
+### Explanation of the Updates
+
+- **API Alignment with PyTorch:** Changed the argument order to match PyTorch's
+  `torch.full` API:
+  - First argument `size` is now a required list of integers representing the
+    dimensions of the tensor (e.g., `[2, 3]` for a 2x3 tensor), using
+    `SyntaxShape::List(Box::new(SyntaxShape::Int))`.
+  - Second argument `fill_value` is the scalar value to fill the tensor with,
+    using `SyntaxShape::Number`.
+- **Signature Update:** Updated the `signature()` to reflect the new parameter
+  order and types, removing the `rest` parameter for individual dimensions and
+  replacing it with a single `size` list parameter.
+- **Examples Update:** Revised the examples to show the new syntax with a list of
+  dimensions followed by the fill value (e.g., `torch full [5] 7`).
+- **Run Logic Update:** Adjusted the `run()` method to:
+  - Retrieve the `size` list from the first argument (`call.nth(0)`) and
+    validate it as a list of positive integers.
+  - Retrieve the `fill_value` from the second argument (`call.nth(1)`) and
+    handle it as a number (integer or float).
+  - Keep the rest of the logic (device, dtype, requires_grad, tensor creation,
+    and registry storage) unchanged.
+- **Error Handling:** Added appropriate error messages for invalid `size` input
+  (not a list or empty list) and ensured dimension values are positive.
+
+### Build and Test
+
+After updating `CommandFull` as shown, rebuild your plugin:
+
+```bash
+cd /Users/ryan/dev/nutorch/rs
+cargo build --release
+```
+
+Re-add the plugin to Nushell:
+
+```nu
+plugin rm torch
+plugin add /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_torch
+```
+
+Test the updated `full` command to ensure it handles the new API correctly:
+
+```nu
+# Test 1: Create a 1D tensor of length 5 filled with value 7
+let result1 = (torch full [5] 7 | torch value)
+$result1  # Expected: [7, 7, 7, 7, 7]
+print "Test 1: SUCCESS if result is [7, 7, 7, 7, 7]"
+
+# Test 2: Create a 2x3 tensor filled with value 0.5 with float64 dtype
+let result2 = (torch full [2, 3] 0.5 --dtype float64 | torch value)
+$result2  # Expected shape [2, 3]: [[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]]
+print "Test 2: SUCCESS if result is a 2x3 tensor of 0.5s"
+
+# Test 3: Error case - empty size list
+torch full [] 5
+# Expected: Error "At least one dimension must be provided in size list"
+
+# Test 4: Error case - non-positive dimension
+torch full [2, 0] 5
+# Expected: Error "All dimensions must be positive"
+```
+
+### Additional Notes
+
+- **Improved Usability:** The updated API `torch full [$dim1, $dim2, ...] $fill_value`
+  is more aligned with PyTorch's `torch.full(size, fill_value)`, making it more
+  intuitive for users familiar with PyTorch.
+- **List Input:** Using a list for `size` as a single argument simplifies the
+  syntax compared to passing individual dimensions as separate arguments,
+  reducing the chance of errors in command construction.
+- **Compatibility:** The rest of the functionality (device, dtype,
+  requires_grad) remains unchanged, ensuring backward compatibility with other
+  parts of your plugin.
+
+### Next Steps
+
+Let me know if the updated `full` command works as expected with the new API
+structure. If there are issues or if you'd like to proceed to another PyTorch
+method or component of your neural network for implementation in `torch`, I'm
+ready to assist.
+
+Let me know how the test goes or if you have further questions!
+
+# === USER ===
+
 
