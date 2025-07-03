@@ -4256,12 +4256,15 @@ impl PluginCommand for CommandTensor {
 
 - **Signature Update:** Added an optional positional argument `data` of type
   `SyntaxShape::Any` to accept input data directly as an argument (e.g.,
-  `torch tensor [1, 2, 3]`). Kept the `input_output_types` as `(Type::Any,
-  Type::String)` to reflect that pipeline input is still supported.
+  `torch tensor [1, 2, 3]`). Kept the `input_output_types` as
+  `(Type::Any,
+  Type::String)` to reflect that pipeline input is still
+  supported.
 - **Examples Update:** Added new examples demonstrating both pipeline input and
   positional argument input styles, ensuring users see both options.
 - **Input Validation:** Implemented logic in `run()` to check for data from both
-  pipeline input (`PipelineData`) and the first positional argument (`call.nth(0)`).
+  pipeline input (`PipelineData`) and the first positional argument
+  (`call.nth(0)`).
   - If neither is provided, returns an error ("Missing input").
   - If both are provided, returns an error ("Conflicting input").
   - If exactly one is provided, uses that as the input value for tensor
@@ -4279,8 +4282,8 @@ cd /Users/ryan/dev/nutorch/rs
 cargo build --release
 ```
 
-Re-add the plugin to Nushell (assuming the binary name is now
-`nu_plugin_torch` as per your earlier naming change):
+Re-add the plugin to Nushell (assuming the binary name is now `nu_plugin_torch`
+as per your earlier naming change):
 
 ```nu
 plugin rm torch
@@ -4330,6 +4333,347 @@ Let me know if this updated `CommandTensor` works as expected for both pipeline
 and argument input. If there are issues or if you'd like to apply this
 dual-input pattern to other commands immediately, or proceed to the next PyTorch
 method or component of your neural network, I'm ready to assist.
+
+Let me know how the test goes or if you have further questions!
+
+# === USER ===
+
+ok, i've run into a nother blocker with my python code. pytorch seems to have
+the ability to add two tensors together using the `+` operator, and it can
+multiply a tensor times a number (or a scalar tensor) with the `*` operator.
+we're going to need to implement both of these. however, to the best of my
+knowledge, nushell does not have the ability to overload operators, as it
+doesn't really make sense with their operator. so we are going to have to stick
+with the `add` and `mul` commands.
+
+let's start with add. can ou please implement the add method? i.e., `torch add`.
+similar to our `torch tensor` method, we need to be conscious of input vs.
+arguments. there are two ways to use `add` with two tensors: either one tensor
+is input, and the other is an argument, or other tensors are arguments. for now,
+let's require exactly two tensors, although in principle there could be more.
+that means there are two allow configurations: one tensor as input, and one
+tensor as argument. or two tensors as arguments.
+
+can you please write this code for `CommandAdd`?
+
+# === ASSISTANT ===
+
+I'm glad to help implement the `torch add` command for your `torch` plugin in
+Nushell to support tensor addition, mirroring the `+` operator functionality in
+PyTorch. Since Nushell doesn't support operator overloading, using a command
+like `add` is a sensible approach. As you’ve outlined, we’ll design `torch add`
+to work with exactly two tensors, supporting two input configurations: one
+tensor via pipeline input and one as an argument, or both tensors as arguments.
+This aligns with the flexible input style we’ve established (e.g., in
+`CommandTensor`), ensuring intuitive usage in Nushell. Let's implement
+`CommandAdd` to handle tensor addition using `tch-rs`, which supports
+broadcasting for tensors of compatible shapes.
+
+### Description of Tensor Addition in PyTorch
+
+**Purpose:** In PyTorch, the `+` operator (or `torch.add`) performs element-wise
+addition of two tensors, with broadcasting support for tensors of different but
+compatible shapes (similar to how `torch.max` works with broadcasting in
+element-wise mode).
+
+**API in PyTorch:**
+
+```python
+torch.add(input, other, *, alpha=1, out=None) -> Tensor
+# Or equivalently: input + other
+```
+
+- **Parameters:**
+  - `input`: (Required) The first tensor.
+  - `other`: (Required) The second tensor to add to the first.
+  - `alpha`: (Optional, default=1) A scalar multiplier for `other` before
+    addition (i.e., `result = input + alpha * other`).
+  - `out`: (Optional) An existing tensor to store the result in.
+- **Return Value:** A tensor of the same shape as the broadcasted result,
+  containing the element-wise sum of the two tensors.
+
+**Equivalent in `tch-rs`:** The equivalent operation is `Tensor::add(&self,
+other: &Tensor) -> Tensor` or `Tensor::add_scalar(&self, scalar: impl
+Into<Scalar>) -> Tensor` for tensor-scalar addition. Broadcasting is handled
+automatically if shapes are compatible. There’s also support for `alpha` via
+methods like `Tensor::add_scaled(&self, other: &Tensor, alpha: f64) -> Tensor`
+in some versions, which we’ll include as an optional parameter.
+
+### Implementation of `torch add` as `CommandAdd`
+
+Here's the implementation of `CommandAdd` to support tensor addition with two
+input configurations (pipeline + argument or two arguments), ensuring exactly
+two tensors are provided for the operation:
+
+```rust
+struct CommandAdd;
+
+impl PluginCommand for CommandAdd {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "torch add"
+    }
+
+    fn description(&self) -> &str {
+        "Compute the element-wise sum of two tensors with broadcasting (similar to torch.add or + operator)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch add")
+            .input_output_types(vec![(Type::String, Type::String), (Type::Nothing, Type::String)])
+            .optional("tensor1_id", SyntaxShape::String, "ID of the first tensor (if not using pipeline input)")
+            .optional("tensor2_id", SyntaxShape::String, "ID of the second tensor")
+            .named(
+                "alpha",
+                SyntaxShape::Float,
+                "Scalar multiplier for the second tensor before addition (default: 1.0)",
+                None,
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Add two tensors using pipeline and argument",
+                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); $t1 | torch add $t2 | torch value",
+                result: None,
+            },
+            Example {
+                description: "Add two tensors using arguments only",
+                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); torch add $t1 $t2 | torch value",
+                result: None,
+            },
+            Example {
+                description: "Add two tensors with alpha scaling on the second tensor",
+                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); $t1 | torch add $t2 --alpha 0.5 | torch value",
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Check for pipeline input
+        let pipeline_input = match input {
+            PipelineData::Empty => None,
+            PipelineData::Value(val, _) => Some(val),
+            PipelineData::ListStream(_, _) => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("ListStream input is not supported", call.head));
+            }
+        };
+
+        // Check for positional argument inputs
+        let arg1 = call.nth(0);
+        let arg2 = call.nth(1);
+
+        // Validate the number of tensor inputs (exactly 2 tensors required)
+        let pipeline_count = if pipeline_input.is_some() { 1 } else { 0 };
+        let arg_count = if arg1.is_some() { 1 } else { 0 } + if arg2.is_some() { 1 } else { 0 };
+        let total_count = pipeline_count + arg_count;
+
+        if total_count != 2 {
+            return Err(LabeledError::new("Invalid input count")
+                .with_label("Exactly two tensors must be provided via pipeline and/or arguments", call.head));
+        }
+
+        // Determine the two tensor IDs based on input sources
+        let (tensor1_id, tensor2_id) = match (pipeline_input, arg1, arg2) {
+            (Some(input_val), Some(arg_val), None) => {
+                let input_id = input_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input").with_label("Unable to parse tensor ID from pipeline input", call.head)
+                })?;
+                let arg_id = arg_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input").with_label("Unable to parse tensor ID from argument", call.head)
+                })?;
+                (input_id, arg_id)
+            }
+            (None, Some(arg1_val), Some(arg2_val)) => {
+                let arg1_id = arg1_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input").with_label("Unable to parse first tensor ID from argument", call.head)
+                })?;
+                let arg2_id = arg2_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input").with_label("Unable to parse second tensor ID from argument", call.head)
+                })?;
+                (arg1_id, arg2_id)
+            }
+            _ => {
+                return Err(LabeledError::new("Invalid input configuration")
+                    .with_label("Must provide exactly two tensors via pipeline and/or arguments", call.head));
+            }
+        };
+
+        // Look up tensors in registry
+        let mut registry = TENSOR_REGISTRY.lock().unwrap();
+        let tensor1 = registry.get(&tensor1_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid first tensor ID", call.head)
+        })?.shallow_clone();
+        let tensor2 = registry.get(&tensor2_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid second tensor ID", call.head)
+        })?.shallow_clone();
+
+        // Handle optional alpha argument
+        let alpha: f64 = call.get_flag("alpha")?.unwrap_or(1.0);
+
+        // Perform element-wise addition with broadcasting using tch-rs
+        let result_tensor = if alpha == 1.0 {
+            tensor1.add(&tensor2)
+        } else {
+            tensor1.add_scaled(&tensor2, alpha)
+        };
+
+        // Store result in registry with new ID
+        let new_id = Uuid::new_v4().to_string();
+        registry.insert(new_id.clone(), result_tensor);
+        // Return new ID wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```
+
+### Update to `NutorchPlugin` to Include `CommandAdd`
+
+Make sure to add the `CommandAdd` command to the list of commands in your
+plugin's `commands()` method:
+
+```rust
+impl Plugin for NutorchPlugin {
+    fn commands(&self) -> Vec<Box<dyn PluginCommand<Plugin = Self>>> {
+        vec![
+            Box::new(CommandNutorch), // Or update to CommandTorch if renamed
+            Box::new(CommandManualSeed),
+            Box::new(CommandRandn),
+            Box::new(CommandDevices),
+            Box::new(CommandLinspace),
+            Box::new(CommandRepeat),
+            Box::new(CommandSin),
+            Box::new(CommandValue),
+            Box::new(CommandTensor),
+            Box::new(CommandMm),
+            Box::new(CommandFull),
+            Box::new(CommandCat),
+            Box::new(CommandMax),
+            Box::new(CommandMaximum),
+            Box::new(CommandLogSoftmax),
+            Box::new(CommandMean),
+            Box::new(CommandAdd), // Added CommandAdd command
+        ]
+    }
+
+    fn version(&self) -> std::string::String {
+        "0.0.1".to_string()
+    }
+}
+```
+
+### Explanation of the Implementation
+
+- **Naming Convention:** Named the struct `CommandAdd` following your convention
+  of prefixing command structs with `Command`.
+- **API Similarity to PyTorch:** Designed the command to mirror `torch.add` or
+  the `+` operator in PyTorch, supporting element-wise addition of two tensors
+  with broadcasting. Included an optional `alpha` parameter to scale the second
+  tensor before addition, matching PyTorch's functionality.
+- **Input Configurations:** Supports two configurations for providing exactly two
+  tensors:
+  - Pipeline input for the first tensor and one argument for the second tensor.
+  - Two arguments for both tensors (no pipeline input).
+  - Validates that exactly two tensors are provided, returning errors for invalid
+    configurations (e.g., too few or too many inputs).
+- **Signature:** Defined `input_output_types` to support both `(Type::String,
+  Type::String)` (pipeline input) and `(Type::Nothing, Type::String)` (no
+  pipeline input), with two optional arguments for tensor IDs since they can be
+  provided in different ways.
+- **Alpha Handling:** Retrieves the `alpha` parameter as a float (defaulting to
+  1.0), using `add_scaled` if `alpha != 1.0` or `add` otherwise for
+  efficiency.
+- **Functionality:** Uses `tensor1.add(&tensor2)` or
+  `tensor1.add_scaled(&tensor2, alpha)` from `tch-rs` to perform element-wise
+  addition, relying on `tch-rs` to handle broadcasting for compatible shapes.
+- **Error Handling:** Includes validation for tensor IDs and input count,
+  providing clear error messages for incorrect usage.
+- **Storage and Output:** Stores the result in `TENSOR_REGISTRY` with a new UUID
+  and returns the ID as a string, consistent with other tensor operation
+  commands.
+
+### Build and Test
+
+After adding the `CommandAdd` command as shown, rebuild your plugin:
+
+```bash
+cd /Users/ryan/dev/nutorch/rs
+cargo build --release
+```
+
+Re-add the plugin to Nushell (using the updated binary name `nu_plugin_torch`):
+
+```nu
+plugin rm torch
+plugin add /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_torch
+```
+
+Test the `add` command to ensure it handles both input configurations and
+performs addition correctly:
+
+```nu
+# Test 1: Add two tensors using pipeline and argument
+let t1 = (torch full 1 2 3)  # Shape: [2, 3], filled with 1
+$t1 | torch value  # Should show [[1, 1, 1], [1, 1, 1]]
+let t2 = (torch full 2 2 3)  # Shape: [2, 3], filled with 2
+$t2 | torch value  # Should show [[2, 2, 2], [2, 2, 2]]
+let result1 = ($t1 | torch add $t2 | torch value)
+$result1  # Expected shape [2, 3]: [[3, 3, 3], [3, 3, 3]]
+print "Test 1: SUCCESS if result is all 3s"
+
+# Test 2: Add two tensors using arguments only
+let result2 = (torch add $t1 $t2 | torch value)
+$result2  # Expected shape [2, 3]: [[3, 3, 3], [3, 3, 3]]
+print "Test 2: SUCCESS if result is all 3s"
+
+# Test 3: Add two tensors with alpha scaling
+let result3 = ($t1 | torch add $t2 --alpha 0.5 | torch value)
+$result3  # Expected shape [2, 3]: [[2, 2, 2], [2, 2, 2]] (1 + 0.5*2 = 2)
+print "Test 3: SUCCESS if result is all 2s"
+
+# Test 4: Error case - no tensors provided
+torch add
+# Expected: Error "Invalid input count"
+
+# Test 5: Error case - too many tensors (pipeline + two arguments)
+$t1 | torch add $t2 $t1
+# Expected: Error "Invalid input count"
+```
+
+### Additional Notes
+
+- **Broadcasting:** The implementation relies on `tch-rs` to handle
+  broadcasting automatically for tensors of different but compatible shapes
+  (e.g., adding a scalar tensor to a 2D tensor). If shapes are incompatible,
+  `tch-rs` will raise a runtime error, which will be propagated as a
+  `LabeledError`.
+- **Alpha Parameter:** Included support for `alpha` to match PyTorch's
+  functionality, using `add_scaled` when `alpha` is not 1.0. If your version of
+  `tch-rs` does not support `add_scaled`, we can adjust to use
+  `tensor2.mul_scalar(alpha).add(&tensor1)` as a fallback.
+- **Extensibility:** While this implementation requires exactly two tensors, it
+  can be extended to support more than two tensors in the future by iterating
+  over additional arguments, though that’s outside the current scope as per your
+  request.
+
+### Next Steps
+
+Let me know if the `add` command works as expected for both input
+configurations and handles tensor addition correctly. If there are issues or if
+you'd like to proceed to implement `torch mul` for multiplication (tensor with
+tensor or tensor with scalar), or move to another PyTorch method or component of
+your neural network, I'm ready to assist.
 
 Let me know how the test goes or if you have further questions!
 
