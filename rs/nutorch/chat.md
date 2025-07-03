@@ -5780,8 +5780,8 @@ torch.div(input, other, *, rounding_mode=None, out=None) -> Tensor
   - `input`: (Required) The first tensor (numerator).
   - `other`: (Required) The second tensor (denominator) to divide the first by.
   - `rounding_mode`: (Optional, default=None) Specifies how to round the result
-    (e.g., 'trunc' or 'floor'). If `None`, results are returned as floating-point
-    numbers without rounding.
+    (e.g., 'trunc' or 'floor'). If `None`, results are returned as
+    floating-point numbers without rounding.
   - `out`: (Optional) An existing tensor to store the result in.
 - **Return Value:** A tensor of the same shape as the broadcasted result,
   containing the element-wise quotient of the two tensors.
@@ -6087,10 +6087,11 @@ i believe our api for `torch full` does not match python.
 look at this python code:
 
 ```python
-        labels: torch.Tensor = torch.full((n_samples_per_class,), i, dtype=torch.long)
+labels: torch.Tensor = torch.full((n_samples_per_class,), i, dtype=torch.long)
 ```
 
-according to my lsp information, the `full` command takes a `size` first, which can be a list, a touple, or a `Size`. and the second argument is the fill value.
+according to my lsp information, the `full` command takes a `size` first, which
+can be a list, a touple, or a `Size`. and the second argument is the fill value.
 
 however, in our code it is different.
 
@@ -6100,7 +6101,8 @@ we do it like this:
 torch full $fill_value $dim1 $dim2...
 ```
 
-we put the fill value first, followed by "rest" arguments specifying the dimensions.
+we put the fill value first, followed by "rest" arguments specifying the
+dimensions.
 
 we should change this to:
 
@@ -6108,9 +6110,11 @@ we should change this to:
 torch full $[dim1 $dim2 ...] $fill_value
 ```
 
-in other words, taking in a list of dimensions as the first argument (the `size`), and the fill value as the second argument.
+in other words, taking in a list of dimensions as the first argument (the
+`size`), and the fill value as the second argument.
 
-can you analyze this our rust code and determine, first, if i am correct that we have th wrong api (compared to python), and second, to fix the code?
+can you analyze this our rust code and determine, first, if i am correct that we
+have th wrong api (compared to python), and second, to fix the code?
 
 ```rust
 struct CommandFull;
@@ -6473,8 +6477,8 @@ your plugin's command list. If not, ensure it's added as in previous responses.
 - **Signature Update:** Updated the `signature()` to reflect the new parameter
   order and types, removing the `rest` parameter for individual dimensions and
   replacing it with a single `size` list parameter.
-- **Examples Update:** Revised the examples to show the new syntax with a list of
-  dimensions followed by the fill value (e.g., `torch full [5] 7`).
+- **Examples Update:** Revised the examples to show the new syntax with a list
+  of dimensions followed by the fill value (e.g., `torch full [5] 7`).
 - **Run Logic Update:** Adjusted the `run()` method to:
   - Retrieve the `size` list from the first argument (`call.nth(0)`) and
     validate it as a list of positive integers.
@@ -6525,9 +6529,10 @@ torch full [2, 0] 5
 
 ### Additional Notes
 
-- **Improved Usability:** The updated API `torch full [$dim1, $dim2, ...] $fill_value`
-  is more aligned with PyTorch's `torch.full(size, fill_value)`, making it more
-  intuitive for users familiar with PyTorch.
+- **Improved Usability:** The updated API
+  `torch full [$dim1, $dim2, ...] $fill_value` is more aligned with PyTorch's
+  `torch.full(size, fill_value)`, making it more intuitive for users familiar
+  with PyTorch.
 - **List Input:** Using a list for `size` as a single argument simplifies the
   syntax compared to passing individual dimensions as separate arguments,
   reducing the chance of errors in command construction.
@@ -6539,6 +6544,552 @@ torch full [2, 0] 5
 
 Let me know if the updated `full` command works as expected with the new API
 structure. If there are issues or if you'd like to proceed to another PyTorch
+method or component of your neural network for implementation in `torch`, I'm
+ready to assist.
+
+Let me know how the test goes or if you have further questions!
+
+# === USER ===
+
+as an aside, does nutorch have a way to create a custom type that matches a
+schema, sort of like zod in typescript? it should be useful if i create a
+`tensor` type that was maybe not just a string, but, say, an object, with a
+"name" or "tensor" or something like that. is this possible? please give me a
+brief response.
+
+# === ASSISTANT ===
+
+In Nushell, there isn't a direct equivalent to something like Zod in TypeScript
+for defining and validating custom schema-based types at runtime. Nushell's type
+system is more dynamic and focused on built-in types like strings, lists, and
+records, and it doesn't natively support custom type definitions with strict
+schema validation in the way Zod does.
+
+However, you can approximate custom types by using **records** (objects with
+key-value pairs) to represent structured data like a `tensor` type. Instead of
+returning just a string ID from commands like `torch tensor`, you could return a
+record with fields like `name` or `tensor_id`, e.g.,
+`{tensor_id: "uuid123",
+name: "tensor"}`. This allows you to attach metadata and
+treat it as a custom type in your scripts, though without strict schema
+enforcement.
+
+For validation, you'd need to implement custom logic in your scripts (e.g.,
+checking if a value is a record with expected fields) or within your Rust plugin
+code before processing inputs. Nushell's plugin API lets you inspect input types
+and reject invalid structures with errors, which can mimic schema validation to
+some extent.
+
+If you want to explore this further, I can help design a record-based approach
+or custom validation in your plugin. Let me know!
+
+# === USER ===
+
+ok, thanks for the information. let's forget about that for now.
+
+---
+
+now, let's move on to updating the `cat` command. i'm trying to use this
+command, and i've noticed it does not have the same api as pytorch. in pytorch,
+the `cat` command takes a list of tensors to concatenate. however, in our
+command, we take a variable number of arguments, which is not the same.
+
+i'd like to update our cat command to change from taking a variable number of
+arguments to taking a list of tensors as the first argument OR taking a list of
+tensors as input. i believe this approach is both pythony and newshelly
+simultaneously.
+
+can you please update this command to so that it:
+
+1. takes a list of tensors IDs as a required first argument
+2. OR takes a list of tensors as input
+
+```rust
+struct CommandCat;
+
+impl PluginCommand for CommandCat {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "torch cat"
+    }
+
+    fn description(&self) -> &str {
+        "Concatenate a sequence of tensors along a specified dimension (similar to torch.cat)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch cat")
+            .rest(
+                "tensor_ids",
+                SyntaxShape::String,
+                "IDs of the tensors to concatenate",
+            )
+            .named(
+                "dim",
+                SyntaxShape::Int,
+                "Dimension along which to concatenate (default: 0)",
+                None,
+            )
+            .input_output_types(vec![(Type::Nothing, Type::String)])
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Concatenate two 2x3 tensors along dimension 0",
+                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); torch cat $t1 $t2 --dim 0 | torch value",
+                result: None,
+            },
+            Example {
+                description: "Concatenate three 2x3 tensors along dimension 1",
+                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); let t3 = (torch full 3 2 3); torch cat $t1 $t2 $t3 --dim 1 | torch value",
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        _input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Get tensor IDs to concatenate
+        let tensor_ids: Vec<String> = call
+            .rest(0)
+            .map_err(|_| {
+                LabeledError::new("Invalid input")
+                    .with_label("Unable to parse tensor IDs", call.head)
+            })?
+            .into_iter()
+            .map(|v: Value| v.as_str().map(|s| s.to_string()))
+            .collect::<Result<Vec<String>, _>>()?;
+        if tensor_ids.len() < 2 {
+            return Err(LabeledError::new("Invalid input").with_label(
+                "At least two tensor IDs must be provided for concatenation",
+                call.head,
+            ));
+        }
+
+        // Get the dimension to concatenate along (default to 0)
+        let dim: i64 = match call.get_flag::<i64>("dim")? {
+            Some(d) => {
+                if d < 0 {
+                    return Err(LabeledError::new("Invalid input")
+                        .with_label("Dimension must be non-negative", call.head));
+                }
+                d
+            }
+            None => 0,
+        };
+
+        // Look up tensors in registry
+        let mut registry = TENSOR_REGISTRY.lock().unwrap();
+        let mut tensors: Vec<Tensor> = Vec::new();
+        for id in &tensor_ids {
+            match registry.get(id) {
+                Some(tensor) => tensors.push(tensor.shallow_clone()),
+                None => {
+                    return Err(LabeledError::new("Tensor not found")
+                        .with_label(format!("Invalid tensor ID: {}", id), call.head))
+                }
+            }
+        }
+
+        // Check if tensors have compatible shapes for concatenation
+        if tensors.is_empty() {
+            return Err(LabeledError::new("Invalid input")
+                .with_label("No tensors provided for concatenation", call.head));
+        }
+        let first_shape = tensors[0].size();
+        if first_shape.len() as i64 <= dim {
+            return Err(LabeledError::new("Invalid dimension").with_label(
+                format!(
+                    "Dimension {} out of bounds for tensor with {} dimensions",
+                    dim,
+                    first_shape.len()
+                ),
+                call.head,
+            ));
+        }
+        for (i, tensor) in tensors.iter().enumerate().skip(1) {
+            let shape = tensor.size();
+            if shape.len() != first_shape.len() {
+                return Err(LabeledError::new("Shape mismatch").with_label(
+                    format!(
+                        "Tensor {} has different number of dimensions ({} vs {})",
+                        i,
+                        shape.len(),
+                        first_shape.len()
+                    ),
+                    call.head,
+                ));
+            }
+            for (d, (&s1, &s2)) in first_shape.iter().zip(shape.iter()).enumerate() {
+                if d as i64 != dim && s1 != s2 {
+                    return Err(LabeledError::new("Shape mismatch").with_label(
+                        format!(
+                            "Tensor {} has mismatched size in dimension {} ({} vs {})",
+                            i, d, s2, s1
+                        ),
+                        call.head,
+                    ));
+                }
+            }
+        }
+
+        // Create references to tensors for cat
+        let tensor_refs: Vec<&Tensor> = tensors.iter().collect();
+
+        // Perform concatenation using tch-rs
+        let result_tensor = Tensor::cat(&tensor_refs, dim);
+
+        // Store result in registry with new ID
+        let new_id = Uuid::new_v4().to_string();
+        registry.insert(new_id.clone(), result_tensor);
+        // Return new ID wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```
+
+# === ASSISTANT ===
+
+Thank you for pointing out the discrepancy between the API of `torch cat` in
+your Nushell plugin and the PyTorch API. I'm happy to update the `CommandCat` to
+align more closely with PyTorch's `torch.cat` by changing it to accept a list of
+tensor IDs as a single required argument or as pipeline input, ensuring it’s both
+"Pythony" and "Nushelly" as you’ve described. This approach will mirror
+PyTorch's behavior of taking a sequence (list/tuple) of tensors as the primary
+input for concatenation.
+
+### Analysis of Current `CommandCat` API vs. PyTorch API
+
+**PyTorch API for `torch.cat`:**
+
+```python
+torch.cat(tensors, dim=0, *, out=None) -> Tensor
+```
+
+- **Parameters:**
+  - `tensors`: (Required) A sequence (list or tuple) of tensors to concatenate.
+  - `dim`: (Optional, default=0) The dimension along which to concatenate.
+  - `out`: (Optional) An existing tensor to store the result in.
+- **Behavior:** Concatenates the given sequence of tensors along the specified
+  dimension, requiring at least two tensors for meaningful concatenation.
+
+**Current Nushell API for `torch cat` (from your Rust code):**
+
+```nu
+torch cat $tensor_id1 $tensor_id2 ... --dim 0
+```
+
+- **Parameters (as per `signature()`):**
+  - `tensor_ids`: (Rest) A variable number of string arguments specifying
+    individual tensor IDs.
+  - `dim`: (Optional named parameter, default=0) The dimension for
+    concatenation.
+- **Behavior:** Takes individual tensor IDs as separate arguments, which differs
+  from PyTorch's approach of taking a single list/tuple of tensors.
+
+**Conclusion of Analysis:** Yes, you are correct that the current API for
+`torch cat` in your Nushell plugin does not match PyTorch's API. PyTorch expects
+a single sequence (list/tuple) of tensors as the first argument, whereas your
+current implementation takes individual tensor IDs as separate arguments. Your
+proposed change to accept a list of tensor IDs as the first argument OR as
+pipeline input aligns better with both PyTorch's design and Nushell's flexible
+input style.
+
+### Updated `CommandCat` to Match PyTorch API with Nushell Flexibility
+
+Let's update the `CommandCat` code to accept either:
+1. A list of tensor IDs as a required first argument.
+2. A list of tensor IDs as pipeline input.
+
+The command will ensure at least two tensors are provided for concatenation and
+maintain the optional `dim` parameter.
+
+```rust
+struct CommandCat;
+
+impl PluginCommand for CommandCat {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "torch cat"
+    }
+
+    fn description(&self) -> &str {
+        "Concatenate a sequence of tensors along a specified dimension (similar to torch.cat)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch cat")
+            .input_output_types(vec![(Type::List(Box::new(Type::String)), Type::String), (Type::Nothing, Type::String)])
+            .optional(
+                "tensor_ids",
+                SyntaxShape::List(Box::new(SyntaxShape::String)),
+                "List of tensor IDs to concatenate (if not using pipeline input)",
+            )
+            .named(
+                "dim",
+                SyntaxShape::Int,
+                "Dimension along which to concatenate (default: 0)",
+                None,
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Concatenate two 2x3 tensors along dimension 0 using pipeline input",
+                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); [$t1, $t2] | torch cat --dim 0 | torch value",
+                result: None,
+            },
+            Example {
+                description: "Concatenate three 2x3 tensors along dimension 1 using argument",
+                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); let t3 = (torch full 3 2 3); torch cat [$t1, $t2, $t3] --dim 1 | torch value",
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Check for pipeline input
+        let pipeline_input = match input {
+            PipelineData::Empty => None,
+            PipelineData::Value(val, _) => Some(val),
+            _ => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Empty or Value inputs are supported", call.head));
+            }
+        };
+
+        // Check for positional argument input
+        let arg_input = call.nth(0);
+
+        // Validate that exactly one data source is provided
+        let tensor_ids: Vec<String> = match (pipeline_input, arg_input) {
+            (None, None) => {
+                return Err(LabeledError::new("Missing input")
+                    .with_label("Tensor IDs must be provided via pipeline or as an argument", call.head));
+            }
+            (Some(_), Some(_)) => {
+                return Err(LabeledError::new("Conflicting input")
+                    .with_label("Tensor IDs cannot be provided both via pipeline and as an argument", call.head));
+            }
+            (Some(input_val), None) => {
+                input_val.as_list().map_err(|_| {
+                    LabeledError::new("Invalid input")
+                        .with_label("Pipeline input must be a list of tensor IDs", call.head)
+                })?.iter()
+                    .map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect::<Result<Vec<String>, _>>()?
+            }
+            (None, Some(arg_val)) => {
+                arg_val.as_list().map_err(|_| {
+                    LabeledError::new("Invalid input")
+                        .with_label("Argument must be a list of tensor IDs", call.head)
+                })?.iter()
+                    .map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect::<Result<Vec<String>, _>>()?
+            }
+        };
+
+        // Validate that at least two tensors are provided
+        if tensor_ids.len() < 2 {
+            return Err(LabeledError::new("Invalid input")
+                .with_label("At least two tensor IDs must be provided for concatenation", call.head));
+        }
+
+        // Get the dimension to concatenate along (default to 0)
+        let dim: i64 = match call.get_flag::<i64>("dim")? {
+            Some(d) => {
+                if d < 0 {
+                    return Err(LabeledError::new("Invalid input")
+                        .with_label("Dimension must be non-negative", call.head));
+                }
+                d
+            }
+            None => 0,
+        };
+
+        // Look up tensors in registry
+        let mut registry = TENSOR_REGISTRY.lock().unwrap();
+        let mut tensors: Vec<Tensor> = Vec::new();
+        for id in &tensor_ids {
+            match registry.get(id) {
+                Some(tensor) => tensors.push(tensor.shallow_clone()),
+                None => {
+                    return Err(LabeledError::new("Tensor not found")
+                        .with_label(format!("Invalid tensor ID: {}", id), call.head))
+                }
+            }
+        }
+
+        // Check if tensors have compatible shapes for concatenation
+        if tensors.is_empty() {
+            return Err(LabeledError::new("Invalid input")
+                .with_label("No tensors provided for concatenation", call.head));
+        }
+        let first_shape = tensors[0].size();
+        if first_shape.len() as i64 <= dim {
+            return Err(LabeledError::new("Invalid dimension").with_label(
+                format!(
+                    "Dimension {} out of bounds for tensor with {} dimensions",
+                    dim,
+                    first_shape.len()
+                ),
+                call.head,
+            ));
+        }
+        for (i, tensor) in tensors.iter().enumerate().skip(1) {
+            let shape = tensor.size();
+            if shape.len() != first_shape.len() {
+                return Err(LabeledError::new("Shape mismatch").with_label(
+                    format!(
+                        "Tensor {} has different number of dimensions ({} vs {})",
+                        i,
+                        shape.len(),
+                        first_shape.len()
+                    ),
+                    call.head,
+                ));
+            }
+            for (d, (&s1, &s2)) in first_shape.iter().zip(shape.iter()).enumerate() {
+                if d as i64 != dim && s1 != s2 {
+                    return Err(LabeledError::new("Shape mismatch").with_label(
+                        format!(
+                            "Tensor {} has mismatched size in dimension {} ({} vs {})",
+                            i, d, s2, s1
+                        ),
+                        call.head,
+                    ));
+                }
+            }
+        }
+
+        // Create references to tensors for cat
+        let tensor_refs: Vec<&Tensor> = tensors.iter().collect();
+
+        // Perform concatenation using tch-rs
+        let result_tensor = Tensor::cat(&tensor_refs, dim);
+
+        // Store result in registry with new ID
+        let new_id = Uuid::new_v4().to_string();
+        registry.insert(new_id.clone(), result_tensor);
+        // Return new ID wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```
+
+### Explanation of the Updates
+
+- **API Alignment with PyTorch:** Changed the input method to match PyTorch's
+  `torch.cat` API by accepting a list of tensor IDs as a single input, either
+  via:
+  - Pipeline input as a list of tensor IDs (e.g., `[$t1, $t2] | torch cat`).
+  - First argument as a list of tensor IDs (e.g., `torch cat [$t1, $t2]`).
+  This aligns with PyTorch's requirement of a sequence of tensors as the primary
+  input.
+- **Signature Update:** Updated the `signature()` to:
+  - Support pipeline input as a list of strings with
+    `input_output_types` including `(Type::List(Box::new(Type::String)),
+    Type::String)`.
+  - Define an optional first argument `tensor_ids` as a list of strings
+    (`SyntaxShape::List(Box::new(SyntaxShape::String))`).
+  - Removed the `rest` parameter for individual tensor IDs, replacing it with a
+    single list parameter.
+- **Examples Update:** Revised the examples to show the new syntax with a list
+  of tensor IDs, demonstrating both pipeline and argument input methods.
+- **Run Logic Update:** Adjusted the `run()` method to:
+  - Check for input from either pipeline or the first argument, ensuring exactly
+    one source is provided (similar to the dual-input pattern in `CommandTensor`).
+  - Extract the list of tensor IDs from the chosen input source and validate
+    that at least two tensors are provided.
+  - Keep the rest of the logic (dimension handling, shape compatibility checks,
+    tensor concatenation, and registry storage) unchanged.
+- **Error Handling:** Added appropriate error messages for missing input,
+  conflicting input (both pipeline and argument), invalid input types (not a
+  list), and insufficient tensor count.
+
+### Build and Test
+
+After updating `CommandCat` as shown, rebuild your plugin:
+
+```bash
+cd /Users/ryan/dev/nutorch/rs
+cargo build --release
+```
+
+Re-add the plugin to Nushell:
+
+```nu
+plugin rm torch
+plugin add /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_torch
+```
+
+Test the updated `cat` command to ensure it handles the new API with list input
+correctly:
+
+```nu
+# Test 1: Concatenate two 2x3 tensors along dimension 0 using pipeline input
+let t1 = (torch full [2, 3] 1)  # Shape: [2, 3], filled with 1
+$t1 | torch value  # Should show [[1, 1, 1], [1, 1, 1]]
+let t2 = (torch full [2, 3] 2)  # Shape: [2, 3], filled with 2
+$t2 | torch value  # Should show [[2, 2, 2], [2, 2, 2]]
+let result1 = ([$t1, $t2] | torch cat --dim 0 | torch value)
+$result1  # Expected shape [4, 3]: [[1, 1, 1], [1, 1, 1], [2, 2, 2], [2, 2, 2]]
+print "Test 1: SUCCESS if result shape is [4, 3] with values as expected"
+
+# Test 2: Concatenate three 2x3 tensors along dimension 1 using argument
+let t3 = (torch full [2, 3] 3)  # Shape: [2, 3], filled with 3
+$t3 | torch value  # Should show [[3, 3, 3], [3, 3, 3]]
+let result2 = (torch cat [$t1, $t2, $t3] --dim 1 | torch value)
+$result2  # Expected shape [2, 9]: [[1, 1, 1, 2, 2, 2, 3, 3, 3], [1, 1, 1, 2, 2, 2, 3, 3, 3]]
+print "Test 2: SUCCESS if result shape is [2, 9] with values as expected"
+
+# Test 3: Error case - no input provided
+torch cat
+# Expected: Error "Missing input"
+
+# Test 4: Error case - both pipeline and argument provided
+[$t1, $t2] | torch cat [$t1, $t2]
+# Expected: Error "Conflicting input"
+
+# Test 5: Error case - fewer than 2 tensors
+torch cat [$t1]
+# Expected: Error "At least two tensor IDs must be provided for concatenation"
+```
+
+### Additional Notes
+
+- **Improved Usability:** The updated API `torch cat [$t1, $t2, ...]` or
+  `[$t1, $t2, ...] | torch cat` is more aligned with PyTorch's
+  `torch.cat(tensors)`, making it intuitive for users familiar with PyTorch, while
+  supporting Nushell's pipeline flexibility.
+- **List Input:** Using a list for tensor IDs as a single argument or pipeline
+  input simplifies the syntax compared to passing individual IDs as separate
+  arguments, reducing the chance of errors in command construction.
+- **Compatibility:** The rest of the functionality (dimension handling, shape
+  compatibility checks) remains unchanged, ensuring backward compatibility with
+  other parts of your plugin.
+
+### Next Steps
+
+Let me know if the updated `cat` command works as expected with the new list-based
+API structure. If there are issues or if you'd like to proceed to another PyTorch
 method or component of your neural network for implementation in `torch`, I'm
 ready to assist.
 

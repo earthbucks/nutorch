@@ -651,10 +651,11 @@ impl PluginCommand for CommandCat {
 
     fn signature(&self) -> Signature {
         Signature::build("torch cat")
-            .rest(
+            .input_output_types(vec![(Type::List(Box::new(Type::String)), Type::String), (Type::Nothing, Type::String)])
+            .optional(
                 "tensor_ids",
-                SyntaxShape::String,
-                "IDs of the tensors to concatenate",
+                SyntaxShape::List(Box::new(SyntaxShape::String)),
+                "List of tensor IDs to concatenate (if not using pipeline input)",
             )
             .named(
                 "dim",
@@ -662,47 +663,77 @@ impl PluginCommand for CommandCat {
                 "Dimension along which to concatenate (default: 0)",
                 None,
             )
-            .input_output_types(vec![(Type::Nothing, Type::String)])
             .category(Category::Custom("torch".into()))
     }
 
     fn examples(&self) -> Vec<Example> {
         vec![
             Example {
-                description: "Concatenate two 2x3 tensors along dimension 0",
-                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); torch cat $t1 $t2 --dim 0 | torch value",
+                description: "Concatenate two 2x3 tensors along dimension 0 using pipeline input",
+                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); [$t1, $t2] | torch cat --dim 0 | torch value",
                 result: None,
             },
             Example {
-                description: "Concatenate three 2x3 tensors along dimension 1",
-                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); let t3 = (torch full 3 2 3); torch cat $t1 $t2 $t3 --dim 1 | torch value",
+                description: "Concatenate three 2x3 tensors along dimension 1 using argument",
+                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); let t3 = (torch full 3 2 3); torch cat [$t1, $t2, $t3] --dim 1 | torch value",
                 result: None,
             }
         ]
     }
 
+    #[allow(clippy::too_many_lines)]
     fn run(
         &self,
         _plugin: &NutorchPlugin,
         _engine: &nu_plugin::EngineInterface,
         call: &nu_plugin::EvaluatedCall,
-        _input: PipelineData,
+        input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
-        // Get tensor IDs to concatenate
-        let tensor_ids: Vec<String> = call
-            .rest(0)
-            .map_err(|_| {
-                LabeledError::new("Invalid input")
-                    .with_label("Unable to parse tensor IDs", call.head)
-            })?
-            .into_iter()
-            .map(|v: Value| v.as_str().map(|s| s.to_string()))
-            .collect::<Result<Vec<String>, _>>()?;
+        // Check for pipeline input
+        let pipeline_input = match input {
+            PipelineData::Empty => None,
+            PipelineData::Value(val, _) => Some(val),
+            _ => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Empty or Value inputs are supported", call.head));
+            }
+        };
+
+        // Check for positional argument input
+        let arg_input = call.nth(0);
+
+        // Validate that exactly one data source is provided
+        let tensor_ids: Vec<String> = match (pipeline_input, arg_input) {
+            (None, None) => {
+                return Err(LabeledError::new("Missing input")
+                    .with_label("Tensor IDs must be provided via pipeline or as an argument", call.head));
+            }
+            (Some(_), Some(_)) => {
+                return Err(LabeledError::new("Conflicting input")
+                    .with_label("Tensor IDs cannot be provided both via pipeline and as an argument", call.head));
+            }
+            (Some(input_val), None) => {
+                input_val.as_list().map_err(|_| {
+                    LabeledError::new("Invalid input")
+                        .with_label("Pipeline input must be a list of tensor IDs", call.head)
+                })?.iter()
+                    .map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect::<Result<Vec<String>, _>>()?
+            }
+            (None, Some(arg_val)) => {
+                arg_val.as_list().map_err(|_| {
+                    LabeledError::new("Invalid input")
+                        .with_label("Argument must be a list of tensor IDs", call.head)
+                })?.iter()
+                    .map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect::<Result<Vec<String>, _>>()?
+            }
+        };
+
+        // Validate that at least two tensors are provided
         if tensor_ids.len() < 2 {
-            return Err(LabeledError::new("Invalid input").with_label(
-                "At least two tensor IDs must be provided for concatenation",
-                call.head,
-            ));
+            return Err(LabeledError::new("Invalid input")
+                .with_label("At least two tensor IDs must be provided for concatenation", call.head));
         }
 
         // Get the dimension to concatenate along (default to 0)
