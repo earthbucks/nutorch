@@ -9,7 +9,6 @@ def generate_data [
   --cluster_std: float = 0.7 # Standard deviation of clusters
   --skew_factor: float = 0.3 # Skew factor for data distribution
 ] {
-  # Your logic here (currently returns 5 as placeholder)
   let n_samples_per_class: int = ($n_samples // $centers)
   mut X_list: list<string> = [] # nutorch tensors have string ids
   mut y_list: list<string> = [] # nutorch tensors have string ids
@@ -43,9 +42,9 @@ let res = (generate_data --n_samples 30 --centers 3 --cluster_std 0.7 --skew_fac
 let X: string = $res.X
 let y: string = $res.y
 let X_value = $X | torch value
-for i in (seq 0 (($X_value | length) - 1)) {
-  let x = $X_value | get $i
-  print ($x | into string)
-}
+# for i in (seq 0 (($X_value | length) - 1)) {
+#   let x = $X_value | get $i
+#   print ($x | into string)
+# }
 # print ($X | torch value) # Print the generated data
 # print ($y | torch value) # Print the generated labels
