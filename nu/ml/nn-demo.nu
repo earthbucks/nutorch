@@ -49,7 +49,8 @@ let y: string = $res.y
   marker: {
     color: ($y | torch value)
   }
-} | beautiful scatter | to json | termplot
+} | beautiful scatter | to json
+# } | beautiful scatter | to json | termplot
 # for i in (seq 0 (($X_value | length) - 1)) {
 #   let x = $X_value | get $i
 #   print ($x | into string)
