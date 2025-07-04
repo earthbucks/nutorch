@@ -32,3 +32,14 @@ def "into matrix" [] {
   }
   $my_table
 }
+
+def "termplot config" [] {
+  let data = $in # Capture input from pipeline
+  let config = {
+    "type": "matrix",
+    "data": $data,
+    "columns": [],
+    "rows": []
+  }
+  $config
+}
