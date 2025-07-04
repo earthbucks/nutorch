@@ -4,7 +4,7 @@ source ~/dev/termplot/nu/beautiful.nu
 # Set random seed for reproducibility
 torch manual_seed 42
 # torch manual_seed ( 42 * 2 )
- 
+
 def generate_data [
   --n_samples: int = 300 # Number of samples to generate
   --centers: int = 3 # Number of cluster centers
@@ -44,17 +44,23 @@ let res = (generate_data --n_samples 30 --centers 3 --cluster_std 0.7 --skew_fac
 let X: string = $res.X
 let y: string = $res.y
 {
-  x: ($X | torch value | each { |xy| $xy | get 0 }) # Extract first column as x values
-  y: ($X | torch value | each { |xy| $xy | get 1 }) # Extract second column as y values
+  x: ($X | torch value | each {|xy| $xy | get 0 }) # Extract first column as x values
+  y: ($X | torch value | each {|xy| $xy | get 1 }) # Extract second column as y values
   marker: {
     color: ($y | torch value)
-    colorscale: (beautiful colorscale 0 2)
+    colorscale: [
+      [0.000, "rgb(68, 1, 84)"],
+      [0.111, "rgb(72, 40, 120)"],
+      [0.222, "rgb(62, 74, 137)"],
+      [0.333, "rgb(49, 104, 142)"],
+      [0.444, "rgb(38, 130, 142)"],
+      [0.556, "rgb(31, 158, 137)"],
+      [0.667, "rgb(53, 183, 121)"],
+      [0.778, "rgb(109, 205, 89)"],
+      [0.889, "rgb(180, 222, 44)"],
+      [1.000, "rgb(253, 231, 37)"]
+    ]
   }
-# } | beautiful scatter | to json
+  # } | beautiful scatter | to json
 } | beautiful scatter | to json | termplot
-# for i in (seq 0 (($X_value | length) - 1)) {
-#   let x = $X_value | get $i
-#   print ($x | into string)
-# }
-# print ($X | torch value) # Print the generated data
-# print ($y | torch value) # Print the generated labels
+# asdf. asdf. asdf.
