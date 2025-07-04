@@ -1,6 +1,6 @@
 # Nutorch
 
-**GPU-powered AI / ML on the command line.**
+**Data analysis on the command line.**
 
 ## Garbage Collection
 
