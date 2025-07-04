@@ -46,9 +46,9 @@ let y: string = $res.y
 {
   x: ($X | torch value | each { |xy| $xy | get 0 }) # Extract first column as x values
   y: ($X | torch value | each { |xy| $xy | get 1 }) # Extract second column as y values
-  # marker: {
-  #   color: ($y | torch value)
-  # }
+  marker: {
+    color: ($y | torch value)
+  }
 } | beautiful scatter | to json | termplot
 # for i in (seq 0 (($X_value | length) - 1)) {
 #   let x = $X_value | get $i
