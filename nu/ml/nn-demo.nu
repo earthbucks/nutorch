@@ -1,8 +1,10 @@
 plugin use torch
+source ~/dev/termplot/nu/beautiful.nu
 
 # Set random seed for reproducibility
 torch manual_seed 42
-
+# torch manual_seed ( 42 * 2 )
+ 
 def generate_data [
   --n_samples: int = 300 # Number of samples to generate
   --centers: int = 3 # Number of cluster centers
@@ -41,7 +43,13 @@ def generate_data [
 let res = (generate_data --n_samples 30 --centers 3 --cluster_std 0.7 --skew_factor 0.3)
 let X: string = $res.X
 let y: string = $res.y
-let X_value = $X | torch value
+{
+  x: ($X | torch value | each { |xy| $xy | get 0 }) # Extract first column as x values
+  y: ($X | torch value | each { |xy| $xy | get 1 }) # Extract second column as y values
+  # marker: {
+  #   color: ($y | torch value)
+  # }
+} | beautiful scatter | to json | termplot
 # for i in (seq 0 (($X_value | length) - 1)) {
 #   let x = $X_value | get $i
 #   print ($x | into string)
