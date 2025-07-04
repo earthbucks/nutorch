@@ -6761,8 +6761,8 @@ impl PluginCommand for CommandCat {
 Thank you for pointing out the discrepancy between the API of `torch cat` in
 your Nushell plugin and the PyTorch API. I'm happy to update the `CommandCat` to
 align more closely with PyTorch's `torch.cat` by changing it to accept a list of
-tensor IDs as a single required argument or as pipeline input, ensuring it’s both
-"Pythony" and "Nushelly" as you’ve described. This approach will mirror
+tensor IDs as a single required argument or as pipeline input, ensuring it’s
+both "Pythony" and "Nushelly" as you’ve described. This approach will mirror
 PyTorch's behavior of taking a sequence (list/tuple) of tensors as the primary
 input for concatenation.
 
@@ -6806,6 +6806,7 @@ input style.
 ### Updated `CommandCat` to Match PyTorch API with Nushell Flexibility
 
 Let's update the `CommandCat` code to accept either:
+
 1. A list of tensor IDs as a required first argument.
 2. A list of tensor IDs as pipeline input.
 
@@ -7000,12 +7001,12 @@ impl PluginCommand for CommandCat {
   `torch.cat` API by accepting a list of tensor IDs as a single input, either
   via:
   - Pipeline input as a list of tensor IDs (e.g., `[$t1, $t2] | torch cat`).
-  - First argument as a list of tensor IDs (e.g., `torch cat [$t1, $t2]`).
-  This aligns with PyTorch's requirement of a sequence of tensors as the primary
-  input.
+  - First argument as a list of tensor IDs (e.g., `torch cat [$t1, $t2]`). This
+    aligns with PyTorch's requirement of a sequence of tensors as the primary
+    input.
 - **Signature Update:** Updated the `signature()` to:
-  - Support pipeline input as a list of strings with
-    `input_output_types` including `(Type::List(Box::new(Type::String)),
+  - Support pipeline input as a list of strings with `input_output_types`
+    including `(Type::List(Box::new(Type::String)),
     Type::String)`.
   - Define an optional first argument `tensor_ids` as a list of strings
     (`SyntaxShape::List(Box::new(SyntaxShape::String))`).
@@ -7015,7 +7016,8 @@ impl PluginCommand for CommandCat {
   of tensor IDs, demonstrating both pipeline and argument input methods.
 - **Run Logic Update:** Adjusted the `run()` method to:
   - Check for input from either pipeline or the first argument, ensuring exactly
-    one source is provided (similar to the dual-input pattern in `CommandTensor`).
+    one source is provided (similar to the dual-input pattern in
+    `CommandTensor`).
   - Extract the list of tensor IDs from the chosen input source and validate
     that at least two tensors are provided.
   - Keep the rest of the logic (dimension handling, shape compatibility checks,
@@ -7077,8 +7079,8 @@ torch cat [$t1]
 
 - **Improved Usability:** The updated API `torch cat [$t1, $t2, ...]` or
   `[$t1, $t2, ...] | torch cat` is more aligned with PyTorch's
-  `torch.cat(tensors)`, making it intuitive for users familiar with PyTorch, while
-  supporting Nushell's pipeline flexibility.
+  `torch.cat(tensors)`, making it intuitive for users familiar with PyTorch,
+  while supporting Nushell's pipeline flexibility.
 - **List Input:** Using a list for tensor IDs as a single argument or pipeline
   input simplifies the syntax compared to passing individual IDs as separate
   arguments, reducing the chance of errors in command construction.
@@ -7088,10 +7090,360 @@ torch cat [$t1]
 
 ### Next Steps
 
-Let me know if the updated `cat` command works as expected with the new list-based
-API structure. If there are issues or if you'd like to proceed to another PyTorch
-method or component of your neural network for implementation in `torch`, I'm
-ready to assist.
+Let me know if the updated `cat` command works as expected with the new
+list-based API structure. If there are issues or if you'd like to proceed to
+another PyTorch method or component of your neural network for implementation in
+`torch`, I'm ready to assist.
+
+Let me know how the test goes or if you have further questions!
+
+# === USER ===
+
+ok, the next command we need to implement is `tensor.shape`. this command is
+slightly different that most previous command in that it is not a computation.
+presumably tch-rs probably has some .shape method we can call to get the shape.
+now, the shape in pytorch is a special type of object. but we can only store
+tensors in our database, so we're not going to be storing any other types of
+objects. thus, we need to turn the same into either a tensor or an array. before
+we do this, let me know your thoughts. should it be an array (list), which is
+held in cpu memory always, or should it be a tensor, which can be held on cpu or
+gpu? this depends on what sort of operations will be run on it. also, what is
+the "shape" in python? is it a tensor? or is it a special structure always held
+in cpu memory?
+
+# === ASSISTANT ===
+
+I'm glad to help implement the `tensor.shape` command (or `torch shape` in
+your plugin's naming convention) to retrieve the shape of a tensor. Let's first
+address your questions about the nature of "shape" in PyTorch, discuss the
+implications of returning it as a list (array) versus a tensor in your Nushell
+plugin, and then provide the implementation for `CommandShape`.
+
+### What is "shape" in PyTorch?
+
+In PyTorch, `tensor.shape` is a property of a `torch.Tensor` object that returns
+a `torch.Size` object, which is essentially a subclass of Python's `tuple`. It
+represents the dimensions of the tensor (e.g., `(2, 3)` for a 2x3 tensor).
+
+- **Nature of `torch.Size`:** It is **not a tensor**; it is a special structure
+  (a tuple-like object) that is always held in CPU memory as part of the tensor's
+  metadata. It does not reside on the GPU, even if the tensor's data does, and it
+  is not subject to device placement (CPU/GPU) or gradient tracking.
+- **Usage:** `tensor.shape` is typically used for querying the dimensions of a
+  tensor for control flow, reshaping, or debugging purposes. It is rarely
+  involved in computational operations (though you can use it in Python code for
+  indexing or reshaping). PyTorch also provides `tensor.size()` as an alias to
+  `tensor.shape`, returning the same `torch.Size` object.
+- **Example in PyTorch:**
+  ```python
+  tensor = torch.full((2, 3), 1.0)
+  shape = tensor.shape  # Returns torch.Size([2, 3]), a tuple-like object
+  print(shape)  # Output: torch.Size([2, 3])
+  ```
+
+### Should `shape` Be Returned as a List (Array) or a Tensor in Nushell?
+
+Given your constraint that only tensors can be stored in your registry
+(database), and considering the nature of `shape` in PyTorch, let's evaluate
+whether to return the shape as a list (array) in CPU memory or as a tensor
+(potentially on CPU or GPU):
+
+- **Option 1: Return as a List (Array) in CPU Memory**
+  - **Pros:**
+    - Matches PyTorch's behavior where `shape` is not a tensor but a
+      tuple-like structure in CPU memory, independent of the tensor's device.
+    - Lists are native to Nushell and easy to work with in scripts for control
+      flow or debugging (e.g., checking dimensions with `length` or indexing).
+    - No need to store in the registry since it's not a tensor, avoiding
+      unnecessary overhead.
+  - **Cons:**
+    - Since your registry only stores tensors, returning a list means it won't
+      be stored as a persistent object with an ID, which might break consistency
+      with other commands that return tensor IDs. However, since `shape` is
+      metadata and not typically used for further computation, this may not be a
+      significant issue.
+    - Cannot perform tensor operations on it (though this is rarely needed for
+      shape data).
+
+- **Option 2: Return as a Tensor (Potentially on CPU or GPU)**
+  - **Pros:**
+    - Fits your registry constraint since it can be stored with an ID,
+      maintaining consistency with other command outputs.
+    - Allows potential tensor operations on the shape if needed (e.g., reshaping
+      or arithmetic), though this is uncommon for shape data.
+  - **Cons:**
+    - Less aligned with PyTorch's design, where shape is not a tensor and not
+      subject to device placement or gradient tracking.
+    - Adds unnecessary overhead by storing metadata as a tensor in the registry,
+      potentially on GPU, when it’s not typically used for computation.
+    - Users might expect to use tensor operations on it, which could lead to
+      confusion since shape data is usually just for querying dimensions.
+
+**Recommendation:** I recommend returning the shape as a **list (array)** in CPU
+memory, directly as a Nushell `Value` (not stored in the registry), for the
+following reasons:
+- It aligns with PyTorch's design where `shape` is not a tensor but a simple
+  metadata structure.
+- In Nushell, lists are more natural for representing dimension data and can be
+  easily used in scripts without needing to extract values from a tensor.
+- Since `shape` is typically used for querying and control flow (not
+  computation), there's little benefit to storing it as a tensor in the registry,
+  avoiding overhead and maintaining clarity.
+
+However, if you anticipate needing to store shape data persistently in the
+registry for some specific workflow or if consistency with tensor ID outputs is
+critical, we can opt for returning it as a tensor. Since you’ve noted that only
+tensors are stored in your database, but `shape` is more of a metadata query, I
+believe returning a list directly as a Nushell value (not stored) is the better
+choice unless you specify otherwise.
+
+**Decision:** Unless you have a specific need to store shape as a tensor, I'll
+implement `CommandShape` to return a list (array) of integers representing the
+dimensions, directly as a Nushell `Value`, bypassing the registry storage. This
+matches PyTorch's intent and Nushell's usability. If you prefer a tensor output
+for registry consistency, let me know, and I can adjust the implementation.
+
+### Equivalent in `tch-rs`
+
+In `tch-rs`, the equivalent functionality is provided by `Tensor::size()`, which
+returns a `Vec<i64>` representing the dimensions of the tensor (e.g.,
+`vec![2, 3]` for a 2x3 tensor). This is a CPU-based operation that retrieves
+metadata and is not a tensor itself.
+
+### Implementation of `torch shape` as `CommandShape`
+
+Here's the implementation of `CommandShape` to retrieve the shape of a tensor as
+a list of integers, supporting input via pipeline or as a single argument:
+
+```rust
+struct CommandShape;
+
+impl PluginCommand for CommandShape {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "torch shape"
+    }
+
+    fn description(&self) -> &str {
+        "Get the shape (dimensions) of a tensor as a list (similar to tensor.shape in PyTorch)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch shape")
+            .input_output_types(vec![(Type::String, Type::List(Box::new(Type::Int))), (Type::Nothing, Type::List(Box::new(Type::Int)))])
+            .optional(
+                "tensor_id",
+                SyntaxShape::String,
+                "ID of the tensor to get the shape of (if not using pipeline input)",
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Get the shape of a tensor using pipeline input",
+                example: "let t1 = (torch full [2, 3] 1); $t1 | torch shape",
+                result: None,
+            },
+            Example {
+                description: "Get the shape of a tensor using argument",
+                example: "let t1 = (torch full [2, 3] 1); torch shape $t1",
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Check for pipeline input
+        let pipeline_input = match input {
+            PipelineData::Empty => None,
+            PipelineData::Value(val, _) => Some(val),
+            _ => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Empty or Value inputs are supported", call.head));
+            }
+        };
+
+        // Check for positional argument input
+        let arg_input = call.nth(0);
+
+        // Validate that exactly one data source is provided
+        let tensor_id: String = match (pipeline_input, arg_input) {
+            (None, None) => {
+                return Err(LabeledError::new("Missing input")
+                    .with_label("Tensor ID must be provided via pipeline or as an argument", call.head));
+            }
+            (Some(_), Some(_)) => {
+                return Err(LabeledError::new("Conflicting input")
+                    .with_label("Tensor ID cannot be provided both via pipeline and as an argument", call.head));
+            }
+            (Some(input_val), None) => {
+                input_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input")
+                        .with_label("Pipeline input must be a tensor ID (string)", call.head)
+                })?
+            }
+            (None, Some(arg_val)) => {
+                arg_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input")
+                        .with_label("Argument must be a tensor ID (string)", call.head)
+                })?
+            }
+        };
+
+        // Look up tensor in registry
+        let registry = TENSOR_REGISTRY.lock().unwrap();
+        let tensor = registry.get(&tensor_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
+        })?;
+
+        // Get the shape (dimensions) of the tensor
+        let shape = tensor.size();
+        let shape_values: Vec<Value> = shape.into_iter()
+            .map(|dim| Value::int(dim, call.head))
+            .collect();
+        let shape_list = Value::list(shape_values, call.head);
+
+        // Return the shape as a list directly (not stored in registry)
+        Ok(PipelineData::Value(shape_list, None))
+    }
+}
+```
+
+### Update to `NutorchPlugin` to Include `CommandShape`
+
+Make sure to add the `CommandShape` command to the list of commands in your
+plugin's `commands()` method:
+
+```rust
+impl Plugin for NutorchPlugin {
+    fn commands(&self) -> Vec<Box<dyn PluginCommand<Plugin = Self>>> {
+        vec![
+            Box::new(CommandNutorch), // Or update to CommandTorch if renamed
+            Box::new(CommandManualSeed),
+            Box::new(CommandRandn),
+            Box::new(CommandDevices),
+            Box::new(CommandLinspace),
+            Box::new(CommandRepeat),
+            Box::new(CommandSin),
+            Box::new(CommandValue),
+            Box::new(CommandTensor),
+            Box::new(CommandMm),
+            Box::new(CommandFull),
+            Box::new(CommandCat),
+            Box::new(CommandMax),
+            Box::new(CommandMaximum),
+            Box::new(CommandLogSoftmax),
+            Box::new(CommandMean),
+            Box::new(CommandAdd),
+            Box::new(CommandMul),
+            Box::new(CommandSub),
+            Box::new(CommandDiv),
+            Box::new(CommandShape), // Added CommandShape command
+        ]
+    }
+
+    fn version(&self) -> std::string::String {
+        "0.0.1".to_string()
+    }
+}
+```
+
+### Explanation of the Implementation
+
+- **Naming Convention:** Named the struct `CommandShape` following your
+  convention of prefixing command structs with `Command`.
+- **API Similarity to PyTorch:** Designed the command to mirror
+  `tensor.shape` in PyTorch by returning the shape (dimensions) of a tensor as a
+  list of integers, matching the tuple-like structure in PyTorch.
+- **Input Configurations:** Supports two configurations for providing the tensor
+  ID:
+  - Pipeline input for the tensor ID (e.g., `$t1 | torch shape`).
+  - Single argument for the tensor ID (e.g., `torch shape $t1`).
+  - Validates that exactly one source is provided, returning errors for missing
+    or conflicting inputs.
+- **Signature:** Defined `input_output_types` to support both
+  `(Type::String, Type::List(Box::new(Type::Int)))` (pipeline input) and
+  `(Type::Nothing, Type::List(Box::new(Type::Int)))` (no pipeline input), with
+  an optional argument for the tensor ID.
+- **Functionality:** Uses `tensor.size()` from `tch-rs` to retrieve the shape as
+  a `Vec<i64>`, converts it to a list of Nushell `Value::int`, and returns it
+  directly as a `PipelineData::Value` (not stored in the registry).
+- **Error Handling:** Includes validation for tensor ID input and registry
+  lookup, providing clear error messages for incorrect usage.
+- **Output as List:** Returns the shape as a list of integers directly to
+  Nushell, bypassing the registry since it’s metadata and not a tensor, aligning
+  with PyTorch's design.
+
+### Build and Test
+
+After adding the `CommandShape` command as shown, rebuild your plugin:
+
+```bash
+cd /Users/ryan/dev/nutorch/rs
+cargo build --release
+```
+
+Re-add the plugin to Nushell:
+
+```nu
+plugin rm torch
+plugin add /Users/ryan/dev/nutorch/rs/target/release/nu_plugin_torch
+```
+
+Test the `shape` command to ensure it retrieves the tensor shape correctly as a
+list:
+
+```nu
+# Test 1: Get the shape of a tensor using pipeline input
+let t1 = (torch full [2, 3] 1)  # Shape: [2, 3]
+let result1 = ($t1 | torch shape)
+$result1  # Expected: [2, 3]
+print "Test 1: SUCCESS if result is [2, 3]"
+
+# Test 2: Get the shape of a tensor using argument
+let result2 = (torch shape $t1)
+$result2  # Expected: [2, 3]
+print "Test 2: SUCCESS if result is [2, 3]"
+
+# Test 3: Error case - no input provided
+torch shape
+# Expected: Error "Missing input"
+
+# Test 4: Error case - both pipeline and argument provided
+$t1 | torch shape $t1
+# Expected: Error "Conflicting input"
+
+# Test 5: Error case - invalid tensor ID
+torch shape "invalid_id"
+# Expected: Error "Tensor not found"
+```
+
+### Additional Notes
+
+- **List Output:** Returning the shape as a list directly (not as a tensor ID in
+  the registry) aligns with PyTorch's design and avoids unnecessary storage
+  overhead. If you decide you'd prefer to store it as a tensor for consistency,
+  let me know, and I can adjust the implementation to create a tensor from the
+  shape and store it in the registry.
+- **Usability:** The dual input approach (pipeline or argument) maintains
+  consistency with other commands in your plugin, enhancing flexibility for
+  Nushell users.
+
+### Next Steps
+
+Let me know if the `shape` command works as expected for retrieving tensor
+dimensions as a list. If there are issues, or if you'd prefer to return a tensor
+instead, or if you'd like to proceed to another PyTorch method or component of
+your neural network for implementation in `torch`, I'm ready to assist.
 
 Let me know how the test goes or if you have further questions!
 
