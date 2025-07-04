@@ -15,11 +15,4 @@ nutorch
 - [x] add autograd setting to torch.randn
 - [x] add autograd setting to torch.full
 - [x] add autograd setting to torch.mm
-- [x] add autograd setting to tensor.linspace
-- [ ] export -> value
-
-tplot
-
-tview
-- [ ] timg
-- [ ] wezterm imgcat
+- [x] add autograd setting to torch.linspace
