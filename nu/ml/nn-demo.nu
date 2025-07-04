@@ -35,13 +35,13 @@ def generate_data [
   let X: string = $X_list | torch cat --dim 0
   let y: string = $y_list | torch cat --dim 0
 
-  [$X $y]
+  {X: $X y: $y}
 }
 
 # Call with named arguments (flags)
 let res = (generate_data --n_samples 30 --centers 3 --cluster_std 0.7 --skew_factor 0.3)
-let X: string = $res | get 0
-let y: string = $res | get 1
+let X: string = $res.X
+let y: string = $res.y
 let X_value = $X | torch value
 for i in (seq 0 (($X_value | length) - 1)) {
   let x = $X_value | get $i
