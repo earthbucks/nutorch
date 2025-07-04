@@ -32,16 +32,15 @@ def generate_data [
     $y_list = $y_list | append $labels
   }
 
-  # let X: string = $X_list | torch cat --dim 0
-  # let y: string = $y_list | torch cat --dim 0
+  let X: string = $X_list | torch cat --dim 0
+  let y: string = $y_list | torch cat --dim 0
 
-  return 5
+  return [$X, $y]
 }
 
 # Call with named arguments (flags)
-let res = (generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3)
-print $res
-
-# Call with some defaults
-let res2 = (generate_data --n_samples 200)
-print $res2 # Uses defaults for centers=3, cluster_std=0.7, skew_factor=0.3
+let res = (generate_data --n_samples 30 --centers 3 --cluster_std 0.7 --skew_factor 0.3)
+let X: string = $res | get 0
+let y: string = $res | get 1
+print ($X | torch value) # Print the generated data
+print ($y | torch value) # Print the generated labels

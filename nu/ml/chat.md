@@ -4416,3 +4416,10 @@ Let me know if you need further clarification!
 
 # === USER ===
 
+in python, you can return a tuple:
+
+```python
+    return X, y
+```
+
+what is the analog of this in nushell?
