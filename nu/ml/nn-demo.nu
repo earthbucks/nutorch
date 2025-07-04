@@ -40,14 +40,22 @@ def generate_data [
 }
 
 # Call with named arguments (flags)
-let res = (generate_data --n_samples 30 --centers 3 --cluster_std 0.7 --skew_factor 0.3)
+let res = (generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3)
 let X: string = $res.X
 let y: string = $res.y
-{
-  x: ($X | torch value | each {|xy| $xy | get 0 }) # Extract first column as x values
-  y: ($X | torch value | each {|xy| $xy | get 1 }) # Extract second column as y values
-  marker: {
-    color: ($y | torch div ($y | torch max) | torch value) # Normalize y values for color
-    colorscale: (beautiful colorscale 3)
+let X_value = $X | torch value
+let y_value = $y | torch value
+[
+  {
+    x: ($X_value | enumerate | each {|xy| if (($y_value | get $xy.index) == 0) { $xy.item.0 } })
+    y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 0 { $xy.item.1 } })
   }
-} | beautiful scatter | to json | termplot
+  {
+    x: ($X_value | enumerate | each {|xy| if (($y_value | get $xy.index) == 1) { $xy.item.0 } })
+    y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 1 { $xy.item.1 } })
+  }
+  {
+    x: ($X_value | enumerate | each {|xy| if (($y_value | get $xy.index) == 2) { $xy.item.0 } })
+    y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 2 { $xy.item.1 } })
+  }
+] | beautiful scatter | to json | termplot
