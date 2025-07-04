@@ -39,23 +39,27 @@ def generate_data [
   {X: $X y: $y}
 }
 
-# Call with named arguments (flags)
+def plot_raw_data [res: record<X: string, y: string>] {
+  # Call with named arguments (flags)
+  let X: string = $res.X
+  let y: string = $res.y
+  let X_value = $X | torch value
+  let y_value = $y | torch value
+  [
+    {
+      x: ($X_value | enumerate | each {|xy| if (($y_value | get $xy.index) == 0) { $xy.item.0 } })
+      y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 0 { $xy.item.1 } })
+    }
+    {
+      x: ($X_value | enumerate | each {|xy| if (($y_value | get $xy.index) == 1) { $xy.item.0 } })
+      y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 1 { $xy.item.1 } })
+    }
+    {
+      x: ($X_value | enumerate | each {|xy| if (($y_value | get $xy.index) == 2) { $xy.item.0 } })
+      y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 2 { $xy.item.1 } })
+    }
+  ] | beautiful scatter | to json | termplot
+}
+
 let res = (generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3)
-let X: string = $res.X
-let y: string = $res.y
-let X_value = $X | torch value
-let y_value = $y | torch value
-[
-  {
-    x: ($X_value | enumerate | each {|xy| if (($y_value | get $xy.index) == 0) { $xy.item.0 } })
-    y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 0 { $xy.item.1 } })
-  }
-  {
-    x: ($X_value | enumerate | each {|xy| if (($y_value | get $xy.index) == 1) { $xy.item.0 } })
-    y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 1 { $xy.item.1 } })
-  }
-  {
-    x: ($X_value | enumerate | each {|xy| if (($y_value | get $xy.index) == 2) { $xy.item.0 } })
-    y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 2 { $xy.item.1 } })
-  }
-] | beautiful scatter | to json | termplot
+plot_raw_data $res
