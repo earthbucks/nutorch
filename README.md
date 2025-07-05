@@ -33,6 +33,10 @@ $env.config.plugin_gc = {
 - [x] torch.gather
 - [x] torch.squeeze
 - [x] torch.unsqueeze
+- [ ] fix broadcasting logic for add
+- [ ] fix broadcasting logic for sub
+- [ ] fix broadcasting logic for mul
+- [ ] fix broadcasting logic for div
 - [ ] torch... everything else
 - [x] add autograd setting to torch.tensor
 - [x] add autograd setting to torch.randn
