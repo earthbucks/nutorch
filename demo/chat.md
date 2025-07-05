@@ -5833,4 +5833,75 @@ if __name__ == "__main__":
 
 # === USER ===
 
+ok, the next method i'm going to need to translate to nushell/nutorch is the cross_entropy_loss function.
 
+```python
+def cross_entropy_loss(
+    outputs: torch.Tensor, targets: torch.Tensor
+) -> torch.Tensor:
+    """Cross-entropy implemented with log-softmax."""
+    logp = torch.log_softmax(outputs, dim=1)
+    loss = -logp[range(outputs.size(0)), targets].mean()
+    return loss
+```
+
+this function does a couple of things. first of all, it uses the `log_softmax` function. i have already implemented that. however, the next thing it does is some sort of slice. i'm not really sure what this syntax is going, because it is not clear based on the use of brackets.
+
+i'm talking about this here:
+
+```python
+logp[range(outputs.size(0)), targets]
+```
+
+my best guess is this is some sort of slice, but i don't know the api. note that `logp` is a tensor, the `range(..)` is unclear (LSP does not give us the type), and `targets` is another tensor. in pytorch what does this bracket syntax mean?
+
+# === ASSISTANT ===
+
+In PyTorch, the bracket expression
+
+```python
+logp[range(outputs.size(0)), targets]
+```
+
+is an example of **advanced (aka “fancy”) indexing**.  It simultaneously
+specifies an index for the first dimension (rows) *and* an index for the second
+dimension (columns):
+
+• `range(outputs.size(0))` → a Python `range` object `[0, 1, 2, …, N-1]`
+   (one index for every sample in the batch).  
+• `targets` → a 1-D tensor of length `N` whose `i`-th entry is the class label
+   (column index) for sample `i`.
+
+When you pass two 1-D index objects like that, PyTorch pairs them element-wise,
+so the result is
+
+```
+tensor([ logp[0, targets[0]],
+         logp[1, targets[1]],
+         …
+         logp[N-1, targets[N-1]] ])
+```
+
+– i.e. it picks, for each row, **the log-probability that corresponds to that
+row’s true class**.  The returned tensor has shape `[N]`.
+
+Internally this is equivalent to
+
+```python
+batch_indices = torch.arange(outputs.size(0))
+selected_logp = logp[batch_indices, targets]   # same thing
+# or
+selected_logp = torch.gather(logp, 1, targets.unsqueeze(1)).squeeze(1)
+```
+
+So:
+
+1. `range(outputs.size(0))` supplies the row numbers 0…N-1.  
+2. `targets` supplies one column number per row.  
+3. Advanced indexing returns the 1-D tensor of those `N` selected elements.
+
+That’s why the subsequent line takes `.mean()` to produce a single scalar loss.
+
+# === USER ===
+
+i'd like to keep the nushell code as close to the python code as possible, however, to the best of my knowledge, nushell provides no way to overload the indexing operator in the same matter as python. therefore we need to know the exact name of the torch method that is being called by the indexing operator. do you understand what i'm asking? does `logp[n, m]` correspond to `logp.fancy_indexing(n, m)` or something like that? if so, what is the exact name of the method?

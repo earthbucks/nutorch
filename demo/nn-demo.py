@@ -50,12 +50,19 @@ def plot_raw_data(X: torch.Tensor, y: torch.Tensor) -> None:
     plt.show()
 
 
-def primitive_cross_entropy_loss(
+def cross_entropy_loss(
     outputs: torch.Tensor, targets: torch.Tensor
 ) -> torch.Tensor:
     """Cross-entropy implemented with log-softmax."""
     logp = torch.log_softmax(outputs, dim=1)
-    loss = -logp[range(outputs.size(0)), targets].mean()
+
+    # alt method 1
+    batch_idx = torch.arange(outputs.size(0))           # shape [N]
+    chosen    = logp[batch_idx, targets]                # sugar
+    loss = -chosen.mean()                               # mean over batch
+
+    # loss = -logp[range(outputs.size(0)), targets].mean()
+
     return loss
 
 
@@ -110,7 +117,7 @@ def model_train(
 
     for epoch in range(epochs):
         out = model_forward_pass(model, X)
-        loss = primitive_cross_entropy_loss(out, y)
+        loss = cross_entropy_loss(out, y)
 
         optim.zero_grad()
         loss.backward()
