@@ -70,5 +70,18 @@ def cross_entropy_loss [
   $loss
 }
 
+def model_init [
+  --input_size: int = 2 # Number of input features
+  --hidden_size: int = 20 # Number of hidden units
+  --output_size: int = 3 # Number of output classes
+]: [nothing -> record<w1: string, b1: string, w2: string, b2: string>] {
+  {
+    w1: (torch.randn $hidden_size $input_size --requires_grad true)
+    b1: (torch.randn $hidden_size --requires_grad true)
+    w2: (torch.randn $output_size $hidden_size --requires_grad true)
+    b2: (torch.randn $output_size --requires_grad true)
+  }
+}
+
 let res = (generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3)
 plot_raw_data $res
