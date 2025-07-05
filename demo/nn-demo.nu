@@ -83,5 +83,16 @@ def model_init [
   }
 }
 
+def model_get_parameters [
+  --model: record<w1: string, b1: string, w2: string, b2: string>
+]: [nothing -> list<string>] {
+  [
+    $model.w1
+    $model.b1
+    $model.w2
+    $model.b2
+  ]
+}
+
 let res = (generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3)
 plot_raw_data $res
