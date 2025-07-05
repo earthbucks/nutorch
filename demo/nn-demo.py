@@ -52,6 +52,30 @@ def generate_data(
     return X, y
 
 
+def plot_raw_data(X: torch.Tensor, y: torch.Tensor) -> None:
+    """
+    Plot the raw data points before training.
+
+    Args:
+        X (torch.Tensor): Input features tensor of shape (N, 2).
+        y (torch.Tensor): Target labels tensor of shape (N,).
+    """
+    X_list: List[List[float]] = X.detach().tolist()
+    y_list: List[int] = y.detach().tolist()
+    plt.scatter(
+        [x[0] for x in X_list],
+        [x[1] for x in X_list],
+        c=y_list,
+        alpha=0.8,
+        cmap="viridis",
+    )
+    plt.title("Raw Data Points (Before Training) - Three Blobs")
+    plt.xlabel("Feature 1")
+    plt.ylabel("Feature 2")
+    plt.colorbar(label="Class")
+    plt.show()
+
+
 # Simplified two-layer neural network for multi-class classification
 class SimpleNN:
     def __init__(
@@ -182,30 +206,6 @@ def train_model(
             epoch_steps.append(epoch + 1)
             print(f"Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}")
     return losses, epoch_steps
-
-
-def plot_raw_data(X: torch.Tensor, y: torch.Tensor) -> None:
-    """
-    Plot the raw data points before training.
-
-    Args:
-        X (torch.Tensor): Input features tensor of shape (N, 2).
-        y (torch.Tensor): Target labels tensor of shape (N,).
-    """
-    X_list: List[List[float]] = X.detach().tolist()
-    y_list: List[int] = y.detach().tolist()
-    plt.scatter(
-        [x[0] for x in X_list],
-        [x[1] for x in X_list],
-        c=y_list,
-        alpha=0.8,
-        cmap="viridis",
-    )
-    plt.title("Raw Data Points (Before Training) - Three Blobs")
-    plt.xlabel("Feature 1")
-    plt.ylabel("Feature 2")
-    plt.colorbar(label="Class")
-    plt.show()
 
 
 def plot_results(X: torch.Tensor, y: torch.Tensor, model: SimpleNN) -> None:
