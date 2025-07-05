@@ -1828,14 +1828,11 @@ impl PluginCommand for CommandSqueeze {
     ) -> Result<PipelineData, LabeledError> {
 
         // ------ tensor ID must come from the pipeline --------------------
-        let tensor_id_val = match input {
-            PipelineData::Value(v, _) => v,
-            _ => {
-                return Err(
-                    LabeledError::new("Missing input")
-                        .with_label("A tensor ID must be provided via the pipeline", call.head)
-                );
-            }
+        let PipelineData::Value(tensor_id_val, _) = input else {
+            return Err(
+                LabeledError::new("Unsupported input")
+                    .with_label("Only Value inputs are supported", call.head)
+            );
         };
 
         let tensor_id = tensor_id_val
