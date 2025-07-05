@@ -8155,3 +8155,406 @@ let PipelineData::Value(tensor_id_val, _) = input else {
 now, let's move onto the unsqueeze method. can you produce the unsqueeze method,
 following the exact same pattern as the squeeze method? we should require a
 tensor to be piped in, and the argument should be the dimension to unsqueeze.
+
+# === ASSISTANT ===
+
+```rust
+// torch unsqueeze -----------------------------------------------------------
+// Insert a size-1 dimension at the given index (like tensor.unsqueeze(dim))
+// Tensor ID must be supplied via the pipeline; one positional argument = dim.
+// ---------------------------------------------------------------------------
+struct CommandUnsqueeze;
+
+impl PluginCommand for CommandUnsqueeze {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str { "torch unsqueeze" }
+
+    fn description(&self) -> &str {
+        "Insert a dimension of size 1 into a tensor (similar to tensor.unsqueeze(dim) in PyTorch)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch unsqueeze")
+            // tensor id comes from pipeline, returns new tensor id
+            .input_output_types(vec![(Type::String, Type::String)])
+            .required(
+                "dim",
+                SyntaxShape::Int,
+                "Dimension index at which to insert size-1 dimension",
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Unsqueeze dim 0 of a [2,3] tensor -> shape [1,2,3]",
+                example: r#"let t = (torch full [2,3] 1); $t | torch unsqueeze 0 | torch shape"#,
+                result: None,
+            },
+            Example {
+                description: "Unsqueeze dim 2 of a [2,3] tensor -> shape [2,3,1]",
+                example: r#"let t = (torch full [2,3] 1); $t | torch unsqueeze 2 | torch shape"#,
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin : &NutorchPlugin,
+        _engine : &nu_plugin::EngineInterface,
+        call    : &nu_plugin::EvaluatedCall,
+        input   : PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+
+        // ---- tensor ID must come from pipeline --------------------------
+        let PipelineData::Value(tensor_id_val, _) = input else {
+            return Err(
+                LabeledError::new("Unsupported input")
+                    .with_label("Tensor ID must be supplied via the pipeline", call.head)
+            );
+        };
+
+        let tensor_id = tensor_id_val
+            .as_str()
+            .map(|s| s.to_string())
+            .map_err(|_| {
+                LabeledError::new("Invalid input")
+                    .with_label("Pipeline input must be a tensor ID (string)", call.head)
+            })?;
+
+        // ---- parse dimension argument -----------------------------------
+        let dim_val = call.nth(0).ok_or_else(|| {
+            LabeledError::new("Missing dimension")
+                .with_label("A dimension argument is required", call.head)
+        })?;
+
+        let dim = dim_val.as_int().map_err(|_| {
+            LabeledError::new("Invalid dimension")
+                .with_label("Dimension must be an integer", call.head)
+        })?;
+
+        // ---- fetch tensor ------------------------------------------------
+        let mut reg = TENSOR_REGISTRY.lock().unwrap();
+        let tensor = reg.get(&tensor_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
+        })?.shallow_clone();
+
+        // ---- validate dim ------------------------------------------------
+        let ndims = tensor.size().len() as i64;
+        // In PyTorch unsqueeze allows dim == ndims (insert at end)
+        if dim < 0 || dim > ndims {
+            return Err(
+                LabeledError::new("Invalid dimension")
+                    .with_label(format!("Dim {dim} out of bounds for tensor with {ndims} dims"), call.head)
+            );
+        }
+
+        // ---- perform unsqueeze ------------------------------------------
+        let result_tensor = tensor.unsqueeze(dim);
+
+        // ---- store & return ---------------------------------------------
+        let new_id = Uuid::new_v4().to_string();
+        reg.insert(new_id.clone(), result_tensor);
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```
+
+# === USER ===
+
+next, we need to implement `torch gather`. in pytorch, this command takes two tensors, with a 'dim' value in between. in this case, i think we should break with the convention of supporting nushelly pipeline data and just make this a normal function. the reason for that is that otherwise the dim parameter is going to be placed in an ambiguous location. thus, we the command will make perfect sense and match the python code by making the arguments `tensor dim tensor` just like python.
+
+can you implement this method? the rust method should be called `CommandGather`. please also give a test or two in nushell.
+
+# === ASSISTANT ===
+
+```rust
+// torch gather  -------------------------------------------------------------
+// Syntax  :  torch gather <source_tensor_id> <dim:int> <index_tensor_id>
+// Behaviour: same as PyTorch ‑– result = source.gather(dim, index)
+// ---------------------------------------------------------------------------
+struct CommandGather;
+
+impl PluginCommand for CommandGather {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str { "torch gather" }
+
+    fn description(&self) -> &str {
+        "Gather values along an axis using an index tensor \
+         (equivalent to torch.gather in PyTorch)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch gather")
+            .required("source_id", SyntaxShape::String, "ID of the source tensor")
+            .required("dim",        SyntaxShape::Int,    "Dimension along which to gather")
+            .required("index_id",  SyntaxShape::String, "ID of the index tensor (must be int64)")
+            .input_output_types(vec![(Type::Nothing, Type::String)])
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Gather columns 2,1,0 from each row (dim=1)",
+                example: r#"
+let src  = ([[10 11 12] [20 21 22]] | torch tensor)
+let idx  = ([[2 1 0]   [0 0 2]]     | torch tensor --dtype int64)
+torch gather $src 1 $idx | torch value
+"#.trim(),
+                result: None,
+            },
+            Example {
+                description: "Gather rows 0,0,1 (dim=0)",
+                example: r#"
+let src = ([[1 2] [3 4]] | torch tensor)
+let idx = ([0 0 1]       | torch tensor --dtype int64)
+torch gather $src 0 $idx | torch value
+"#.trim(),
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin : &NutorchPlugin,
+        _engine : &nu_plugin::EngineInterface,
+        call    : &nu_plugin::EvaluatedCall,
+        _input  : PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+
+        // ---------------- parse arguments -------------------------------
+        let src_id  = call.nth(0).unwrap().as_str()
+                       .map(|s| s.to_string())
+                       .map_err(|_| LabeledError::new("Invalid source tensor ID").with_label("Must be a string", call.head))?;
+
+        let dim     = call.nth(1).unwrap().as_int()
+                       .map_err(|_| LabeledError::new("Invalid dim").with_label("Dimension must be an integer", call.head))?;
+
+        let idx_id  = call.nth(2).unwrap().as_str()
+                       .map(|s| s.to_string())
+                       .map_err(|_| LabeledError::new("Invalid index tensor ID").with_label("Must be a string", call.head))?;
+
+        // ---------------- fetch tensors from registry --------------------
+        let mut reg = TENSOR_REGISTRY.lock().unwrap();
+        let src  = reg.get(&src_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid source tensor ID", call.head)
+        })?.shallow_clone();
+
+        let mut index = reg.get(&idx_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid index tensor ID", call.head)
+        })?.shallow_clone();
+
+        // ---------------- checks ----------------------------------------
+        let ndims = src.size().len() as i64;
+        if dim < 0 || dim >= ndims {
+            return Err(
+                LabeledError::new("Invalid dimension")
+                    .with_label(format!("Dim {dim} out of bounds for tensor with {ndims} dims"), call.head)
+            );
+        }
+
+        // gather expects int64 indices
+        if index.kind() != Kind::Int64 {
+            index = index.to_kind(Kind::Int64);
+        }
+
+        // ---------------- gather ----------------------------------------
+        let result_tensor = src.gather(dim, &index);
+
+        // ---------------- store & return ---------------------------------
+        let new_id = Uuid::new_v4().to_string();
+        reg.insert(new_id.clone(), result_tensor);
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```
+
+### Quick Nushell tests
+
+```nu
+# Test 1 – gather along dim 1 (columns)
+let src  = ([[10 11 12] [20 21 22]] | torch tensor)
+let idx  = ([[2 1 0]   [0 0 2]]     | torch tensor --dtype int64)
+(torch gather $src 1 $idx | torch value)
+# Expected → [[12, 11, 10], [20, 20, 22]]
+
+# Test 2 – gather along dim 0 (rows)
+let src2 = ([[1 2] [3 4]] | torch tensor)
+let idx2 = ([0 0 1]       | torch tensor --dtype int64)
+(torch gather $src2 0 $idx2 | torch value)
+# Expected → [[1, 2], [1, 2], [3, 4]]
+```
+
+The command strictly takes three positional arguments (`source_id dim index_id`)
+and does not accept pipeline input, mirroring PyTorch’s `torch.gather(src, dim, index)` usage.
+
+# === USER ===
+
+on second thought, i think we should change this again:
+
+1. we should actually require the first tensor to be in pipeline data. the reason for this is that this is the tensor we are operating on a sense, and this makes it compatible with the pipeline model of nushell, even though it breaks with python.
+2. a second reason to make the first tensor a pipeline is that this actually match tch-rs, which treats the .gather method on a tensor, not as a static method.
+3. finally, there is a bug in the code. we need to know the `sparse_grad` setting of the source tensor, which is a bool, and that has to be passed in to the tch-rs `tensor.gather` method.
+
+here is the problematic code:
+
+```rust
+        let result_tensor = src.gather(dim, &index);
+```
+
+can you please fix the bug and make the changes to the api as requested?
+
+# === ASSISTANT ===
+
+### Updated `CommandGather`
+
+```rust
+/// torch gather
+/// Usage:  <source-tensor comes through pipeline>  torch gather <dim:int> <index_tensor_id>
+struct CommandGather;
+
+impl PluginCommand for CommandGather {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str { "torch gather" }
+
+    fn description(&self) -> &str {
+        "Gather values along an axis using an index tensor \
+         (like `x.gather(dim, index)` in PyTorch)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch gather")
+            // source tensor id must arrive through the pipeline
+            .input_output_types(vec![(Type::String, Type::String)])
+            .required("dim",        SyntaxShape::Int,    "Dimension along which to gather")
+            .required("index_id",   SyntaxShape::String, "ID of the index tensor (int64)")
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Gather columns 2,1,0 from each row (dim=1)",
+                example: r#"
+let src  = ([[10 11 12] [20 21 22]] | torch tensor)
+let idx  = ([[2 1 0]   [0 0 2]]     | torch tensor --dtype int64)
+$src | torch gather 1 $idx | torch value
+"#.trim(),
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin : &NutorchPlugin,
+        _engine : &nu_plugin::EngineInterface,
+        call    : &nu_plugin::EvaluatedCall,
+        input   : PipelineData,
+    ) -> Result<PipelineData, LabeledError>
+    {
+        // ── source tensor ID must be piped in ────────────────────────────
+        let PipelineData::Value(source_id_val, _) = input else {
+            return Err(
+                LabeledError::new("Missing input")
+                    .with_label("Source tensor ID must be supplied via the pipeline", call.head)
+            );
+        };
+
+        let source_id = source_id_val
+            .as_str()
+            .map(|s| s.to_string())
+            .map_err(|_| LabeledError::new("Invalid input")
+                .with_label("Pipeline input must be a tensor ID (string)", call.head))?;
+
+        // ── parse positional arguments: dim and index tensor ID ──────────
+        let dim_val = call.nth(0).ok_or_else(|| {
+            LabeledError::new("Missing dim")
+                .with_label("Dimension argument is required", call.head)
+        })?;
+        let dim = dim_val.as_int().map_err(|_| {
+            LabeledError::new("Invalid dim")
+                .with_label("Dimension must be an integer", call.head)
+        })?;
+
+        let index_id_val = call.nth(1).ok_or_else(|| {
+            LabeledError::new("Missing index tensor")
+                .with_label("Index tensor ID argument is required", call.head)
+        })?;
+        let index_id = index_id_val.as_str().map(|s| s.to_string()).map_err(|_| {
+            LabeledError::new("Invalid index tensor ID")
+                .with_label("Must be a string", call.head)
+        })?;
+
+        // ── fetch tensors from registry ──────────────────────────────────
+        let mut reg = TENSOR_REGISTRY.lock().unwrap();
+
+        let source = reg.get(&source_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid source tensor ID", call.head)
+        })?.shallow_clone();
+
+        let mut index = reg.get(&index_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid index tensor ID", call.head)
+        })?.shallow_clone();
+
+        // gather expects int64 indices
+        if index.kind() != Kind::Int64 {
+            index = index.to_kind(Kind::Int64);
+        }
+
+        // check dim bounds
+        let ndims = source.size().len() as i64;
+        if dim < 0 || dim >= ndims {
+            return Err(
+                LabeledError::new("Invalid dimension")
+                    .with_label(format!("Dim {dim} out of bounds for tensor with {ndims} dims"), call.head)
+            );
+        }
+
+        // sparse_grad flag: use the source tensor's sparse-grad property
+        let sparse_grad = source.is_sparse();
+
+        // ── perform gather ───────────────────────────────────────────────
+        let result_tensor = source.gather(dim, &index, sparse_grad);
+
+        // ── store & return ───────────────────────────────────────────────
+        let new_id = Uuid::new_v4().to_string();
+        reg.insert(new_id.clone(), result_tensor);
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```
+
+### Quick Nushell tests
+
+```nu
+# Create a 2×3 source tensor and an index tensor; gather columns 2,1,0
+let src  = ([[10 11 12] [20 21 22]] | torch tensor)
+let idx  = ([[2 1 0]   [0 0 2]]     | torch tensor --dtype int64)
+($src | torch gather 1 $idx | torch value)
+# → [[12, 11, 10], [20, 20, 22]]
+
+# Gather rows along dim 0
+let src2 = ([[1 2] [3 4]] | torch tensor)
+let idx2 = ([0 0 1]       | torch tensor --dtype int64)
+($src2 | torch gather 0 $idx2 | torch value)
+# → [[1, 2], [1, 2], [3, 4]]
+```
+
+The command now:
+
+* **Requires** the source tensor ID via pipeline input.  
+* Takes two positional arguments: `dim` (integer) and `index_tensor_id`.  
+* Passes the `sparse_grad` flag obtained from `source.is_sparse()` to
+`tch-rs`’s `gather`.
+
+# === USER ===
+
+
