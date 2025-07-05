@@ -9033,4 +9033,12 @@ let b = (torch full [2,3] 2)
 
 # === USER ===
 
+that worked. however, there is an issue. the broadcasting logic allows the two different tensors to have different shapes. however, the shapes can still be incompatible. for instance, this will crash:
 
+```nu
+(torch full [2] 1) | torch maximum (torch full [2,3] 2) | torch value
+```
+
+unfortunately, the `tch-rs` library does not catch this error, so we need to handle it ourselves.
+
+do you know what the logic is to detect compatibility of non-equal shapes? can you fix the code to handle this case?
