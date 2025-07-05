@@ -8265,9 +8265,16 @@ impl PluginCommand for CommandUnsqueeze {
 
 # === USER ===
 
-next, we need to implement `torch gather`. in pytorch, this command takes two tensors, with a 'dim' value in between. in this case, i think we should break with the convention of supporting nushelly pipeline data and just make this a normal function. the reason for that is that otherwise the dim parameter is going to be placed in an ambiguous location. thus, we the command will make perfect sense and match the python code by making the arguments `tensor dim tensor` just like python.
+next, we need to implement `torch gather`. in pytorch, this command takes two
+tensors, with a 'dim' value in between. in this case, i think we should break
+with the convention of supporting nushelly pipeline data and just make this a
+normal function. the reason for that is that otherwise the dim parameter is
+going to be placed in an ambiguous location. thus, we the command will make
+perfect sense and match the python code by making the arguments
+`tensor dim tensor` just like python.
 
-can you implement this method? the rust method should be called `CommandGather`. please also give a test or two in nushell.
+can you implement this method? the rust method should be called `CommandGather`.
+please also give a test or two in nushell.
 
 # === ASSISTANT ===
 
@@ -8392,20 +8399,28 @@ let idx2 = ([0 0 1]       | torch tensor --dtype int64)
 ```
 
 The command strictly takes three positional arguments (`source_id dim index_id`)
-and does not accept pipeline input, mirroring PyTorch’s `torch.gather(src, dim, index)` usage.
+and does not accept pipeline input, mirroring PyTorch’s
+`torch.gather(src, dim, index)` usage.
 
 # === USER ===
 
 on second thought, i think we should change this again:
 
-1. we should actually require the first tensor to be in pipeline data. the reason for this is that this is the tensor we are operating on a sense, and this makes it compatible with the pipeline model of nushell, even though it breaks with python.
-2. a second reason to make the first tensor a pipeline is that this actually match tch-rs, which treats the .gather method on a tensor, not as a static method.
-3. finally, there is a bug in the code. we need to know the `sparse_grad` setting of the source tensor, which is a bool, and that has to be passed in to the tch-rs `tensor.gather` method.
+1. we should actually require the first tensor to be in pipeline data. the
+   reason for this is that this is the tensor we are operating on a sense, and
+   this makes it compatible with the pipeline model of nushell, even though it
+   breaks with python.
+2. a second reason to make the first tensor a pipeline is that this actually
+   match tch-rs, which treats the .gather method on a tensor, not as a static
+   method.
+3. finally, there is a bug in the code. we need to know the `sparse_grad`
+   setting of the source tensor, which is a bool, and that has to be passed in
+   to the tch-rs `tensor.gather` method.
 
 here is the problematic code:
 
 ```rust
-        let result_tensor = src.gather(dim, &index);
+let result_tensor = src.gather(dim, &index);
 ```
 
 can you please fix the bug and make the changes to the api as requested?
@@ -8550,19 +8565,28 @@ let idx2 = ([0 0 1]       | torch tensor --dtype int64)
 
 The command now:
 
-* **Requires** the source tensor ID via pipeline input.  
-* Takes two positional arguments: `dim` (integer) and `index_tensor_id`.  
-* Passes the `sparse_grad` flag obtained from `source.is_sparse()` to
-`tch-rs`’s `gather`.
+- **Requires** the source tensor ID via pipeline input.
+- Takes two positional arguments: `dim` (integer) and `index_tensor_id`.
+- Passes the `sparse_grad` flag obtained from `source.is_sparse()` to `tch-rs`’s
+  `gather`.
 
 # === USER ===
 
-ok, the first test passed. now, there is an issue. we are not checking the dimensions of the two tensors correctly. the two tensors must exactly fully match. in your second example, they do not match! the gather method does not have the property you suppose. it does NOT gather along dim 0. instaed, it crashes! that is beacuse tch-rs is not catching the c++ error from libtorch. it is on us to ensure that the shape of both tensors are exactly the same! can you implement this check?
+ok, the first test passed. now, there is an issue. we are not checking the
+dimensions of the two tensors correctly. the two tensors must exactly fully
+match. in your second example, they do not match! the gather method does not
+have the property you suppose. it does NOT gather along dim 0. instaed, it
+crashes! that is beacuse tch-rs is not catching the c++ error from libtorch. it
+is on us to ensure that the shape of both tensors are exactly the same! can you
+implement this check?
 
 # === ASSISTANT ===
 
-Below is the updated `CommandGather` `run` body – only the **Shape-compatibility** and **index-range** validation parts have been inserted/changed.  
-(Everything else – argument parsing, sparse flag, gathering, storage – is untouched.)
+Below is the updated `CommandGather` `run` body – only the
+**Shape-compatibility** and **index-range** validation parts have been
+inserted/changed.\
+(Everything else – argument parsing, sparse flag, gathering, storage – is
+untouched.)
 
 ```rust
     fn run(
@@ -8687,6 +8711,69 @@ $src | torch gather 0 $idx    # expect “Shape mismatch” error
 
 With the added checks the command now fails fast instead of crashing whenever
 the index tensor’s shape or values are invalid.
+
+# === USER ===
+
+great. now, given all the methods we have recently written, does this
+implementation of `cross_entropy_loss` look right to you?
+
+```nu
+def crosss_entropy_loss [
+  --outputs: string # tensor id of model outputs
+  --targets: string # tensor id of target labels
+] {
+  let logp = $outputs | torch log_softmax --dim 1
+  let loss = $logp | torch gather 1 ($targets | torch unsqueeze 1) | torch squeeze 1 | torch mean | torch neg
+}
+```
+
+# === ASSISTANT ===
+
+A few small corrections will make the function work the way you expect.
+
+1  Output value  
+   – In Nushell the **last expression is returned**.  
+   – Your function stores `$loss` in a variable but never outputs it.
+
+2  Typo in name  
+   – `crosss_entropy_loss` → `cross_entropy_loss`.
+
+3  Minor style: reuse the created index tensor ID in the `gather` call.
+
+Working version:
+
+```nu
+def cross_entropy_loss [
+    --outputs: string  # tensor-id of model logits  (shape [N,C])
+    --targets: string  # tensor-id of target class indices (shape [N])
+] {
+    # log-softmax over class dimension
+    let logp   = $outputs | torch log_softmax --dim 1
+
+    # build index tensor  (shape [N,1])
+    let index  = $targets | torch unsqueeze 1
+
+    # pick the log-probability of the true class for every sample
+    let picked = $logp | torch gather 1 $index | torch squeeze 1
+
+    # negative mean log-likelihood
+    let loss   = $picked | torch mean | torch neg
+
+    $loss          # <-- return
+}
+```
+
+Explanation of each step
+1. `log_softmax` turns logits into log-probabilities.  
+2. `unsqueeze 1` converts targets `[N] → [N,1]` so it can be used as an index
+   tensor.  
+3. `gather 1` selects the log-probability of the correct class for every row
+   (`dim=1`).  
+4. `squeeze 1` removes the now-size-1 class dimension.  
+5. `mean` averages across the batch; `neg` turns the mean log-prob into loss.
+
+With these fixes the function compiles and returns the scalar
+cross-entropy loss tensor ID.
 
 # === USER ===
 

@@ -61,5 +61,14 @@ def plot_raw_data [res: record<X: string, y: string>] {
   ] | beautiful scatter | to json | termplot
 }
 
+def cross_entropy_loss [
+  --outputs: string # tensor id of model outputs
+  --targets: string # tensor id of target labels
+] {
+  let logp = $outputs | torch log_softmax --dim 1
+  let loss = $logp | torch gather 1 ($targets | torch unsqueeze 1) | torch squeeze 1 | torch mean | torch neg
+  $loss
+}
+
 let res = (generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3)
 plot_raw_data $res
