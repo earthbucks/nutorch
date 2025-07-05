@@ -9033,12 +9033,172 @@ let b = (torch full [2,3] 2)
 
 # === USER ===
 
-that worked. however, there is an issue. the broadcasting logic allows the two different tensors to have different shapes. however, the shapes can still be incompatible. for instance, this will crash:
+that worked. however, there is an issue. the broadcasting logic allows the two
+different tensors to have different shapes. however, the shapes can still be
+incompatible. for instance, this will crash:
 
 ```nu
 (torch full [2] 1) | torch maximum (torch full [2,3] 2) | torch value
 ```
 
-unfortunately, the `tch-rs` library does not catch this error, so we need to handle it ourselves.
+unfortunately, the `tch-rs` library does not catch this error, so we need to
+handle it ourselves.
 
-do you know what the logic is to detect compatibility of non-equal shapes? can you fix the code to handle this case?
+do you know what the logic is to detect compatibility of non-equal shapes? can
+you fix the code to handle this case?
+
+# === ASSISTANT ===
+
+Below is a drop-in replacement for the body of `run` in `CommandMaximum`.
+Nothing else in the struct changes.\
+It adds a helper that checks standard NumPy / PyTorch broadcasting rules:
+
+• Compare the two shapes right-to-left.\
+• At each position the sizes are compatible if they are equal **or** either size
+== 1.\
+• If any position violates this rule → shapes are incompatible ➜ error.
+
+If the shapes are compatible, the original `maximum` is executed.
+
+```rust
+    fn run(
+        &self,
+        _plugin : &NutorchPlugin,
+        _engine : &nu_plugin::EngineInterface,
+        call    : &nu_plugin::EvaluatedCall,
+        input   : PipelineData,
+    ) -> Result<PipelineData, LabeledError>
+    {
+        //------------------------------------------------------------------
+        // collect exactly two tensor IDs  (pipeline list / pipeline single /
+        // positional args)  –– same logic as before
+        //------------------------------------------------------------------
+        let mut ids: Vec<String> = Vec::new();
+
+        match input {
+            PipelineData::Empty => {}
+            PipelineData::Value(v, _) => {
+                if let Ok(list) = v.as_list() {
+                    for itm in list {
+                        ids.push(itm.as_str()?.to_string());
+                    }
+                } else {
+                    ids.push(v.as_str()?.to_string());
+                }
+            }
+            _ => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Empty or Value inputs are supported", call.head))
+            }
+        }
+
+        for i in 0..2 {
+            if let Some(arg) = call.nth(i) {
+                ids.push(arg.as_str()?.to_string());
+            }
+        }
+
+        if ids.len() != 2 {
+            return Err(LabeledError::new("Invalid input count")
+                .with_label("Provide exactly two tensor IDs", call.head));
+        }
+        let (id1, id2) = (ids.remove(0), ids.remove(0));
+
+        //------------------------------------------------------------------
+        // fetch tensors
+        //------------------------------------------------------------------
+        let mut reg = TENSOR_REGISTRY.lock().unwrap();
+        let t1 = reg.get(&id1)
+            .ok_or_else(|| LabeledError::new("Tensor not found").with_label("Invalid first tensor ID", call.head))?
+            .shallow_clone();
+        let t2 = reg.get(&id2)
+            .ok_or_else(|| LabeledError::new("Tensor not found").with_label("Invalid second tensor ID", call.head))?
+            .shallow_clone();
+
+        //------------------------------------------------------------------
+        // broadcast-compatibility check
+        //------------------------------------------------------------------
+        fn broadcast_ok(a: &[i64], b: &[i64]) -> bool {
+            let mut ia = a.len() as isize - 1;
+            let mut ib = b.len() as isize - 1;
+            while ia >= 0 || ib >= 0 {
+                let sa = if ia >= 0 { a[ia as usize] } else { 1 };
+                let sb = if ib >= 0 { b[ib as usize] } else { 1 };
+                if sa != sb && sa != 1 && sb != 1 {
+                    return false;
+                }
+                ia -= 1;
+                ib -= 1;
+            }
+            true
+        }
+
+        let shape1 = t1.size();
+        let shape2 = t2.size();
+        if !broadcast_ok(&shape1, &shape2) {
+            return Err(
+                LabeledError::new("Shape mismatch")
+                    .with_label(
+                        format!(
+                            "Tensors cannot be broadcast together: {:?} vs {:?}",
+                            shape1, shape2
+                        ),
+                        call.head,
+                    ),
+            );
+        }
+
+        //------------------------------------------------------------------
+        // compute maximum
+        //------------------------------------------------------------------
+        let result_tensor = t1.maximum(&t2);
+
+        //------------------------------------------------------------------
+        // store & return
+        //------------------------------------------------------------------
+        let new_id = Uuid::new_v4().to_string();
+        reg.insert(new_id.clone(), result_tensor);
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+```
+
+With this change:
+
+```nu
+(torch full [2] 1) | torch maximum (torch full [2,3] 2)
+```
+
+now returns
+
+```
+Error: Shape mismatch
+╭─ ... Tensors cannot be broadcast together: [2] vs [2, 3]
+```
+
+while shapes like `[1,3]` vs `[2,3]` or `[2,1]` vs `[2,3]` succeed, matching
+PyTorch broadcasting rules.
+
+# === USER ===
+
+great, that worked. however, i want to make sure the terminology is right. is
+"broadcast" the right term for what's going on here?
+
+# === ASSISTANT ===
+
+Yes — “broadcasting” is exactly the standard term.
+
+Origin\
+• First coined in NumPy and later adopted by most tensor libraries (PyTorch,
+TensorFlow, JAX, etc.).\
+• Describes the automatic expansion of a smaller‐shaped array/tensor so that
+element-wise operations can be applied with another tensor of a larger shape.
+
+Rule of thumb\
+Compare the shapes from the trailing (right-most) dimension backward; two sizes
+are compatible if they are equal or if either of them is 1. If every dimension
+pair satisfies that rule, the shapes can be broadcast together.
+
+So checking whether two shapes are “broadcast-compatible” is the correct
+description of what we added to the command.
+
+# === USER ===
