@@ -2,12 +2,12 @@ plugin use torch
 
 # Function to print SUCCESS in green with an uncolored message
 def print_success [message: string] {
-  print ((ansi green) + "SUCCESS" + (ansi reset) + " - test-tensor - " + $message)
+  print ((ansi green) + "SUCCESS" + (ansi reset) + " - test/add - " + $message)
 }
 
 # Function to print FAILURE in red with an uncolored message
 def print_failure [message: string] {
-  print ((ansi red) + "FAILURE" + (ansi reset) + " - test-tensor - " + $message)
+  print ((ansi red) + "FAILURE" + (ansi reset) + " - test/add - " + $message)
 }
 
 let result1 = ([1] | torch tensor) | torch add ([2] | torch tensor) | torch value | get 0
