@@ -2232,93 +2232,130 @@ impl PluginCommand for CommandExp {
     }
 }
 
+// torch maximum  -----------------------------------------------------------
+//  1) [$t1 $t2] | torch maximum              (both IDs piped as a list)
+//  2)  $t1      | torch maximum $t2          (first ID piped, second as arg)
+//  3)  torch maximum $t1 $t2                 (no pipeline, two args – kept for b-compat)
+// --------------------------------------------------------------------------
 struct CommandMaximum;
 
 impl PluginCommand for CommandMaximum {
     type Plugin = NutorchPlugin;
 
-    fn name(&self) -> &str {
-        "torch maximum"
-    }
+    fn name(&self) -> &str { "torch maximum" }
 
     fn description(&self) -> &str {
-        "Compute the element-wise maximum between two tensors with broadcasting (similar to torch.max comparison mode)"
+        "Element-wise maximum of two tensors with broadcasting (like torch.maximum)"
     }
 
     fn signature(&self) -> Signature {
         Signature::build("torch maximum")
-            .required("tensor1_id", SyntaxShape::String, "ID of the first tensor")
-            .required("tensor2_id", SyntaxShape::String, "ID of the second tensor")
-            .input_output_types(vec![(Type::Nothing, Type::String)])
+            .input_output_types(vec![
+                (Type::String,  Type::String),                               // single id via pipe
+                (Type::List(Box::new(Type::String)), Type::String),          // list via pipe
+                (Type::Nothing, Type::String)                                // all by args
+            ])
+            .optional("tensor1_id", SyntaxShape::String, "ID of 1st tensor (if not piped)")
+            .optional("tensor2_id", SyntaxShape::String, "ID of 2nd tensor (or 1st if one piped)")
             .category(Category::Custom("torch".into()))
     }
 
     fn examples(&self) -> Vec<Example> {
         vec![
             Example {
-                description: "Compute element-wise maximum between two tensors of same shape",
-                example: "let t1 = (torch full 1 2 3); let t2 = (torch full 2 2 3); torch maximum $t1 $t2 | torch value",
+                description: "Both tensor IDs in a list via pipeline",
+                example: r#"
+let a = (torch full [2,3] 1)
+let b = (torch full [2,3] 2)
+[$a $b] | torch maximum | torch value
+"#.trim(),
                 result: None,
             },
             Example {
-                description: "Clamp a tensor to a minimum value using a scalar tensor (broadcasting)",
-                example: "let t1 = (torch full 0 1); let t2 = (torch linspace -2 2 5); torch maximum $t1 $t2 | torch value",
+                description: "First ID piped, second as argument",
+                example: r#"
+let a = (torch full [2,3] 1)
+let b = (torch full [2,3] 2)
+$a | torch maximum $b | torch value
+"#.trim(),
                 result: None,
-            }
+            },
         ]
     }
 
     fn run(
         &self,
-        _plugin: &NutorchPlugin,
-        _engine: &nu_plugin::EngineInterface,
-        call: &nu_plugin::EvaluatedCall,
-        _input: PipelineData,
-    ) -> Result<PipelineData, LabeledError> {
-        // Get tensor1 ID from first required argument
-        let tensor1_id = call
-            .nth(0)
-            .unwrap()
-            .as_str()
-            .map(|s| s.to_string())
-            .map_err(|_| {
-                LabeledError::new("Invalid input")
-                    .with_label("Unable to parse tensor1 ID", call.head)
-            })?;
+        _plugin : &NutorchPlugin,
+        _engine : &nu_plugin::EngineInterface,
+        call    : &nu_plugin::EvaluatedCall,
+        input   : PipelineData,
+    ) -> Result<PipelineData, LabeledError>
+    {
+        // ---------- collect the two tensor IDs --------------------------------
+        let mut ids: Vec<String> = Vec::new();
 
-        // Get tensor2 ID from second required argument
-        let tensor2_id = call
-            .nth(1)
-            .unwrap()
-            .as_str()
-            .map(|s| s.to_string())
-            .map_err(|_| {
-                LabeledError::new("Invalid input")
-                    .with_label("Unable to parse tensor2 ID", call.head)
-            })?;
+        // from pipeline
+        match input {
+            PipelineData::Empty => {}
+            PipelineData::Value(v, _) => {
+                // list of ids?
+                if let Ok(list) = v.as_list() {
+                    for itm in list {
+                        ids.push(itm.as_str().map(|s| s.to_string()).map_err(|_|{
+                            LabeledError::new("Invalid input")
+                                .with_label("List elements must be tensor IDs (string)", call.head)
+                        })?);
+                    }
+                } else {
+                    // single id
+                    ids.push(v.as_str().map(|s| s.to_string()).map_err(|_|{
+                        LabeledError::new("Invalid input")
+                            .with_label("Pipeline input must be tensor ID string or list of strings", call.head)
+                    })?);
+                }
+            }
+            _ => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Empty or Value inputs are supported", call.head));
+            }
+        }
 
-        // Look up tensors in registry
-        let mut registry = TENSOR_REGISTRY.lock().unwrap();
-        let tensor1 = registry
-            .get(&tensor1_id)
-            .ok_or_else(|| {
-                LabeledError::new("Tensor not found").with_label("Invalid tensor1 ID", call.head)
-            })?
-            .shallow_clone();
-        let tensor2 = registry
-            .get(&tensor2_id)
-            .ok_or_else(|| {
-                LabeledError::new("Tensor not found").with_label("Invalid tensor2 ID", call.head)
-            })?
-            .shallow_clone();
+        // from positional arguments (up to 2)
+        for i in 0..2 {
+            if let Some(arg) = call.nth(i) {
+                ids.push(arg.as_str().map(|s| s.to_string()).map_err(|_|{
+                    LabeledError::new("Invalid input")
+                        .with_label("Tensor IDs must be strings", call.head)
+                })?);
+            }
+        }
 
-        // Perform element-wise maximum using tch-rs, relying on broadcasting
-        let result_tensor = tensor1.maximum(&tensor2);
+        // --- must have exactly 2 ids ------------------------------------------
+        if ids.len() != 2 {
+            return Err(
+                LabeledError::new("Invalid input count")
+                    .with_label("Provide exactly two tensor IDs (via pipeline, arguments, or both)", call.head)
+            );
+        }
 
-        // Store result in registry with new ID
+        let (id1, id2) = (ids.remove(0), ids.remove(0));
+
+        // ---------- fetch tensors ---------------------------------------------
+        let mut reg = TENSOR_REGISTRY.lock().unwrap();
+        let t1 = reg.get(&id1).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid first tensor ID", call.head)
+        })?.shallow_clone();
+
+        let t2 = reg.get(&id2).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid second tensor ID", call.head)
+        })?.shallow_clone();
+
+        // ---------- compute ----------------------------------------------------
+        let result_tensor = t1.maximum(&t2);
+
+        // ---------- store & return --------------------------------------------
         let new_id = Uuid::new_v4().to_string();
-        registry.insert(new_id.clone(), result_tensor);
-        // Return new ID wrapped in PipelineData
+        reg.insert(new_id.clone(), result_tensor);
         Ok(PipelineData::Value(Value::string(new_id, call.head), None))
     }
 }
