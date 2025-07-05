@@ -50,6 +50,15 @@ def plot_raw_data(X: torch.Tensor, y: torch.Tensor) -> None:
     plt.show()
 
 
+def primitive_cross_entropy_loss(
+    outputs: torch.Tensor, targets: torch.Tensor
+) -> torch.Tensor:
+    """Cross-entropy implemented with log-softmax."""
+    logp = torch.log_softmax(outputs, dim=1)
+    loss = -logp[range(outputs.size(0)), targets].mean()
+    return loss
+
+
 Model = Dict[str, torch.Tensor]  # alias for readability
 
 
@@ -85,15 +94,6 @@ def model_forward_pass(model: Model, x: torch.Tensor) -> torch.Tensor:
     x = torch.max(torch.tensor(0.0), x)  # ReLU
     x = torch.mm(x, model["w2"].t()) + model["b2"]  # Linear
     return x
-
-
-def primitive_cross_entropy_loss(
-    outputs: torch.Tensor, targets: torch.Tensor
-) -> torch.Tensor:
-    """Cross-entropy implemented with log-softmax."""
-    logp = torch.log_softmax(outputs, dim=1)
-    loss = -logp[range(outputs.size(0)), targets].mean()
-    return loss
 
 
 def model_train(
