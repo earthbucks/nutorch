@@ -7459,3 +7459,217 @@ argument. but not both, of course.
 
 can you write this method? the rust method should be called `CommandNeg` and
 corresponds to the `torch neg` command in nushell.
+
+# === ASSISTANT ===
+
+```rust
+// torch neg  ---------------------------------------------------------------
+// Negate a tensor (element-wise) :  y = -x
+// Accept the tensor ID either from the pipeline or as a single argument.
+// -------------------------------------------------------------------------
+struct CommandNeg;
+
+impl PluginCommand for CommandNeg {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "torch neg"
+    }
+
+    fn description(&self) -> &str {
+        "Return the element-wise negative of a tensor (like –tensor in PyTorch)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch neg")
+            .input_output_types(vec![(Type::String, Type::String),        // pipeline-in
+                                     (Type::Nothing, Type::String)])      // arg-in
+            .optional(
+                "tensor_id",
+                SyntaxShape::String,
+                "ID of the tensor to negate (if not provided via pipeline)",
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Negate a tensor supplied by pipeline",
+                example: "let t = (torch full [2,3] 1); $t | torch neg | torch value",
+                result: None,
+            },
+            Example {
+                description: "Negate a tensor supplied as argument",
+                example: "let t = (torch full [2,3] 1); torch neg $t | torch value",
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // -------- figure out where the tensor ID comes from ----------------
+        let piped = match input {
+            PipelineData::Empty         => None,
+            PipelineData::Value(v, _span) => Some(v),
+            _ => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Empty or single Value inputs are supported", call.head))
+            }
+        };
+        let arg0 = call.nth(0);
+
+        let tensor_id = match (piped, arg0) {
+            (Some(_), Some(_)) =>
+                return Err(LabeledError::new("Conflicting input")
+                    .with_label("Provide tensor ID either via pipeline OR argument, not both", call.head)),
+            (None, None)      =>
+                return Err(LabeledError::new("Missing input")
+                    .with_label("Tensor ID must be supplied via pipeline or argument", call.head)),
+            (Some(v), None)   =>
+                v.as_str().map(|s| s.to_string()).map_err(|_|{
+                    LabeledError::new("Invalid input")
+                        .with_label("Pipeline input must be a tensor ID (string)", call.head)
+                })?,
+            (None, Some(a))   =>
+                a.as_str().map(|s| s.to_string()).map_err(|_|{
+                    LabeledError::new("Invalid input")
+                        .with_label("Argument must be a tensor ID (string)", call.head)
+                })?,
+        };
+
+        // -------- fetch tensor from registry -------------------------------
+        let mut reg = TENSOR_REGISTRY.lock().unwrap();
+        let tensor = reg.get(&tensor_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found")
+                .with_label("Invalid tensor ID", call.head)
+        })?.shallow_clone();
+
+        // -------- perform negation -----------------------------------------
+        let result_tensor = -tensor;      // std::ops::Neg is implemented for tch::Tensor
+
+        // -------- store & return -------------------------------------------
+        let new_id = Uuid::new_v4().to_string();
+        reg.insert(new_id.clone(), result_tensor);
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```
+
+# === USER ===
+
+next, we need to update the log_softmax command. there is an oversight in our implement. in our implementation, we require the tensor as input. however, we should be nushelly about this and allow the tensor in two places: either as pipeline input OR as a single arguement (but not both, of course), similar to other methods we have written recently.
+
+can you updaet this method to allow the tensor to be provided either as pipeline input or as a single argument?
+
+```rust
+struct CommandLogSoftmax;
+
+impl PluginCommand for CommandLogSoftmax {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "torch log_softmax"
+    }
+
+    fn description(&self) -> &str {
+        "Compute the log-softmax of a tensor along a specified dimension (similar to torch.log_softmax)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch log_softmax")
+            .input_output_types(vec![(Type::String, Type::String)])
+            .named(
+                "dim",
+                SyntaxShape::Int,
+                "Dimension along which to compute log-softmax (default: last dimension)",
+                None,
+            )
+            .named(
+                "dtype",
+                SyntaxShape::String,
+                "Data type of the output tensor (default: inherits input dtype)",
+                None,
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Compute log-softmax over the last dimension of a tensor",
+                example: "let t1 = (torch linspace 0 5 6 | torch repeat 2 1); $t1 | torch log_softmax | torch value",
+                result: None,
+            },
+            Example {
+                description: "Compute log-softmax along a specific dimension",
+                example: "let t1 = (torch linspace 0 5 6 | torch repeat 2 1); $t1 | torch log_softmax --dim 1 | torch value",
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Get tensor ID from input (pipeline)
+        let input_value = input.into_value(call.head)?;
+        let tensor_id = input_value.as_str().map(|s| s.to_string()).map_err(|_| {
+            LabeledError::new("Invalid input")
+                .with_label("Unable to parse tensor ID from input", call.head)
+        })?;
+
+        // Look up tensor in registry
+        let mut registry = TENSOR_REGISTRY.lock().unwrap();
+        let tensor = registry
+            .get(&tensor_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
+            })?
+            .shallow_clone();
+
+        // Handle optional dtype argument using convenience method if provided
+        let kind = get_kind_from_call(call)?;
+
+        // Handle optional dim argument (default to last dimension)
+        let dim: i64 = match call.get_flag::<i64>("dim")? {
+            Some(d) => {
+                let num_dims = tensor.size().len() as i64;
+                if d < 0 || d >= num_dims {
+                    return Err(LabeledError::new("Invalid dimension").with_label(
+                        format!(
+                            "Dimension {} out of bounds for tensor with {} dimensions",
+                            d, num_dims
+                        ),
+                        call.head,
+                    ));
+                }
+                d
+            }
+            None => {
+                // Default to last dimension
+                (tensor.size().len() as i64) - 1
+            }
+        };
+
+        // Compute log-softmax using tch-rs
+        let result_tensor = tensor.log_softmax(dim, kind);
+
+        // Store result in registry with new ID
+        let new_id = Uuid::new_v4().to_string();
+        registry.insert(new_id.clone(), result_tensor);
+        // Return new ID wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```

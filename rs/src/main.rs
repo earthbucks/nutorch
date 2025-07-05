@@ -1667,7 +1667,16 @@ impl PluginCommand for CommandLogSoftmax {
 
     fn signature(&self) -> Signature {
         Signature::build("torch log_softmax")
-            .input_output_types(vec![(Type::String, Type::String)])
+            // tensor id may come from pipeline or from a single argument
+            .input_output_types(vec![
+                (Type::String,  Type::String),   // pipeline-in
+                (Type::Nothing, Type::String)    // arg-in
+            ])
+            .optional(
+                "tensor_id",
+                SyntaxShape::String,
+                "ID of the tensor (if not supplied by pipeline)",
+            )
             .named(
                 "dim",
                 SyntaxShape::Int,
@@ -1686,15 +1695,15 @@ impl PluginCommand for CommandLogSoftmax {
     fn examples(&self) -> Vec<Example> {
         vec![
             Example {
-                description: "Compute log-softmax over the last dimension of a tensor",
-                example: "let t1 = (torch linspace 0 5 6 | torch repeat 2 1); $t1 | torch log_softmax | torch value",
+                description: "Compute log-softmax over the last dimension (pipeline input)",
+                example: "let t = (torch linspace 0 5 6 | torch repeat 2 1); $t | torch log_softmax | torch value",
                 result: None,
             },
             Example {
-                description: "Compute log-softmax along a specific dimension",
-                example: "let t1 = (torch linspace 0 5 6 | torch repeat 2 1); $t1 | torch log_softmax --dim 1 | torch value",
+                description: "Compute log-softmax along dim 1 (argument input)",
+                example: "let t = (torch linspace 0 5 6 | torch repeat 2 1); torch log_softmax $t --dim 1 | torch value",
                 result: None,
-            }
+            },
         ]
     }
 
@@ -1705,53 +1714,68 @@ impl PluginCommand for CommandLogSoftmax {
         call: &nu_plugin::EvaluatedCall,
         input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
-        // Get tensor ID from input (pipeline)
-        let input_value = input.into_value(call.head)?;
-        let tensor_id = input_value.as_str().map(|s| s.to_string()).map_err(|_| {
-            LabeledError::new("Invalid input")
-                .with_label("Unable to parse tensor ID from input", call.head)
-        })?;
+        // -------------------------------------------------------------
+        // Fetch tensor id: either from pipeline or from first argument
+        // -------------------------------------------------------------
+        let piped = match input {
+            PipelineData::Empty        => None,
+            PipelineData::Value(v, _)  => Some(v),
+            _ => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Empty or single Value inputs are supported", call.head))
+            }
+        };
+        let arg0 = call.nth(0);
 
-        // Look up tensor in registry
+        let tensor_id = match (piped, arg0) {
+            (Some(_), Some(_)) =>
+                return Err(LabeledError::new("Conflicting input")
+                    .with_label("Provide tensor ID via pipeline OR argument, not both", call.head)),
+            (None, None)      =>
+                return Err(LabeledError::new("Missing input")
+                    .with_label("Tensor ID must be supplied via pipeline or argument", call.head)),
+            (Some(v), None) =>
+                v.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input")
+                        .with_label("Pipeline input must be a tensor ID (string)", call.head)
+                })?,
+            (None, Some(a)) =>
+                a.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input")
+                        .with_label("Argument must be a tensor ID (string)", call.head)
+                })?,
+        };
+
+        // -------------------- fetch tensor ---------------------------
         let mut registry = TENSOR_REGISTRY.lock().unwrap();
-        let tensor = registry
-            .get(&tensor_id)
-            .ok_or_else(|| {
-                LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
-            })?
-            .shallow_clone();
+        let tensor = registry.get(&tensor_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
+        })?.shallow_clone();
 
-        // Handle optional dtype argument using convenience method if provided
+        // -------------------- dtype flag -----------------------------
         let kind = get_kind_from_call(call)?;
 
-        // Handle optional dim argument (default to last dimension)
-        let dim: i64 = match call.get_flag::<i64>("dim")? {
+        // -------------------- dim flag -------------------------------
+        let dim = match call.get_flag::<i64>("dim")? {
             Some(d) => {
-                let num_dims = tensor.size().len() as i64;
-                if d < 0 || d >= num_dims {
-                    return Err(LabeledError::new("Invalid dimension").with_label(
-                        format!(
-                            "Dimension {} out of bounds for tensor with {} dimensions",
-                            d, num_dims
-                        ),
-                        call.head,
-                    ));
+                let n = tensor.size().len() as i64;
+                if d < 0 || d >= n {
+                    return Err(
+                        LabeledError::new("Invalid dimension")
+                            .with_label(format!("Dimension {d} out of bounds for tensor with {n} dimensions"), call.head)
+                    );
                 }
                 d
             }
-            None => {
-                // Default to last dimension
-                (tensor.size().len() as i64) - 1
-            }
+            None => (tensor.size().len() as i64) - 1,
         };
 
-        // Compute log-softmax using tch-rs
+        // ------------------- compute --------------------------------
         let result_tensor = tensor.log_softmax(dim, kind);
 
-        // Store result in registry with new ID
+        // ------------------- store & return --------------------------
         let new_id = Uuid::new_v4().to_string();
         registry.insert(new_id.clone(), result_tensor);
-        // Return new ID wrapped in PipelineData
         Ok(PipelineData::Value(Value::string(new_id, call.head), None))
     }
 }
