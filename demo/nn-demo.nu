@@ -94,5 +94,15 @@ def model_get_parameters [
   ]
 }
 
+def model_forward_pass [
+  --model: record<w1: string, b1: string, w2: string, b2: string>
+  --input: string # tensor id of input features
+]: [nothing -> string] {
+
+  mut output = torch mm $input $model.w1 | torch add $model.b1
+  $output = torch maximum ([0.0] | torch tensor) $output # ReLU activation
+  $output
+}
+
 let res = (generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3)
 plot_raw_data $res
