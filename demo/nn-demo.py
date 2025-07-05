@@ -77,9 +77,12 @@ def cross_entropy_loss(outputs: torch.Tensor, targets: torch.Tensor) -> torch.Te
     # gather() receives an index tensor shaped like logp, so we first add
     # a dummy dimension to `targets` to make it [N, 1]; gather then returns
     # logp[i, targets[i]] for every i.  squeeze(1) removes that dummy dim.
-    chosen = torch.gather(logp, dim=1, index=targets.unsqueeze(1)).squeeze(1)
-    # Negative log-likelihood, averaged over the batch
-    loss = -chosen.mean()  # mean over batch
+    # chosen = torch.gather(logp, dim=1, index=targets.unsqueeze(1)).squeeze(1)
+    # # Negative log-likelihood, averaged over the batch
+    # loss = -chosen.mean()  # mean over batch
+
+    # loss calculution method 4
+    loss = torch.gather(logp, dim=1, index=targets.unsqueeze(1)).squeeze(1).mean().neg()
 
     return loss
 
