@@ -6007,3 +6007,41 @@ def cross_entropy_loss(outputs: torch.Tensor, targets: torch.Tensor) -> torch.Te
 ```
 
 # === USER ===
+
+i find the squeeze/unsqueeze approach to be difficult to understand. howeer, i have verified that all three methods do work. now, because we are wrapping tch-rs, i wonder, does tch-rs expose the python slicing functionality somehow? what method name does it use for that? if so, we can copy that method name and use the slicing approach, or rather the indexing approach, instead of the confusing squeeze/unsqueeze.
+
+# === ASSISTANT ===
+
+In LibTorch / `tch-rs` there is **no direct counterpart to Python’s
+“advanced-index” sugar** (`logp[rows, cols]`).  
+The `Tensor` struct exposes:
+
+• `select(dim, index)` – pick a single slice along one dimension  
+• `index_select(dim, index_tensor)` – pick *several* slices along **one**
+  dimension  
+• `narrow`, `slice`, `i()` – classic range slicing  
+• `gather(dim, index_tensor)` – fetch element-wise values according to an
+  index tensor
+
+None of these allows the two-tensor *row-and-column* lookup that
+`logp[range(N), targets]` performs in one shot.  
+The canonical LibTorch way (and what `cross_entropy` does internally) is exactly
+what you wrote as “method 3”:
+
+```rust
+let batch_idx = Tensor::arange(N, (Kind::Int64, Device::Cpu));  // rows
+let chosen    = logp.gather(1, targets.unsqueeze(1), false);    // cols
+let loss      = -chosen.squeeze_dim(1).mean(Kind::Float);
+```
+
+So, when wrapping with `tch-rs`, the **least-code / most-idiomatic** route is to
+keep the `gather + unsqueeze/squeeze` sequence; there is no hidden
+`fancy_indexing()` or `__getitem__` equivalent you can call instead.
+
+(If you really dislike the `unsqueeze/squeeze` pair you can
+`gather(...).mean_dim(Some(Kind::Float), &[1], false)` etc., but using `gather`
+remains unavoidable.)
+
+# === USER ===
+
+
