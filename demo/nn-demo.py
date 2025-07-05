@@ -53,12 +53,19 @@ def plot_raw_data(X: torch.Tensor, y: torch.Tensor) -> None:
 Model = Dict[str, torch.Tensor]  # alias for readability
 
 
-def init_model(
+def model_init(
     input_size: int = 2,
     hidden_size: int = 20,
     output_size: int = 3,
 ) -> Model:
-    """Return a dict holding all trainable tensors."""
+    """Return a dict holding all trainable tensors.
+
+    Our model is a simple two-layer neural network with ReLU activation. The
+    purpose of this is to demonstrate a simple neural network that can
+    accurately classify the generated data. A single hidden layer is sufficient
+    for this task. If we had used only one layer, we would not be able to
+    separate the classes correctly, as they are not linearly separable.
+    """
     return {
         "w1": torch.randn(hidden_size, input_size, requires_grad=True),
         "b1": torch.randn(hidden_size, requires_grad=True),
@@ -67,12 +74,12 @@ def init_model(
     }
 
 
-def get_parameters(model: Model) -> List[torch.Tensor]:
+def model_get_parameters(model: Model) -> List[torch.Tensor]:
     """Convenience accessor for optimiser."""
     return [model["w1"], model["b1"], model["w2"], model["b2"]]
 
 
-def forward_pass(model: Model, x: torch.Tensor) -> torch.Tensor:
+def model_forward_pass(model: Model, x: torch.Tensor) -> torch.Tensor:
     """Forward pass producing raw logits."""
     x = torch.mm(x, model["w1"].t()) + model["b1"]  # Linear
     x = torch.max(torch.tensor(0.0), x)  # ReLU
@@ -89,7 +96,7 @@ def primitive_cross_entropy_loss(
     return loss
 
 
-def train_model(
+def model_train(
     model: Model,
     X: torch.Tensor,
     y: torch.Tensor,
@@ -98,11 +105,11 @@ def train_model(
     record_interval: int = 100,
 ) -> Tuple[List[float], List[int]]:
     """SGD training loop."""
-    optim = torch.optim.SGD(get_parameters(model), lr=lr)
+    optim = torch.optim.SGD(model_get_parameters(model), lr=lr)
     losses, steps = [], []
 
     for epoch in range(epochs):
-        out = forward_pass(model, X)
+        out = model_forward_pass(model, X)
         loss = primitive_cross_entropy_loss(out, y)
 
         optim.zero_grad()
@@ -128,7 +135,7 @@ def plot_results(X: torch.Tensor, y: torch.Tensor, model: Model) -> None:
     mesh = torch.stack([xx.flatten(), yy.flatten()], dim=1)
 
     with torch.no_grad():
-        logits = forward_pass(model, mesh)
+        logits = model_forward_pass(model, mesh)
         _, Z = torch.max(logits, dim=1)
         Z = Z.reshape(xx.shape)
 
@@ -145,12 +152,12 @@ if __name__ == "__main__":
     X, y = generate_data()
     plot_raw_data(X, y)
 
-    model = init_model()
+    model = model_init()
     print("Initial parameters require_grad status:")
-    for i, p in enumerate(get_parameters(model)):
+    for i, p in enumerate(model_get_parameters(model)):
         print(f"  Param {i}: shape {tuple(p.shape)}, requires_grad={p.requires_grad}")
 
-    losses, steps = train_model(model, X, y, epochs=3000, lr=0.1, record_interval=100)
+    losses, steps = model_train(model, X, y, epochs=3000, lr=0.1, record_interval=100)
     plt.plot(steps, losses)
     plt.title("Training Loss")
     plt.xlabel("Epoch")
