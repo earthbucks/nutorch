@@ -51,7 +51,17 @@ def plot_raw_data(X: torch.Tensor, y: torch.Tensor) -> None:
 
 
 def cross_entropy_loss(outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-    """Cross-entropy implemented with log-softmax."""
+    """Cross-entropy using an explicit log-softmax + negative-log-likelihood step.
+
+    outputs : raw logits of shape [N, C]
+    targets : integer class labels of shape [N]
+    ------------------------------------------------------------------
+    Algorithm:
+      1. Convert logits to log-probabilities with log_softmax.
+      2. For every sample i pick the log-probability that corresponds
+         to its true class  targets[i].          ⟶  log p_i
+      3. Negate and average those values to get the mean NLL loss.
+    """
     logp = torch.log_softmax(outputs, dim=1)
 
     # loss calculation method 1
@@ -63,7 +73,12 @@ def cross_entropy_loss(outputs: torch.Tensor, targets: torch.Tensor) -> torch.Te
     # loss = -chosen.mean()  # mean over batch
 
     # loss calculation method 3
+    # -- pick the correct log-probability for each sample ------------------
+    # gather() receives an index tensor shaped like logp, so we first add
+    # a dummy dimension to `targets` to make it [N, 1]; gather then returns
+    # logp[i, targets[i]] for every i.  squeeze(1) removes that dummy dim.
     chosen = torch.gather(logp, dim=1, index=targets.unsqueeze(1)).squeeze(1)
+    # Negative log-likelihood, averaged over the batch
     loss = -chosen.mean()  # mean over batch
 
     return loss

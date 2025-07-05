@@ -5362,11 +5362,15 @@ those values rather than on hidden `self` data.
 
 # === USER ===
 
-ok, in that case, i believe it will be simpler to change the python code to not uses clases. in my python neural network example, the class is not really being used at all. we have no inheritance, and the methods are simple. i believe the code can be simplified in the following manner:
+ok, in that case, i believe it will be simpler to change the python code to not
+uses clases. in my python neural network example, the class is not really being
+used at all. we have no inheritance, and the methods are simple. i believe the
+code can be simplified in the following manner:
 
 1. remove the class definition for `SimpleNN`
 2. instead, have a data structure that contains weights and biases
-3. the forward pass of the neural network can just be a function that takes the W&B data structure
+3. the forward pass of the neural network can just be a function that takes the
+   W&B data structure
 4. we will also need a function that initializes the W&B data structure
 
 can you please make that change to this python code?
@@ -5833,7 +5837,8 @@ if __name__ == "__main__":
 
 # === USER ===
 
-ok, the next method i'm going to need to translate to nushell/nutorch is the cross_entropy_loss function.
+ok, the next method i'm going to need to translate to nushell/nutorch is the
+cross_entropy_loss function.
 
 ```python
 def cross_entropy_loss(
@@ -5845,7 +5850,10 @@ def cross_entropy_loss(
     return loss
 ```
 
-this function does a couple of things. first of all, it uses the `log_softmax` function. i have already implemented that. however, the next thing it does is some sort of slice. i'm not really sure what this syntax is going, because it is not clear based on the use of brackets.
+this function does a couple of things. first of all, it uses the `log_softmax`
+function. i have already implemented that. however, the next thing it does is
+some sort of slice. i'm not really sure what this syntax is going, because it is
+not clear based on the use of brackets.
 
 i'm talking about this here:
 
@@ -5853,7 +5861,9 @@ i'm talking about this here:
 logp[range(outputs.size(0)), targets]
 ```
 
-my best guess is this is some sort of slice, but i don't know the api. note that `logp` is a tensor, the `range(..)` is unclear (LSP does not give us the type), and `targets` is another tensor. in pytorch what does this bracket syntax mean?
+my best guess is this is some sort of slice, but i don't know the api. note that
+`logp` is a tensor, the `range(..)` is unclear (LSP does not give us the type),
+and `targets` is another tensor. in pytorch what does this bracket syntax mean?
 
 # === ASSISTANT ===
 
@@ -5863,14 +5873,14 @@ In PyTorch, the bracket expression
 logp[range(outputs.size(0)), targets]
 ```
 
-is an example of **advanced (aka “fancy”) indexing**.  It simultaneously
-specifies an index for the first dimension (rows) *and* an index for the second
+is an example of **advanced (aka “fancy”) indexing**. It simultaneously
+specifies an index for the first dimension (rows) _and_ an index for the second
 dimension (columns):
 
-• `range(outputs.size(0))` → a Python `range` object `[0, 1, 2, …, N-1]`
-   (one index for every sample in the batch).  
+• `range(outputs.size(0))` → a Python `range` object `[0, 1, 2, …, N-1]` (one
+index for every sample in the batch).\
 • `targets` → a 1-D tensor of length `N` whose `i`-th entry is the class label
-   (column index) for sample `i`.
+(column index) for sample `i`.
 
 When you pass two 1-D index objects like that, PyTorch pairs them element-wise,
 so the result is
@@ -5883,7 +5893,7 @@ tensor([ logp[0, targets[0]],
 ```
 
 – i.e. it picks, for each row, **the log-probability that corresponds to that
-row’s true class**.  The returned tensor has shape `[N]`.
+row’s true class**. The returned tensor has shape `[N]`.
 
 Internally this is equivalent to
 
@@ -5896,12 +5906,104 @@ selected_logp = torch.gather(logp, 1, targets.unsqueeze(1)).squeeze(1)
 
 So:
 
-1. `range(outputs.size(0))` supplies the row numbers 0…N-1.  
-2. `targets` supplies one column number per row.  
+1. `range(outputs.size(0))` supplies the row numbers 0…N-1.
+2. `targets` supplies one column number per row.
 3. Advanced indexing returns the 1-D tensor of those `N` selected elements.
 
 That’s why the subsequent line takes `.mean()` to produce a single scalar loss.
 
 # === USER ===
 
-i'd like to keep the nushell code as close to the python code as possible, however, to the best of my knowledge, nushell provides no way to overload the indexing operator in the same matter as python. therefore we need to know the exact name of the torch method that is being called by the indexing operator. do you understand what i'm asking? does `logp[n, m]` correspond to `logp.fancy_indexing(n, m)` or something like that? if so, what is the exact name of the method?
+i'd like to keep the nushell code as close to the python code as possible,
+however, to the best of my knowledge, nushell provides no way to overload the
+indexing operator in the same matter as python. therefore we need to know the
+exact name of the torch method that is being called by the indexing operator. do
+you understand what i'm asking? does `logp[n, m]` correspond to
+`logp.fancy_indexing(n, m)` or something like that? if so, what is the exact
+name of the method?
+
+# === ASSISTANT ===
+
+Yes, the square-bracket syntax is only syntactic sugar.\
+Behind the scenes PyTorch calls the tensor’s magic method `Tensor.__getitem__`,
+which recognises that you supplied two **index tensors** and therefore performs
+“advanced indexing”.
+
+The functional (non-sugar) equivalent is
+
+```python
+batch_idx = torch.arange(outputs.size(0))           # shape [N]
+chosen    = logp[batch_idx, targets]                # sugar
+# same as
+chosen    = torch.gather(logp, dim=1,
+                         index=targets.unsqueeze(1)).squeeze(1)
+```
+
+So, for code you want to translate literally (e.g. into Nushell where you don’t
+have `[]` overloading) you should use
+
+```python
+torch.gather(input, dim, index)
+```
+
+• `input` → `logp`\
+• `dim` → `1` (class dimension)\
+• `index` → `targets` first expanded to shape `[N,1]`
+
+After the `gather` you `squeeze` the singleton dimension and take the mean, just
+like the original code.
+
+# === USER ===
+
+what is the code doing conceptually? can you add an enlightening comment?
+
+```python
+def cross_entropy_loss(outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    """Cross-entropy implemented with log-softmax."""
+    logp = torch.log_softmax(outputs, dim=1)
+
+    # loss calculation method 1
+    # loss = -logp[range(outputs.size(0)), targets].mean()
+
+    # loss calculation method 2
+    # batch_idx = torch.arange(outputs.size(0))  # shape [N]
+    # chosen = logp[batch_idx, targets]  # sugar
+    # loss = -chosen.mean()  # mean over batch
+
+    # loss calculation method 3
+    chosen = torch.gather(logp, dim=1, index=targets.unsqueeze(1)).squeeze(1)
+    loss = -chosen.mean()  # mean over batch
+
+    return loss
+```
+
+# === ASSISTANT ===
+
+```python
+def cross_entropy_loss(outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    """Cross-entropy using an explicit log-softmax + negative-log-likelihood step.
+
+    outputs : raw logits of shape [N, C]
+    targets : integer class labels of shape [N]
+    ------------------------------------------------------------------
+    Algorithm:
+      1. Convert logits to log-probabilities with log_softmax.
+      2. For every sample i pick the log-probability that corresponds
+         to its true class  targets[i].          ⟶  log p_i
+      3. Negate and average those values to get the mean NLL loss.
+    """
+
+    logp = torch.log_softmax(outputs, dim=1)        # shape [N, C]
+
+    # -- pick the correct log-probability for each sample ------------------
+    # gather() receives an index tensor shaped like logp, so we first add
+    # a dummy dimension to `targets` to make it [N, 1]; gather then returns
+    # logp[i, targets[i]] for every i.  squeeze(1) removes that dummy dim.
+    chosen = torch.gather(logp, dim=1, index=targets.unsqueeze(1)).squeeze(1)
+
+    # Negative log-likelihood, averaged over the batch
+    loss = -chosen.mean()
+    return loss
+```
+
+# === USER ===
