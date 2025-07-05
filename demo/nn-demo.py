@@ -54,16 +54,17 @@ def cross_entropy_loss(outputs: torch.Tensor, targets: torch.Tensor) -> torch.Te
     """Cross-entropy implemented with log-softmax."""
     logp = torch.log_softmax(outputs, dim=1)
 
-    # alt method 2
-    chosen = torch.gather(logp, dim=1, index=targets.unsqueeze(1)).squeeze(1)
-    loss = -chosen.mean()  # mean over batch
+    # loss calculation method 1
+    # loss = -logp[range(outputs.size(0)), targets].mean()
 
-    # alt method 1
+    # loss calculation method 2
     # batch_idx = torch.arange(outputs.size(0))  # shape [N]
     # chosen = logp[batch_idx, targets]  # sugar
     # loss = -chosen.mean()  # mean over batch
 
-    # loss = -logp[range(outputs.size(0)), targets].mean()
+    # loss calculation method 3
+    chosen = torch.gather(logp, dim=1, index=targets.unsqueeze(1)).squeeze(1)
+    loss = -chosen.mean()  # mean over batch
 
     return loss
 
