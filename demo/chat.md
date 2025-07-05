@@ -6044,4 +6044,119 @@ remains unavoidable.)
 
 # === USER ===
 
+can you please explain why squeeze/unsqueeze is needed again and why we can't just use .gather?
+
+# === ASSISTANT ===
+
+`gather` itself does the element pick-up, but it has a very strict shape rule:
+
+Tensor::gather(dim, index)  
+• `index` must have **the same rank as the source tensor**.  
+• For every dimension *d* it must hold  
+  `index.size(d) == source.size(d)`   except for the dimension you are
+  gathering over (`dim`), where it is the size of the output.
+
+In our case  
+
+```
+logp            : shape [N, C]      (N rows, C classes)
+targets         : shape [N]         (one class id per row)
+```
+
+What we want is one element per row ⇒ an output of shape `[N]` (or `[N,1]`).
+
+But `targets` is **rank-1**, while `logp` is **rank-2**, so it violates the
+“same rank” rule.  
+We first have to *lift* `targets` to rank-2 by adding a dummy second dimension:
+
+```
+targets.unsqueeze(1)      # shape [N, 1]
+```
+
+Now the tensor fed to `gather` has rank 2, and its sizes match
+`logp` in every dimension except dim = 1 (class dimension), exactly what
+`gather` expects:
+
+```python
+chosen = logp.gather(dim=1, index=targets.unsqueeze(1))  # shape [N, 1]
+```
+
+After the gather we are left with a singleton dimension of length 1 that we
+don’t care about; `squeeze(1)` (or `squeeze(-1)`) removes it:
+
+```python
+loss_vec = chosen.squeeze(1)   # shape [N]
+```
+
+So:
+
+1. **unsqueeze(1)** – makes `targets` compatible with `gather`.
+2. **gather** – picks `logp[i, targets[i]]` for every `i`.
+3. **squeeze(1)** – collapses the leftover length-1 dimension.
+
+Without the `unsqueeze`, `gather` will raise a size/rank mismatch error;  
+without the `squeeze`, you’d carry an unnecessary `[N,1]` tensor into the
+subsequent `.mean()`.
+
+# === USER ===
+
+what does 'gather' actually do?
+
+# === ASSISTANT ===
+
+`gather` = element-wise look-up.
+
+Signature (PyTorch / LibTorch / `tch-rs`)  
+```python
+out = torch.gather(input, dim, index)        # same in C++/Rust bindings
+```
+
+What happens 
+
+1. `input` is any N-D tensor.  
+2. `dim` is the axis along which you want to pick values.  
+3. `index` is an integer tensor **of the same rank as `input`**.  
+   • For every axis **except** `dim`, `index.size(d) == input.size(d)`.  
+   • Along `dim` its values are integers in `[0, input.size(dim)-1]`.
+
+For every position `pos` in `index`, `gather` copies
+
+```
+out[pos] = input[ pos[0], pos[1], …, index[pos], …, pos[-1] ]
+                       ↑ along `dim`
+```
+
+The output tensor’s shape is exactly `index.shape`.
+
+Simple 2-D example
+------------------
+```python
+input = tensor([[10, 11, 12],
+                [20, 21, 22]])
+# pick column 2 for row 0 and column 0 for row 1
+index = tensor([[2],
+                [0]])
+
+out = input.gather(1, index)   # dim = 1 (columns)
+# out ➜ tensor([[12],
+#               [20]])
+```
+
+Batch cross-entropy use case
+----------------------------
+```python
+logp   # shape [N, C]
+targets      # shape [N] contains class id for each row
+
+chosen = logp.gather(1, targets.unsqueeze(1))   # index shape [N,1]
+# chosen[i,0] == logp[i, targets[i]]
+loss = -(chosen.squeeze(1)).mean()
+```
+
+Thus **`gather` returns a new tensor whose entries are taken from `input`
+according to `index`, along a single dimension.** It’s the inverse of
+`scatter`, which writes values to positions given by an index tensor.
+
+# === USER ===
+
 
