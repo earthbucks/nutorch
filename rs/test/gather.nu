@@ -17,8 +17,8 @@ let idx  = ([[2 1 0]   [0 0 2]]     | torch tensor --dtype int64)
 $src | torch gather 1 $idx | torch value
 # → [[12, 11, 10], [20, 20, 22]]
 
-# # Gather rows along dim 0
-# let src2 = ([[1 2] [3 4]] | torch tensor)
-# let idx2 = ([0 0 1]       | torch tensor --dtype int64)
-# print ($src2 | torch gather 0 $idx2 | torch value)
-# # → [[1, 2], [1, 2], [3, 4]]
+# Gather rows along dim 0
+let src2 = ([[1 2] [3 4]] | torch tensor)
+let idx2 = ([0 0 1]       | torch tensor --dtype int64)
+print ($src2 | torch gather 0 $idx2 | torch value)
+# → [[1, 2], [1, 2], [3, 4]]

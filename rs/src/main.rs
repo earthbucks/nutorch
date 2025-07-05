@@ -2037,42 +2037,38 @@ $src | torch gather 1 $idx | torch value
         input   : PipelineData,
     ) -> Result<PipelineData, LabeledError>
     {
-        // ── source tensor ID must be piped in ────────────────────────────
+        //--------------------------------------------------------------
+        // 1. get tensor-id from pipeline, dim and index-id from args
+        //--------------------------------------------------------------
         let PipelineData::Value(source_id_val, _) = input else {
-            return Err(
-                LabeledError::new("Missing input")
-                    .with_label("Source tensor ID must be supplied via the pipeline", call.head)
-            );
+            return Err(LabeledError::new("Missing input")
+                .with_label("Source tensor ID must be supplied via the pipeline", call.head));
         };
-
-        let source_id = source_id_val
-            .as_str()
+        let source_id = source_id_val.as_str()
             .map(|s| s.to_string())
             .map_err(|_| LabeledError::new("Invalid input")
                 .with_label("Pipeline input must be a tensor ID (string)", call.head))?;
 
-        // ── parse positional arguments: dim and index tensor ID ──────────
-        let dim_val = call.nth(0).ok_or_else(|| {
+        let dim = call.nth(0).ok_or_else(|| {
             LabeledError::new("Missing dim")
                 .with_label("Dimension argument is required", call.head)
-        })?;
-        let dim = dim_val.as_int().map_err(|_| {
+        })?.as_int().map_err(|_| {
             LabeledError::new("Invalid dim")
                 .with_label("Dimension must be an integer", call.head)
         })?;
 
-        let index_id_val = call.nth(1).ok_or_else(|| {
+        let index_id = call.nth(1).ok_or_else(|| {
             LabeledError::new("Missing index tensor")
                 .with_label("Index tensor ID argument is required", call.head)
-        })?;
-        let index_id = index_id_val.as_str().map(|s| s.to_string()).map_err(|_| {
+        })?.as_str().map(|s| s.to_string()).map_err(|_| {
             LabeledError::new("Invalid index tensor ID")
                 .with_label("Must be a string", call.head)
         })?;
 
-        // ── fetch tensors from registry ──────────────────────────────────
+        //--------------------------------------------------------------
+        // 2. fetch tensors
+        //--------------------------------------------------------------
         let mut reg = TENSOR_REGISTRY.lock().unwrap();
-
         let source = reg.get(&source_id).ok_or_else(|| {
             LabeledError::new("Tensor not found").with_label("Invalid source tensor ID", call.head)
         })?.shallow_clone();
@@ -2081,27 +2077,63 @@ $src | torch gather 1 $idx | torch value
             LabeledError::new("Tensor not found").with_label("Invalid index tensor ID", call.head)
         })?.shallow_clone();
 
-        // gather expects int64 indices
+        // ensure int64
         if index.kind() != Kind::Int64 {
             index = index.to_kind(Kind::Int64);
         }
 
-        // check dim bounds
-        let ndims = source.size().len() as i64;
+        //--------------------------------------------------------------
+        // 3. validate shapes & index-range
+        //--------------------------------------------------------------
+        let src_shape  = source.size();
+        let idx_shape  = index.size();
+        let ndims      = src_shape.len() as i64;
+
+        // dim bounds
         if dim < 0 || dim >= ndims {
-            return Err(
-                LabeledError::new("Invalid dimension")
-                    .with_label(format!("Dim {dim} out of bounds for tensor with {ndims} dims"), call.head)
-            );
+            return Err(LabeledError::new("Invalid dimension")
+                .with_label(format!("Dim {dim} out of bounds for tensor with {ndims} dims"), call.head));
         }
 
-        // sparse_grad flag: use the source tensor's sparse-grad property
-        let sparse_grad = source.is_sparse();
+        // same rank
+        if idx_shape.len() != src_shape.len() {
+            return Err(LabeledError::new("Shape mismatch")
+                .with_label(format!(
+                    "Index tensor rank {} differs from source rank {}",
+                    idx_shape.len(), src_shape.len()
+                ), call.head));
+        }
 
-        // ── perform gather ───────────────────────────────────────────────
+        // all dims except 'dim' must match exactly
+        for (d, (&s, &i)) in src_shape.iter().zip(idx_shape.iter()).enumerate() {
+            if d as i64 != dim && s != i {
+                return Err(LabeledError::new("Shape mismatch")
+                    .with_label(format!(
+                        "Size mismatch at dim {d}: source={s}, index={i}", 
+                    ), call.head));
+            }
+        }
+
+        // index values must be in [0, src_shape[dim])
+        let max_idx = index.max().int64_value(&[]);
+        let min_idx = index.min().int64_value(&[]);
+        if min_idx < 0 || max_idx >= src_shape[dim as usize] {
+            return Err(LabeledError::new("Index out of range")
+                .with_label(format!(
+                    "Index values must be between 0 and {} (exclusive); found [{}, {}]",
+                    src_shape[dim as usize] - 1, min_idx, max_idx
+                ), call.head));
+        }
+
+        //--------------------------------------------------------------
+        // 4. gather  (sparse_grad matches source tensor)
+        //--------------------------------------------------------------
+        let sparse_grad = source.is_sparse();
         let result_tensor = source.gather(dim, &index, sparse_grad);
 
-        // ── store & return ───────────────────────────────────────────────
+        //--------------------------------------------------------------
+        // 5. store & return
+        //--------------------------------------------------------------
         let new_id = Uuid::new_v4().to_string();
         reg.insert(new_id.clone(), result_tensor);
         Ok(PipelineData::Value(Value::string(new_id, call.head), None))

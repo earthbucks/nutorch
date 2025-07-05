@@ -8557,4 +8557,4 @@ The command now:
 
 # === USER ===
 
-
+ok, the first test passed. now, there is an issue. we are not checking the dimensions of the two tensors correctly. the two tensors must exactly fully match. in your second example, they do not match! the gather method does not have the property you suppose. it does NOT gather along dim 0. instaed, it crashes! that is beacuse tch-rs is not catching the c++ error from libtorch. it is on us to ensure that the shape of both tensors are exactly the same! can you implement this check?
