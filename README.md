@@ -26,12 +26,13 @@ $env.config.plugin_gc = {
 - [x] torch.full
 - [x] torch.tensor
 - [x] torch.mul
-- [ ] torch.add
+- [x] torch.add
 - [x] torch.sub
 - [x] torch.div
-- [ ] torch.gather
-- [ ] torch.squeeze
-- [ ] torch.unsqueeze
+- [x] torch.neg
+- [x] torch.gather
+- [x] torch.squeeze
+- [x] torch.unsqueeze
 - [ ] torch... everything else
 - [x] add autograd setting to torch.tensor
 - [x] add autograd setting to torch.randn
