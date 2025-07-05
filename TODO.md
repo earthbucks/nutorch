@@ -1,6 +1,5 @@
 # Nutorch
 
-nutorch
 - [x] torch.manual_seed
 - [x] tensor.linspace
 - [x] torch.randn
@@ -11,6 +10,7 @@ nutorch
 - [x] torch.add
 - [x] torch.sub
 - [x] torch.div
+- [ ] torch... everything else
 - [x] add autograd setting to torch.tensor
 - [x] add autograd setting to torch.randn
 - [x] add autograd setting to torch.full
