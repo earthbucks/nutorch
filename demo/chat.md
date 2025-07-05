@@ -4917,38 +4917,40 @@ Thank you for sharing this code snippet. I see that you're working with
 `termplot` (your custom plotting tool mentioned earlier) in Nushell, not Plotly
 directly, and you're encountering an issue where hex color values (e.g.,
 `"#a6e3a1"`) in the color scale don't work, while RGB values (e.g.,
-`"rgb(68, 1, 84)"`) do work as expected. Let's analyze the code and identify
-why hex values might be failing to make a difference in the output when using
+`"rgb(68, 1, 84)"`) do work as expected. Let's analyze the code and identify why
+hex values might be failing to make a difference in the output when using
 `termplot`.
 
 ### Analysis of the Issue
 
-Since `termplot` is a custom tool you've developed (presumably for terminal-based
-plotting as a replacement for Matplotlib), the issue with hex color values not
-working likely stems from how `termplot` interprets color data, rather than a
-general Plotly limitation (as I initially assumed in my previous response).
-Let's break this down:
+Since `termplot` is a custom tool you've developed (presumably for
+terminal-based plotting as a replacement for Matplotlib), the issue with hex
+color values not working likely stems from how `termplot` interprets color data,
+rather than a general Plotly limitation (as I initially assumed in my previous
+response). Let's break this down:
 
 1. **Hex Colors Not Recognized by `termplot`:**
    - The hex color values in your color scale (e.g., `"#a6e3a1"`) are likely not
-     being parsed or recognized by `termplot`. Terminal plotting tools often have
-     limited color support compared to web-based libraries like Plotly, and they
-     might not natively handle hex colors unless explicitly implemented to do so.
+     being parsed or recognized by `termplot`. Terminal plotting tools often
+     have limited color support compared to web-based libraries like Plotly, and
+     they might not natively handle hex colors unless explicitly implemented to
+     do so.
    - Many terminal-based plotting tools rely on ANSI color codes or specific
-     color formats (like RGB strings) that map directly to terminal capabilities.
-     Hex colors are a web/CSS standard and might not be supported unless
-     `termplot` includes logic to convert hex to a terminal-compatible format.
+     color formats (like RGB strings) that map directly to terminal
+     capabilities. Hex colors are a web/CSS standard and might not be supported
+     unless `termplot` includes logic to convert hex to a terminal-compatible
+     format.
 
 2. **RGB Colors Working:**
    - The commented-out RGB color scale (e.g., `"rgb(68, 1, 84)"`) works because
-     `termplot` likely includes parsing logic for RGB strings, converting them to
-     approximate ANSI color codes or other terminal color representations.
+     `termplot` likely includes parsing logic for RGB strings, converting them
+     to approximate ANSI color codes or other terminal color representations.
      Terminal emulators often support RGB colors through truecolor escape
      sequences if the terminal supports 24-bit color (most modern terminals do).
 
 3. **Data Passing to `termplot`:**
-   - Your code converts the structured data (a record with `x`, `y`, and `marker`
-     including a `colorscale`) to JSON via `to json`, then pipes it to
+   - Your code converts the structured data (a record with `x`, `y`, and
+     `marker` including a `colorscale`) to JSON via `to json`, then pipes it to
      `termplot`. If `termplot` is expecting a specific JSON structure or color
      format, hex values might be ignored or misinterpreted if the parsing logic
      doesn't handle them.
@@ -4965,10 +4967,10 @@ Let's break this down:
 
 - **Unsupported Format:** `termplot` likely doesn't parse hex color strings
   (e.g., `"#a6e3a1"`) into usable colors for terminal rendering. Terminal
-  graphics libraries or tools often require colors to be in a format they can map
-  to ANSI codes or truecolor escape sequences, and hex might not be implemented
-  unless you've added conversion logic (e.g., hex to RGB) in `termplot`'s
-  codebase.
+  graphics libraries or tools often require colors to be in a format they can
+  map to ANSI codes or truecolor escape sequences, and hex might not be
+  implemented unless you've added conversion logic (e.g., hex to RGB) in
+  `termplot`'s codebase.
 - **Fallback or Silent Ignore:** If `termplot` encounters an unrecognized color
   format, it might silently ignore the color scale or fall back to a default
   color, which would explain why hex values "fail to make any difference" while
@@ -5031,9 +5033,9 @@ let color_scale = [
 
 ### Explanation of the Fix
 
-- **Hex to RGB Conversion:** Added a `hex_to_rgb` helper function that strips the
-  `#` from hex colors and converts the hexadecimal pairs to decimal values for
-  R, G, and B, then formats them as `"rgb(r, g, b)"`.
+- **Hex to RGB Conversion:** Added a `hex_to_rgb` helper function that strips
+  the `#` from hex colors and converts the hexadecimal pairs to decimal values
+  for R, G, and B, then formats them as `"rgb(r, g, b)"`.
 - **Color Scale Transformation:** Used `each` to iterate over the original color
   scale list, converting each hex color to an RGB string while preserving the
   associated value.
@@ -5058,8 +5060,7 @@ its implementation (e.g., by integrating a hex-to-RGB conversion like the one
 above). This would make it more user-friendly and compatible with common color
 formats. If `termplot` is built in Rust or another language, you can use
 libraries or manual parsing to handle hex colors and map them to terminal
-truecolor codes (e.g., `\e[38;2;r;g;bm` for foreground in supporting
-terminals).
+truecolor codes (e.g., `\e[38;2;r;g;bm` for foreground in supporting terminals).
 
 ### Additional Notes
 
@@ -5084,7 +5085,8 @@ Let me know how this goes or if you have further questions!
 
 # === USER ===
 
-does nushell have the equivalent of python's "__main__" so i can know this code is the primary entry point?
+does nushell have the equivalent of python's "**main**" so i can know this code
+is the primary entry point?
 
 # === ASSISTANT ===
 
@@ -5107,8 +5109,8 @@ script), which can serve a similar purpose:
 
 - **Sourcing vs. Running:** In Nushell, scripts can be executed directly (e.g.,
   `nu my_script.nu`) or sourced (e.g., `source my_script.nu`). When sourced, the
-  script's contents are loaded into the current environment, similar to importing
-  in Python, but without a distinct "module" identity.
+  script's contents are loaded into the current environment, similar to
+  importing in Python, but without a distinct "module" identity.
 - **Environment Variable `$nu`:** Nushell provides the `$nu` variable, which
   contains metadata about the current environment. While it doesn't directly
   indicate "main" status, you can use `$nu.current-file` or check if the script
@@ -5263,6 +5265,571 @@ about your neural network implementation, need additional `torch` plugin
 methods, or want help with other aspects, I'm ready to assist.
 
 Let me know how this goes or if you have more questions!
+
+# === USER ===
+
+i'm working on simplifying my python code to make it easier to translate to
+nushell. now, i have a question about classes in python and how they may map to
+nushell. as far as i can tell, nushell does not have notion of classes at all.
+the closest thing it has it a module. first of all, can modules somehow be used
+as classes, e.g. by creating separate instances of them, and having them contain
+a closure of data that can get retrieved? is my question clear?
+
+the next question pertains to simplifying the python code to get rid of needless
+classes. but first, can you give me your analysis of the distinction between
+classes in python and modules in nushell?
+
+# === ASSISTANT ===
+
+Python classes and Nushell modules serve very different purposes:
+
+Python classes\
+• Blueprint for creating any number of instances.\
+• Each instance has its own private data (attributes) held in the object’s
+mutable state.\
+• Methods are functions that automatically receive that per-instance state
+(`self`).\
+• Support inheritance, polymorphism, decorators, etc.\
+• Lifetime is controlled by the program; you can have thousands of objects, each
+independent.
+
+Nushell modules / overlays\
+• Merely a namespace: a bag of commands/functions/vars that you “overlay” into
+the current scope.\
+• Loaded (or sourced) once; you don’t “instantiate” a module multiple times.\
+• Any variables defined in the module become _global_ (to that overlay) rather
+than per-instance.\
+• No built-in notion of `self`, no constructors/destructors, no inheritance.\
+• Overlaying the same module twice does not give you two separate copies of its
+state.
+
+Can a Nushell module be used like a class instance?\
+Not really. Because a module has no per-instance storage, you cannot make ten
+independent copies, each holding its own tensors or counters. What you _can_ do
+is:
+
+1. Treat the module as a **namespace of functions**.
+2. Keep the _state_ outside the module—in a record/table value that you pass to
+   (and return from) the functions.
+   ```nu
+   # model.nu
+   export def init [] { {w1: (torch randn 10 5) b1: (torch zeros 5)} }
+
+   export def forward [model, x] {
+       let z = (torch mm $x ($model | get w1) | torch maximum (torch full 0 1))  # ReLU
+       return $z
+   }
+   ```
+
+   Caller:
+   ```nu
+   use model.nu
+   let net = (model init)
+   let out = (model forward $net $input)
+   ```
+
+3. If you really want a _closure_ you can create an **anonymous record of
+   functions** that capture local variables:
+   ```nu
+   let create_counter = { |start|
+       let counter = $start
+       {
+           inc: { counter = ($counter + 1); $counter },
+           val: { $counter }
+       }
+   }
+
+   let c1 = (create_counter 0)
+   (c1 inc)  # → 1
+   (c1 inc)  # → 2
+   (c1 val)  # → 2
+   ```
+   But this is just record-of-closures, not a module.
+
+Guidance for translating Python code\
+• Strip away small “utility” classes whose only job is to hold data + a couple
+of methods—replace them with plain **records** and free-standing functions that
+accept/return those records.\
+• For large classes (e.g. a neural-network “model”) keep the state in a record
+and expose functions like `forward`, `backward`, `step`.\
+• Avoid trying to reproduce inheritance; instead compose records or pass
+additional parameters.
+
+In short, Python classes give you instantiable, state-carrying objects; Nushell
+modules merely give you reusable code in a named scope. When porting, move the
+state out into explicit values (records/tables) and make functions operate on
+those values rather than on hidden `self` data.
+
+# === USER ===
+
+ok, in that case, i believe it will be simpler to change the python code to not uses clases. in my python neural network example, the class is not really being used at all. we have no inheritance, and the methods are simple. i believe the code can be simplified in the following manner:
+
+1. remove the class definition for `SimpleNN`
+2. instead, have a data structure that contains weights and biases
+3. the forward pass of the neural network can just be a function that takes the W&B data structure
+4. we will also need a function that initializes the W&B data structure
+
+can you please make that change to this python code?
+
+```python
+import torch
+from typing import List, Tuple, Dict, Any, Optional
+import matplotlib.pyplot as plt
+
+# Set random seed for reproducibility
+torch.manual_seed(42)  # type: ignore
+
+
+def generate_data(
+    n_samples: int = 300,
+    centers: int = 3,
+    cluster_std: float = 0.7,
+    skew_factor: float = 0.3,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Generate synthetic data with Gaussian blobs arranged triangularly.
+
+    Args:
+        n_samples (int): Total number of samples to generate.
+        centers (int): Number of blob centers (classes).
+        cluster_std (float): Standard deviation for Gaussian blobs.
+        skew_factor (float): Factor to skew some blobs for visual distinction.
+
+    Returns:
+        Tuple[torch.Tensor, torch.Tensor]: Features (X) and labels (y) as tensors.
+    """
+    n_samples_per_class: int = n_samples // centers
+    X_list: List[torch.Tensor] = []
+    y_list: List[torch.Tensor] = []
+
+    blob_centers: List[torch.Tensor] = [
+        torch.tensor([0.0, 0.0]),
+        torch.tensor([3.0, 0.0]),
+        torch.tensor([1.5, 2.5]),
+    ]
+
+    for i in range(centers):
+        points: torch.Tensor = (
+            torch.randn(n_samples_per_class, 2) * cluster_std + blob_centers[i]
+        )
+        if i == 1 or i == 2:
+            skew_matrix: torch.Tensor = torch.tensor(
+                [[1.0, skew_factor * (i - 1)], [skew_factor * (i - 1), 1.0]]
+            )
+            points = torch.mm(points - blob_centers[i], skew_matrix) + blob_centers[i]
+        labels: torch.Tensor = torch.full((n_samples_per_class,), i, dtype=torch.long)
+        X_list.append(points)
+        y_list.append(labels)
+
+    X: torch.Tensor = torch.cat(X_list, dim=0)
+    y: torch.Tensor = torch.cat(y_list, dim=0)
+    return X, y
+
+
+def plot_raw_data(X: torch.Tensor, y: torch.Tensor) -> None:
+    """
+    Plot the raw data points before training.
+
+    Args:
+        X (torch.Tensor): Input features tensor of shape (N, 2).
+        y (torch.Tensor): Target labels tensor of shape (N,).
+    """
+    X_list: List[List[float]] = X.detach().tolist()
+    y_list: List[int] = y.detach().tolist()
+    plt.scatter(
+        [x[0] for x in X_list],
+        [x[1] for x in X_list],
+        c=y_list,
+        alpha=0.8,
+        cmap="viridis",
+    )
+    plt.title("Raw Data Points (Before Training) - Three Blobs")
+    plt.xlabel("Feature 1")
+    plt.ylabel("Feature 2")
+    plt.colorbar(label="Class")
+    plt.show()
+
+
+# Simplified two-layer neural network for multi-class classification
+class SimpleNN:
+    def __init__(
+        self, input_size: int = 2, hidden_size: int = 20, output_size: int = 3
+    ) -> None:
+        """
+        Initialize a simple two-layer neural network.
+
+        Args:
+            input_size (int): Number of input features.
+            hidden_size (int): Number of neurons in the hidden layer.
+            output_size (int): Number of output classes.
+        """
+        # Initialize weights and biases directly with requires_grad=True for gradient tracking
+        self.weight1: torch.Tensor = torch.randn(
+            hidden_size, input_size, requires_grad=True
+        )
+        self.bias1: torch.Tensor = torch.randn(hidden_size, requires_grad=True)
+        self.weight2: torch.Tensor = torch.randn(
+            output_size, hidden_size, requires_grad=True
+        )
+        self.bias2: torch.Tensor = torch.randn(output_size, requires_grad=True)
+        # Store parameters in a list for optimization
+        self.parameters_list: List[torch.Tensor] = [
+            self.weight1,
+            self.bias1,
+            self.weight2,
+            self.bias2,
+        ]
+
+    def parameters(self) -> List[torch.Tensor]:
+        """
+        Return all parameters for optimization.
+
+        Returns:
+            List[torch.Tensor]: List of parameter tensors.
+        """
+        return self.parameters_list
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Perform forward pass through the network.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, input_size).
+
+        Returns:
+            torch.Tensor: Output tensor of shape (batch_size, output_size) with raw logits.
+        """
+        # First layer (linear transformation)
+        x = torch.mm(x, self.weight1.t()) + self.bias1
+        # ReLU activation
+        x = torch.max(torch.tensor(0.0), x)
+        # Second layer (linear transformation)
+        x = torch.mm(x, self.weight2.t()) + self.bias2
+        return x  # Raw logits for CrossEntropyLoss
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Make instance callable by delegating to forward method.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, input_size).
+
+        Returns:
+            torch.Tensor: Output tensor of shape (batch_size, output_size).
+        """
+        return self.forward(x)
+
+
+def primitive_cross_entropy_loss(
+    outputs: torch.Tensor, targets: torch.Tensor
+) -> torch.Tensor:
+    """
+    Compute cross-entropy loss for multi-class classification.
+
+    Args:
+        outputs (torch.Tensor): Raw logits from the model, shape (N, C) where N is batch size, C is number of classes.
+        targets (torch.Tensor): Class indices, shape (N), values in range [0, C-1].
+
+    Returns:
+        torch.Tensor: Scalar loss value.
+    """
+    log_probs: torch.Tensor = torch.log_softmax(outputs, dim=1)
+    batch_size: int = outputs.size(0)
+    # Select log probabilities for the target classes using indexing
+    selected_log_probs: torch.Tensor = log_probs[range(batch_size), targets]
+    # Compute the mean negative log likelihood as loss
+    loss: torch.Tensor = -selected_log_probs.mean()
+    return loss
+
+
+def train_model(
+    model: SimpleNN,
+    X: torch.Tensor,
+    y: torch.Tensor,
+    epochs: int = 1000,
+    lr: float = 0.1,
+    record_interval: int = 100,
+) -> Tuple[List[float], List[int]]:
+    """
+    Train the neural network model.
+
+    Args:
+        model (SimpleNN): The neural network model to train.
+        X (torch.Tensor): Input features tensor of shape (N, input_size).
+        y (torch.Tensor): Target labels tensor of shape (N,).
+        epochs (int): Number of training epochs.
+        lr (float): Learning rate for the optimizer.
+        record_interval (int): Interval at which to record loss values.
+
+    Returns:
+        Tuple[List[float], List[int]]: List of recorded loss values and corresponding epoch numbers.
+    """
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr)
+
+    losses: List[float] = []
+    epoch_steps: List[int] = []
+    for epoch in range(epochs):
+        outputs: torch.Tensor = model(X)
+        loss: torch.Tensor = primitive_cross_entropy_loss(outputs, y)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        # Store loss and corresponding epoch at the specified interval
+        if (epoch + 1) % record_interval == 0:
+            losses.append(loss.item())
+            epoch_steps.append(epoch + 1)
+            print(f"Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}")
+    return losses, epoch_steps
+
+
+def plot_results(X: torch.Tensor, y: torch.Tensor, model: SimpleNN) -> None:
+    """
+    Plot the decision boundaries and data points after training.
+
+    Args:
+        X (torch.Tensor): Input features tensor of shape (N, 2).
+        y (torch.Tensor): Target labels tensor of shape (N,).
+        model (SimpleNN): Trained neural network model.
+    """
+    X_list: List[List[float]] = X.detach().tolist()
+    y_list: List[int] = y.detach().tolist()
+    x_min: float = min(x[0] for x in X_list) - 1
+    x_max: float = max(x[0] for x in X_list) + 1
+    y_min: float = min(x[1] for x in X_list) - 1
+    y_max: float = max(x[1] for x in X_list) + 1
+    step: float = 0.1
+    x_range: torch.Tensor = torch.arange(x_min, x_max, step)
+    y_range: torch.Tensor = torch.arange(y_min, y_max, step)
+    xx, yy = torch.meshgrid(x_range, y_range, indexing="xy")
+    mesh_points: torch.Tensor = torch.stack([xx.flatten(), yy.flatten()], dim=1)
+    with torch.no_grad():
+        outputs: torch.Tensor = model(mesh_points)
+        _, Z = torch.max(outputs, dim=1)
+        Z = Z.reshape(xx.shape)
+    xx_list: List[List[float]] = xx.tolist()
+    yy_list: List[List[float]] = yy.tolist()
+    Z_list: List[List[int]] = Z.tolist()
+    plt.contourf(xx_list, yy_list, Z_list, alpha=0.4, cmap="viridis")
+    plt.scatter(
+        [x[0] for x in X_list],
+        [x[1] for x in X_list],
+        c=y_list,
+        alpha=0.8,
+        cmap="viridis",
+    )
+    plt.title("Two-Layer Neural Network Decision Boundaries (After Training)")
+    plt.xlabel("Feature 1")
+    plt.ylabel("Feature 2")
+    plt.colorbar(label="Class")
+    plt.show()
+
+
+if __name__ == "__main__":
+    X, y = generate_data(n_samples=300, centers=3, cluster_std=0.7, skew_factor=0.3)
+    print("Data shape:", X.shape, y.shape)
+    plot_raw_data(X, y)
+    model = SimpleNN(input_size=2, hidden_size=20, output_size=3)
+    print("Model architecture:\n", model)
+    print("Checking if model parameters require gradients for backpropagation:")
+    for i, param in enumerate(model.parameters()):
+        print(
+            f"Parameter {i}: shape {param.shape}, requires_grad: {param.requires_grad}"
+        )
+    # Example with increased epochs
+    epochs: int = 3000
+    record_interval: int = 100
+    losses, epoch_steps = train_model(
+        model, X, y, epochs=epochs, lr=0.1, record_interval=record_interval
+    )
+    plt.plot(epoch_steps, losses)
+    plt.title("Training Loss Over Epochs")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.show()
+    plot_results(X, y, model)
+```
+
+# === ASSISTANT ===
+
+```python
+import torch
+from typing import List, Tuple, Dict, Any
+import matplotlib.pyplot as plt
+
+# --------------------------------------------------------------------------- #
+#  Data generation and visualisation                                          #
+# --------------------------------------------------------------------------- #
+
+torch.manual_seed(42)                                     # reproducibility
+
+
+def generate_data(
+    n_samples: int = 300,
+    centers: int = 3,
+    cluster_std: float = 0.7,
+    skew_factor: float = 0.3,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Generate synthetic data with Gaussian blobs arranged triangularly.
+    """
+    n_samples_per_class: int = n_samples // centers
+    X_parts, y_parts = [], []
+
+    blob_centers = [
+        torch.tensor([0.0, 0.0]),
+        torch.tensor([3.0, 0.0]),
+        torch.tensor([1.5, 2.5]),
+    ]
+
+    for i in range(centers):
+        pts = torch.randn(n_samples_per_class, 2) * cluster_std + blob_centers[i]
+        if i in (1, 2):
+            skew = torch.tensor([[1.0, skew_factor * (i - 1)],
+                                 [skew_factor * (i - 1), 1.0]])
+            pts = torch.mm(pts - blob_centers[i], skew) + blob_centers[i]
+        lbl = torch.full((n_samples_per_class,), i, dtype=torch.long)
+        X_parts.append(pts)
+        y_parts.append(lbl)
+
+    X = torch.cat(X_parts, dim=0)
+    y = torch.cat(y_parts, dim=0)
+    return X, y
+
+
+def plot_raw_data(X: torch.Tensor, y: torch.Tensor) -> None:
+    """Scatter-plot the raw blobs."""
+    Xl, yl = X.detach().tolist(), y.detach().tolist()
+    plt.scatter([p[0] for p in Xl], [p[1] for p in Xl],
+                c=yl, alpha=0.8, cmap="viridis")
+    plt.title("Raw Data Points (Before Training) - Three Blobs")
+    plt.xlabel("Feature 1")
+    plt.ylabel("Feature 2")
+    plt.colorbar(label="Class")
+    plt.show()
+
+
+# --------------------------------------------------------------------------- #
+#  Tiny two-layer neural-net implementation without classes                   #
+# --------------------------------------------------------------------------- #
+
+Model = Dict[str, torch.Tensor]          # alias for readability
+
+
+def init_model(
+    input_size: int = 2,
+    hidden_size: int = 20,
+    output_size: int = 3,
+) -> Model:
+    """Return a dict holding all trainable tensors."""
+    return {
+        "w1": torch.randn(hidden_size, input_size,  requires_grad=True),
+        "b1": torch.randn(hidden_size,             requires_grad=True),
+        "w2": torch.randn(output_size, hidden_size, requires_grad=True),
+        "b2": torch.randn(output_size,             requires_grad=True),
+    }
+
+
+def parameters(model: Model) -> List[torch.Tensor]:
+    """Convenience accessor for optimiser."""
+    return [model["w1"], model["b1"], model["w2"], model["b2"]]
+
+
+def forward(model: Model, x: torch.Tensor) -> torch.Tensor:
+    """Forward pass producing raw logits."""
+    x = torch.mm(x, model["w1"].t()) + model["b1"]          # Linear
+    x = torch.max(torch.tensor(0.0), x)                     # ReLU
+    x = torch.mm(x, model["w2"].t()) + model["b2"]          # Linear
+    return x
+
+
+# --------------------------------------------------------------------------- #
+#  Loss, training loop, and evaluation plotting                               #
+# --------------------------------------------------------------------------- #
+
+def primitive_cross_entropy_loss(
+    outputs: torch.Tensor, targets: torch.Tensor
+) -> torch.Tensor:
+    """Cross-entropy implemented with log-softmax."""
+    logp = torch.log_softmax(outputs, dim=1)
+    loss = -logp[range(outputs.size(0)), targets].mean()
+    return loss
+
+
+def train_model(
+    model: Model,
+    X: torch.Tensor,
+    y: torch.Tensor,
+    epochs: int = 1000,
+    lr: float = 0.1,
+    record_interval: int = 100,
+) -> Tuple[List[float], List[int]]:
+    """SGD training loop."""
+    optim = torch.optim.SGD(parameters(model), lr=lr)
+    losses, steps = [], []
+
+    for epoch in range(epochs):
+        out  = forward(model, X)
+        loss = primitive_cross_entropy_loss(out, y)
+
+        optim.zero_grad()
+        loss.backward()
+        optim.step()
+
+        if (epoch + 1) % record_interval == 0:
+            losses.append(loss.item())
+            steps.append(epoch + 1)
+            print(f"Epoch {epoch+1:4d}/{epochs}, loss {loss.item():.4f}")
+
+    return losses, steps
+
+
+def plot_results(X: torch.Tensor, y: torch.Tensor, model: Model) -> None:
+    """Plot decision boundary after training."""
+    Xl, yl = X.detach().tolist(), y.detach().tolist()
+
+    x_min, x_max = min(p[0] for p in Xl) - 1, max(p[0] for p in Xl) + 1
+    y_min, y_max = min(p[1] for p in Xl) - 1, max(p[1] for p in Xl) + 1
+    xs, ys      = torch.arange(x_min, x_max, 0.1), torch.arange(y_min, y_max, 0.1)
+    xx, yy      = torch.meshgrid(xs, ys, indexing="xy")
+    mesh        = torch.stack([xx.flatten(), yy.flatten()], dim=1)
+
+    with torch.no_grad():
+        logits = forward(model, mesh)
+        _, Z   = torch.max(logits, dim=1)
+        Z      = Z.reshape(xx.shape)
+
+    plt.contourf(xx, yy, Z, alpha=0.4, cmap="viridis")
+    plt.scatter([p[0] for p in Xl], [p[1] for p in Xl],
+                c=yl, alpha=0.8, cmap="viridis")
+    plt.title("Two-Layer NN Decision Boundary (After Training)")
+    plt.xlabel("Feature 1")
+    plt.ylabel("Feature 2")
+    plt.colorbar(label="Class")
+    plt.show()
+
+
+# --------------------------------------------------------------------------- #
+#  Entry-point                                                                #
+# --------------------------------------------------------------------------- #
+
+if __name__ == "__main__":
+    X, y = generate_data()
+    plot_raw_data(X, y)
+
+    model = init_model()
+    print("Initial parameters require_grad status:")
+    for i, p in enumerate(parameters(model)):
+        print(f"  Param {i}: shape {tuple(p.shape)}, requires_grad={p.requires_grad}")
+
+    losses, steps = train_model(model, X, y, epochs=3000, lr=0.1, record_interval=100)
+    plt.plot(steps, losses)
+    plt.title("Training Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.show()
+
+    plot_results(X, y, model)
+```
 
 # === USER ===
 
