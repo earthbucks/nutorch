@@ -67,12 +67,12 @@ def init_model(
     }
 
 
-def parameters(model: Model) -> List[torch.Tensor]:
+def get_parameters(model: Model) -> List[torch.Tensor]:
     """Convenience accessor for optimiser."""
     return [model["w1"], model["b1"], model["w2"], model["b2"]]
 
 
-def forward(model: Model, x: torch.Tensor) -> torch.Tensor:
+def forward_pass(model: Model, x: torch.Tensor) -> torch.Tensor:
     """Forward pass producing raw logits."""
     x = torch.mm(x, model["w1"].t()) + model["b1"]  # Linear
     x = torch.max(torch.tensor(0.0), x)  # ReLU
@@ -98,11 +98,11 @@ def train_model(
     record_interval: int = 100,
 ) -> Tuple[List[float], List[int]]:
     """SGD training loop."""
-    optim = torch.optim.SGD(parameters(model), lr=lr)
+    optim = torch.optim.SGD(get_parameters(model), lr=lr)
     losses, steps = [], []
 
     for epoch in range(epochs):
-        out = forward(model, X)
+        out = forward_pass(model, X)
         loss = primitive_cross_entropy_loss(out, y)
 
         optim.zero_grad()
@@ -128,7 +128,7 @@ def plot_results(X: torch.Tensor, y: torch.Tensor, model: Model) -> None:
     mesh = torch.stack([xx.flatten(), yy.flatten()], dim=1)
 
     with torch.no_grad():
-        logits = forward(model, mesh)
+        logits = forward_pass(model, mesh)
         _, Z = torch.max(logits, dim=1)
         Z = Z.reshape(xx.shape)
 
@@ -147,7 +147,7 @@ if __name__ == "__main__":
 
     model = init_model()
     print("Initial parameters require_grad status:")
-    for i, p in enumerate(parameters(model)):
+    for i, p in enumerate(get_parameters(model)):
         print(f"  Param {i}: shape {tuple(p.shape)}, requires_grad={p.requires_grad}")
 
     losses, steps = train_model(model, X, y, epochs=3000, lr=0.1, record_interval=100)
