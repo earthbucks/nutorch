@@ -14,6 +14,23 @@ possible to operate on tensors on your GPU directly from the command line,
 making Nutorch one of the most convenient ways to do data analysis if you spend
 a lot of time in the terminal.
 
+## Demo
+
+Compare CPU and GPU time for a large matrix multiplication on macOS:
+
+```nu
+timeit {torch full [20000, 20000] 1 | torch mm (torch full [20000, 20000] 1) | torch mean | torch value}
+timeit {torch full [20000, 20000] 1 --device mps | torch mm (torch full [20000, 20000] 1 --device mps) | torch mean | torch value}
+```
+
+If you have an NVIDIA GPU, substitute `mps` with `cuda`:
+
+```nu
+timeit {torch full [20000, 20000] 1 --device cuda | torch mm (torch full [20000, 20000] 1 --device cuda) | torch mean | torch value}
+```
+
+![Matmul Demo](./raw-images/screenshot-matmul.png)
+
 ## Garbage Collection
 
 After installing the plugin, you may want to lengthen the garbage collection
