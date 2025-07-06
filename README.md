@@ -2,13 +2,17 @@
 
 **Data analysis on the command line.**
 
+## Introduction
+
 Nutorch is a [Nushell](https://github.com/nushell/nushell) plugin that wraps
 [tch-rs](https://github.com/LaurentMazare/tch-rs), which itself is a wrapper for
 libtorch, the C++ backend of [PyTorch](https://pytorch.org/).
 
-In other words, Nutorch is the same thing as PyTorch, but in Nushell. (Or, at
-least, that is the goal! Currently, not all of PyTorch's functionality is fully
-implemented.)
+In other words, Nutorch is the same thing as PyTorch, but in Nushell instead of
+Python.
+
+(Or, at least, that is the goal! Currently, not all of PyTorch's functionality
+is fully implemented.)
 
 Because Nushell is a shell, not just a programming language, this makes it
 possible to operate on tensors on your GPU directly from the command line,
