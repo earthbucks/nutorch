@@ -76,7 +76,7 @@ def cross_entropy_loss(logits: torch.Tensor, targets: torch.Tensor) -> torch.Ten
 
 def sgd_step(ps: List[torch.Tensor], lr: float = 0.1) -> None:
     """
-    Vanilla SGD:  p ← p - lr * p.grad , then reset gradients.
+    Vanilla gradient descent:  p ← p - lr * p.grad , then reset gradients.
     Operates in-place; returns nothing.
     """
     with torch.no_grad():
