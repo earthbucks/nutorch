@@ -9202,3 +9202,264 @@ So checking whether two shapes are “broadcast-compatible” is the correct
 description of what we added to the command.
 
 # === USER ===
+
+ok, thanks. we're going to have to deal with more broadcasting issues soon. however, first, i want to fix a different issue with `torch mm`. like other methods we have fixed recently, this method has a problem in that it requires two tensors as arguments, and does not allow one of them to be piped in. we should fix this. can you update this function to allow both configurations:
+1. the first tensor is piped in, and the second tensor is an argument, or
+2. both tensors are listed as arguments.
+
+```rust
+struct CommandMm;
+
+impl PluginCommand for CommandMm {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "torch mm"
+    }
+
+    fn description(&self) -> &str {
+        "Perform matrix multiplication of two 2D tensors (similar to torch.mm)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch mm")
+            .required(
+                "tensor1_id",
+                SyntaxShape::String,
+                "ID of the first tensor for matrix multiplication",
+            )
+            .required(
+                "tensor2_id",
+                SyntaxShape::String,
+                "ID of the second tensor for matrix multiplication",
+            )
+            .input_output_types(vec![(Type::Nothing, Type::String)])
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Perform matrix multiplication between two tensors",
+                example: "let t1 = (torch linspace 0 5 6 | torch repeat 2); let t2 = (torch linspace 0 2 3 | torch repeat 2); torch mm $t1 $t2 | torch value",
+                result: None,
+            }
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        _input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        // Get tensor1 ID from first required argument
+        let tensor1_id_opt = call.nth(0).unwrap();
+        let tensor1_id = tensor1_id_opt.as_str()?;
+        // Get tensor2 ID from second required argument
+        let tensor2_id_opt = call.nth(1).unwrap();
+        let tensor2_id = tensor2_id_opt.as_str()?;
+
+        // Look up tensors in registry
+        let mut registry = TENSOR_REGISTRY.lock().unwrap();
+        let tensor1 = registry
+            .get(tensor1_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found").with_label("Invalid tensor1 ID", call.head)
+            })?
+            .shallow_clone();
+        let tensor2 = registry
+            .get(tensor2_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found").with_label("Invalid tensor2 ID", call.head)
+            })?
+            .shallow_clone();
+
+        // Check if tensors are 2D
+        let dims1 = tensor1.size();
+        let dims2 = tensor2.size();
+        if dims1.len() != 2 {
+            return Err(LabeledError::new("Invalid tensor dimension").with_label(
+                format!("First tensor must be 2D, got {}D", dims1.len()),
+                call.head,
+            ));
+        }
+        if dims2.len() != 2 {
+            return Err(LabeledError::new("Invalid tensor dimension").with_label(
+                format!("Second tensor must be 2D, got {}D", dims2.len()),
+                call.head,
+            ));
+        }
+        // Check if matrix multiplication is possible (columns of first == rows of second)
+        if dims1[1] != dims2[0] {
+            return Err(LabeledError::new("Incompatible dimensions").with_label(
+                format!(
+                    "Cannot multiply {}x{} with {}x{}",
+                    dims1[0], dims1[1], dims2[0], dims2[1]
+                ),
+                call.head,
+            ));
+        }
+
+        // Perform matrix multiplication
+        let result_tensor = tensor1.mm(&tensor2);
+        // Store result in registry with new ID
+        let new_id = Uuid::new_v4().to_string();
+        registry.insert(new_id.clone(), result_tensor);
+        // Return new ID wrapped in PipelineData
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```
+
+# === ASSISTANT ===
+
+Below is an updated `CommandMm` that accepts the two tensor IDs in a flexible
+way:
+
+• first-tensor ID through the pipeline + second-tensor ID as argument  
+• or both tensor IDs as positional arguments (back-compat)
+
+It collects the IDs, ensures exactly two, checks the tensors are 2-D and shape–
+compatible, then performs the matrix multiplication.
+
+```rust
+struct CommandMm;
+
+impl PluginCommand for CommandMm {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str            { "torch mm" }
+
+    fn description(&self) -> &str {
+        "Matrix multiply two 2-D tensors (like torch.mm)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch mm")
+            // tensor id(s) may come from pipeline or args
+            .input_output_types(vec![
+                (Type::String,  Type::String),   // single ID via pipe
+                (Type::Nothing, Type::String)    // both IDs via args
+            ])
+            .optional("tensor1_id", SyntaxShape::String, "First tensor ID (if not piped)")
+            .optional("tensor2_id", SyntaxShape::String, "Second tensor ID")
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Pipeline first tensor, argument second tensor",
+                example: r#"
+let a = ([[1 2] [3 4]] | torch tensor)      # 2×2
+let b = ([[5] [6]]     | torch tensor)      # 2×1
+$a | torch mm $b | torch value              # → [[17] [39]]
+"#.trim(),
+                result: None,
+            },
+            Example {
+                description: "Both tensors as arguments",
+                example: r#"
+let a = ([[1 2] [3 4]] | torch tensor)
+let b = ([[5] [6]]     | torch tensor)
+torch mm $a $b | torch value
+"#.trim(),
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin : &NutorchPlugin,
+        _engine : &nu_plugin::EngineInterface,
+        call    : &nu_plugin::EvaluatedCall,
+        input   : PipelineData,
+    ) -> Result<PipelineData, LabeledError>
+    {
+        // -------- Collect exactly two tensor IDs --------------------------
+        let mut ids: Vec<String> = Vec::new();
+
+        // pipeline contribution
+        if let PipelineData::Value(v, _) = input {
+            if !v.is_nothing() {
+                ids.push(v.as_str().map(|s| s.to_string()).map_err(|_|{
+                    LabeledError::new("Invalid input")
+                        .with_label("Pipeline input must be a tensor ID (string)", call.head)
+                })?);
+            }
+        }
+
+        // positional args (max two)
+        for i in 0..2 {
+            if let Some(arg) = call.nth(i) {
+                ids.push(arg.as_str()?.to_string());
+            }
+        }
+
+        if ids.len() != 2 {
+            return Err(
+                LabeledError::new("Invalid input count")
+                    .with_label("Exactly two tensor IDs are required (pipeline+arg or two args)", call.head)
+            );
+        }
+        let (id_a, id_b) = (ids.remove(0), ids.remove(0));
+
+        // -------- Fetch tensors -------------------------------------------
+        let mut reg = TENSOR_REGISTRY.lock().unwrap();
+        let a = reg.get(&id_a).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid first tensor ID", call.head)
+        })?.shallow_clone();
+
+        let b = reg.get(&id_b).ok_or_else(|| {
+            LabeledError::new("Tensor not found").with_label("Invalid second tensor ID", call.head)
+        })?.shallow_clone();
+
+        // -------- Validate shapes (must be 2-D and inner dims equal) -------
+        let sa = a.size();
+        let sb = b.size();
+        if sa.len() != 2 {
+            return Err(LabeledError::new("Invalid tensor dimension")
+                .with_label(format!("First tensor must be 2-D, got {}-D", sa.len()), call.head));
+        }
+        if sb.len() != 2 {
+            return Err(LabeledError::new("Invalid tensor dimension")
+                .with_label(format!("Second tensor must be 2-D, got {}-D", sb.len()), call.head));
+        }
+        if sa[1] != sb[0] {
+            return Err(LabeledError::new("Incompatible dimensions")
+                .with_label(format!("Cannot multiply {}×{} with {}×{}", sa[0], sa[1], sb[0], sb[1]), call.head));
+        }
+
+        // -------- Compute mm ----------------------------------------------
+        let result = a.mm(&b);
+
+        // -------- Store & return ------------------------------------------
+        let new_id = Uuid::new_v4().to_string();
+        reg.insert(new_id.clone(), result);
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```
+
+### One-liner tests in Nushell
+
+```nu
+# pipeline + argument
+let a = ([[1 2] [3 4]] | torch tensor)
+let b = ([[5] [6]]     | torch tensor)
+($a | torch mm $b | torch value)   # → [[17] [39]]
+
+# two arguments
+(torch mm $a $b | torch value)     # same result
+
+# error – wrong sizes
+let c = ([[1 2 3]] | torch tensor) # 1×3
+($a | torch mm $c)                 # → “Incompatible dimensions” error
+```
+
+# === USER ===
+
+

@@ -99,9 +99,11 @@ def model_forward_pass [
   --input: string # tensor id of input features
 ]: [nothing -> string] {
 
-  mut output = torch mm $input $model.w1 | torch add $model.b1
-  $output = torch maximum ([0.0] | torch tensor) $output # ReLU activation
-  $output
+  torch mm $input $model.w1  # Matrix multiplication with input and first layer weights
+  | torch add $model.b1  # Add bias for first layer
+  | torch maximum ([0.0] | torch tensor) # ReLU activation
+  # | torch mm $model.w2  # Matrix multiplication with second layer weights
+  # | torch add $model.b2  # Add bias for second layer
 }
 
 let res = (generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3)
