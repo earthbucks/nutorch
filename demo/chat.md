@@ -6008,23 +6008,28 @@ def cross_entropy_loss(outputs: torch.Tensor, targets: torch.Tensor) -> torch.Te
 
 # === USER ===
 
-i find the squeeze/unsqueeze approach to be difficult to understand. howeer, i have verified that all three methods do work. now, because we are wrapping tch-rs, i wonder, does tch-rs expose the python slicing functionality somehow? what method name does it use for that? if so, we can copy that method name and use the slicing approach, or rather the indexing approach, instead of the confusing squeeze/unsqueeze.
+i find the squeeze/unsqueeze approach to be difficult to understand. howeer, i
+have verified that all three methods do work. now, because we are wrapping
+tch-rs, i wonder, does tch-rs expose the python slicing functionality somehow?
+what method name does it use for that? if so, we can copy that method name and
+use the slicing approach, or rather the indexing approach, instead of the
+confusing squeeze/unsqueeze.
 
 # === ASSISTANT ===
 
 In LibTorch / `tch-rs` there is **no direct counterpart to Python’s
-“advanced-index” sugar** (`logp[rows, cols]`).  
+“advanced-index” sugar** (`logp[rows, cols]`).\
 The `Tensor` struct exposes:
 
-• `select(dim, index)` – pick a single slice along one dimension  
-• `index_select(dim, index_tensor)` – pick *several* slices along **one**
-  dimension  
-• `narrow`, `slice`, `i()` – classic range slicing  
-• `gather(dim, index_tensor)` – fetch element-wise values according to an
-  index tensor
+• `select(dim, index)` – pick a single slice along one dimension\
+• `index_select(dim, index_tensor)` – pick _several_ slices along **one**
+dimension\
+• `narrow`, `slice`, `i()` – classic range slicing\
+• `gather(dim, index_tensor)` – fetch element-wise values according to an index
+tensor
 
-None of these allows the two-tensor *row-and-column* lookup that
-`logp[range(N), targets]` performs in one shot.  
+None of these allows the two-tensor _row-and-column_ lookup that
+`logp[range(N), targets]` performs in one shot.\
 The canonical LibTorch way (and what `cross_entropy` does internally) is exactly
 what you wrote as “method 3”:
 
@@ -6044,19 +6049,20 @@ remains unavoidable.)
 
 # === USER ===
 
-can you please explain why squeeze/unsqueeze is needed again and why we can't just use .gather?
+can you please explain why squeeze/unsqueeze is needed again and why we can't
+just use .gather?
 
 # === ASSISTANT ===
 
 `gather` itself does the element pick-up, but it has a very strict shape rule:
 
-Tensor::gather(dim, index)  
-• `index` must have **the same rank as the source tensor**.  
-• For every dimension *d* it must hold  
-  `index.size(d) == source.size(d)`   except for the dimension you are
-  gathering over (`dim`), where it is the size of the output.
+Tensor::gather(dim, index)\
+• `index` must have **the same rank as the source tensor**.\
+• For every dimension _d_ it must hold\
+`index.size(d) == source.size(d)` except for the dimension you are gathering
+over (`dim`), where it is the size of the output.
 
-In our case  
+In our case
 
 ```
 logp            : shape [N, C]      (N rows, C classes)
@@ -6066,16 +6072,15 @@ targets         : shape [N]         (one class id per row)
 What we want is one element per row ⇒ an output of shape `[N]` (or `[N,1]`).
 
 But `targets` is **rank-1**, while `logp` is **rank-2**, so it violates the
-“same rank” rule.  
-We first have to *lift* `targets` to rank-2 by adding a dummy second dimension:
+“same rank” rule.\
+We first have to _lift_ `targets` to rank-2 by adding a dummy second dimension:
 
 ```
 targets.unsqueeze(1)      # shape [N, 1]
 ```
 
-Now the tensor fed to `gather` has rank 2, and its sizes match
-`logp` in every dimension except dim = 1 (class dimension), exactly what
-`gather` expects:
+Now the tensor fed to `gather` has rank 2, and its sizes match `logp` in every
+dimension except dim = 1 (class dimension), exactly what `gather` expects:
 
 ```python
 chosen = logp.gather(dim=1, index=targets.unsqueeze(1))  # shape [N, 1]
@@ -6094,7 +6099,7 @@ So:
 2. **gather** – picks `logp[i, targets[i]]` for every `i`.
 3. **squeeze(1)** – collapses the leftover length-1 dimension.
 
-Without the `unsqueeze`, `gather` will raise a size/rank mismatch error;  
+Without the `unsqueeze`, `gather` will raise a size/rank mismatch error;\
 without the `squeeze`, you’d carry an unnecessary `[N,1]` tensor into the
 subsequent `.mean()`.
 
@@ -6106,17 +6111,18 @@ what does 'gather' actually do?
 
 `gather` = element-wise look-up.
 
-Signature (PyTorch / LibTorch / `tch-rs`)  
+Signature (PyTorch / LibTorch / `tch-rs`)
+
 ```python
 out = torch.gather(input, dim, index)        # same in C++/Rust bindings
 ```
 
 What happens 
 
-1. `input` is any N-D tensor.  
-2. `dim` is the axis along which you want to pick values.  
-3. `index` is an integer tensor **of the same rank as `input`**.  
-   • For every axis **except** `dim`, `index.size(d) == input.size(d)`.  
+1. `input` is any N-D tensor.
+2. `dim` is the axis along which you want to pick values.
+3. `index` is an integer tensor **of the same rank as `input`**.\
+   • For every axis **except** `dim`, `index.size(d) == input.size(d)`.\
    • Along `dim` its values are integers in `[0, input.size(dim)-1]`.
 
 For every position `pos` in `index`, `gather` copies
@@ -6128,8 +6134,8 @@ out[pos] = input[ pos[0], pos[1], …, index[pos], …, pos[-1] ]
 
 The output tensor’s shape is exactly `index.shape`.
 
-Simple 2-D example
-------------------
+## Simple 2-D example
+
 ```python
 input = tensor([[10, 11, 12],
                 [20, 21, 22]])
@@ -6142,8 +6148,8 @@ out = input.gather(1, index)   # dim = 1 (columns)
 #               [20]])
 ```
 
-Batch cross-entropy use case
-----------------------------
+## Batch cross-entropy use case
+
 ```python
 logp   # shape [N, C]
 targets      # shape [N] contains class id for each row
@@ -6154,9 +6160,298 @@ loss = -(chosen.squeeze(1)).mean()
 ```
 
 Thus **`gather` returns a new tensor whose entries are taken from `input`
-according to `index`, along a single dimension.** It’s the inverse of
-`scatter`, which writes values to positions given by an index tensor.
+according to `index`, along a single dimension.** It’s the inverse of `scatter`,
+which writes values to positions given by an index tensor.
 
 # === USER ===
 
+ok, i've gotten as far as modeling the forward pass in nushell.
 
+here is the code:
+
+```nu
+def model_forward_pass [
+  --model: record<w1: string, b1: string, w2: string, b2: string>
+]: [string -> string] { # input tensor id -> output tensor id
+  torch mm $in $model.w1 # Matrix multiplication with input and first layer weights
+  | torch add $model.b1 # Add bias for first layer
+  | torch maximum ([0.0] | torch tensor) # ReLU activation
+  | torch mm $model.w2 # Matrix multiplication with second layer weights
+  | torch add $model.b2 # Add bias for second layer
+}
+```
+
+now i've run into a wall. so far, we have assumed the tensor is the only object
+that we need to operate on. however, in the python demo code, it is using
+`torch.optim.SGD` to create an optimizer. then it uses this optimizer. this is a
+bit of an issue in that i have no way to store an 'optimizer' without
+complicating the code. so i need some help. first of all, what is SGD? is this
+something we can reimplement? can we get a pure "tensor-based" pytorch
+implementation of SGD?
+
+```python
+optim = torch.optim.SGD(model_get_parameters(model), lr=lr)
+```
+
+# === ASSISTANT ===
+
+What `torch.optim.SGD` really does\
+The class is just a thin convenience wrapper around two steps you could write
+yourself:
+
+1. After you have called `loss.backward()` every parameter tensor `p` (those
+   that were created with `requires_grad=True`) now owns another tensor `p.grad`
+   that stores\
+   ∂ loss ⁄ ∂ p (the gradient that autograd computed).
+
+2. A vanilla stochastic-gradient-descent update is nothing more than
+
+   ```
+   p ← p - lr · p.grad
+   p.grad.zero_()        # so next backward() starts from 0
+   ```
+
+That is all the minimal “optimizer” has to do (momentum, weight-decay, etc. are
+optional extras).
+
+Because the update is just ordinary tensor arithmetic you can reproduce it with
+the commands you already have in _nu_plugin_torch_; no opaque “optimizer object”
+is required.
+
+---
+
+## A hand-rolled SGD step in Python (no optimiser object)
+
+```python
+def sgd_step(params, lr: float = 0.1):
+    """params is a list of tensors with .grad already populated."""
+    with torch.no_grad():                       # do not track these ops
+        for p in params:
+            p -= lr * p.grad                   # in-place update
+            p.grad.zero_()                     # reset for next iteration
+```
+
+---
+
+## What this means for your Nushell port
+
+1. After you compute the loss **call backward once** on that scalar (you already
+   have `torch backward` in your plugin or can add it).
+
+2. Write a helper that walks over the four parameter tensors\
+   (`w1`, `b1`, `w2`, `b2`) and performs
+
+   ```
+   param  = torch sub $param (torch mul (torch grad $param) $lr)
+   torch zero_grad $param           # or torch fill_grad 0
+   ```
+
+   In other words:
+
+   • `torch grad <id>` → returns the gradient tensor ID\
+   • `torch mul` / `torch sub` → ordinary arithmetic\
+   • `torch zero_grad <id>` (a tiny command you expose that calls
+   `tensor.grad().zero_()` in tch-rs).
+
+3. Bundle that into a Nushell function, e.g.
+
+   ```nu
+   def sgd_step [
+       --model: record<w1: string, b1: string, w2: string, b2: string>
+       --lr: number = 0.1
+   ] {
+       let par_names = [w1 b1 w2 b2]
+       for name in $par_names {
+           let p_id   = ($model | get $name)
+           let g_id   = (torch grad $p_id)
+           let delta  = (torch mul $g_id $lr)
+           let new_p  = (torch sub $p_id $delta)
+           # overwrite the entry in the record
+           $model = ($model | upsert $name $new_p)
+           torch zero_grad $p_id
+       }
+       return $model
+   }
+   ```
+
+No “class”, no optimiser object—just tensors and three tiny extra commands
+(`torch grad`, `torch zero_grad`, maybe `torch backward` if not present).\
+That keeps the Nushell code very close to the stripped-down Python version while
+avoiding a stateful optimizer wrapper.
+
+# === USER ===
+
+can you add your sg_step function into the python code? please rewrite the
+model_train function so that ituses your simplified SGD step instead of the
+pytorch convenience class.
+
+once you rewrite the python code, this will make it easier for me to make sure
+the associated rust code is implemented, and then using that in nushell.
+
+```python
+import torch
+from typing import List, Tuple, Dict, Any
+import matplotlib.pyplot as plt
+
+torch.manual_seed(42)  # reproducibility
+
+
+def generate_data(
+    n_samples: int = 300,
+    centers: int = 3,
+    cluster_std: float = 0.7,
+    skew_factor: float = 0.3,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Generate synthetic data with Gaussian blobs arranged triangularly.
+    """
+    n_samples_per_class: int = n_samples // centers
+    X_parts, y_parts = [], []
+
+    blob_centers = [
+        torch.tensor([0.0, 0.0]),
+        torch.tensor([3.0, 0.0]),
+        torch.tensor([1.5, 2.5]),
+    ]
+
+    for i in range(centers):
+        pts = torch.randn(n_samples_per_class, 2) * cluster_std + blob_centers[i]
+        if i in (1, 2):
+            skew = torch.tensor(
+                [[1.0, skew_factor * (i - 1)], [skew_factor * (i - 1), 1.0]]
+            )
+            pts = torch.mm(pts - blob_centers[i], skew) + blob_centers[i]
+        lbl = torch.full((n_samples_per_class,), i, dtype=torch.long)
+        X_parts.append(pts)
+        y_parts.append(lbl)
+
+    X = torch.cat(X_parts, dim=0)
+    y = torch.cat(y_parts, dim=0)
+    return X, y
+
+
+def plot_raw_data(X: torch.Tensor, y: torch.Tensor) -> None:
+    """Scatter-plot the raw blobs."""
+    Xl, yl = X.detach().tolist(), y.detach().tolist()
+    plt.scatter([p[0] for p in Xl], [p[1] for p in Xl], c=yl, alpha=0.8, cmap="viridis")
+    plt.title("Raw Data Points (Before Training) - Three Blobs")
+    plt.xlabel("Feature 1")
+    plt.ylabel("Feature 2")
+    plt.colorbar(label="Class")
+    plt.show()
+
+
+def cross_entropy_loss(outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    logp = torch.log_softmax(outputs, dim=1)
+    loss = torch.gather(logp, dim=1, index=targets.unsqueeze(1)).squeeze(1).mean().neg()
+
+    return loss
+
+
+Model = Dict[str, torch.Tensor]  # alias for readability
+
+
+def model_init(
+    input_size: int = 2,
+    hidden_size: int = 20,
+    output_size: int = 3,
+) -> Model:
+    """Return a dict holding all trainable tensors.
+
+    Our model is a simple two-layer neural network with ReLU activation. The
+    purpose of this is to demonstrate a simple neural network that can
+    accurately classify the generated data. A single hidden layer is sufficient
+    for this task. If we had used only one layer, we would not be able to
+    separate the classes correctly, as they are not linearly separable.
+    """
+    return {
+        "w1": torch.randn(hidden_size, input_size, requires_grad=True),
+        "b1": torch.randn(hidden_size, requires_grad=True),
+        "w2": torch.randn(output_size, hidden_size, requires_grad=True),
+        "b2": torch.randn(output_size, requires_grad=True),
+    }
+
+
+def model_get_parameters(model: Model) -> List[torch.Tensor]:
+    """Convenience accessor for optimiser."""
+    return [model["w1"], model["b1"], model["w2"], model["b2"]]
+
+
+def model_forward_pass(model: Model, x: torch.Tensor) -> torch.Tensor:
+    """Forward pass producing raw logits."""
+    x = torch.mm(x, model["w1"].t()) + model["b1"]  # Linear
+    x = torch.max(torch.tensor(0.0), x)  # ReLU
+    x = torch.mm(x, model["w2"].t()) + model["b2"]  # Linear
+    return x
+
+
+def model_train(
+    model: Model,
+    X: torch.Tensor,
+    y: torch.Tensor,
+    epochs: int = 1000,
+    lr: float = 0.1,
+    record_interval: int = 100,
+) -> Tuple[List[float], List[int]]:
+    """SGD training loop."""
+    optim = torch.optim.SGD(model_get_parameters(model), lr=lr)
+    losses, steps = [], []
+
+    for epoch in range(epochs):
+        out = model_forward_pass(model, X)
+        loss = cross_entropy_loss(out, y)
+
+        optim.zero_grad()
+        loss.backward()
+        optim.step()
+
+        if (epoch + 1) % record_interval == 0:
+            losses.append(loss.item())
+            steps.append(epoch + 1)
+            print(f"Epoch {epoch+1:4d}/{epochs}, loss {loss.item():.4f}")
+
+    return losses, steps
+
+
+def plot_results(X: torch.Tensor, y: torch.Tensor, model: Model) -> None:
+    """Plot decision boundary after training."""
+    Xl, yl = X.detach().tolist(), y.detach().tolist()
+
+    x_min, x_max = min(p[0] for p in Xl) - 1, max(p[0] for p in Xl) + 1
+    y_min, y_max = min(p[1] for p in Xl) - 1, max(p[1] for p in Xl) + 1
+    xs, ys = torch.arange(x_min, x_max, 0.1), torch.arange(y_min, y_max, 0.1)
+    xx, yy = torch.meshgrid(xs, ys, indexing="xy")
+    mesh = torch.stack([xx.flatten(), yy.flatten()], dim=1)
+
+    with torch.no_grad():
+        logits = model_forward_pass(model, mesh)
+        _, Z = torch.max(logits, dim=1)
+        Z = Z.reshape(xx.shape)
+
+    plt.contourf(xx, yy, Z, alpha=0.4, cmap="viridis")
+    plt.scatter([p[0] for p in Xl], [p[1] for p in Xl], c=yl, alpha=0.8, cmap="viridis")
+    plt.title("Two-Layer NN Decision Boundary (After Training)")
+    plt.xlabel("Feature 1")
+    plt.ylabel("Feature 2")
+    plt.colorbar(label="Class")
+    plt.show()
+
+
+if __name__ == "__main__":
+    X, y = generate_data()
+    plot_raw_data(X, y)
+
+    model = model_init()
+    print("Initial parameters require_grad status:")
+    for i, p in enumerate(model_get_parameters(model)):
+        print(f"  Param {i}: shape {tuple(p.shape)}, requires_grad={p.requires_grad}")
+
+    losses, steps = model_train(model, X, y, epochs=3000, lr=0.1, record_interval=100)
+    plt.plot(steps, losses)
+    plt.title("Training Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.show()
+
+    plot_results(X, y, model)
+```
