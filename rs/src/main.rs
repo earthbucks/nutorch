@@ -120,8 +120,10 @@ impl PluginCommand for CommandNeg {
 
     fn signature(&self) -> Signature {
         Signature::build("torch neg")
-            .input_output_types(vec![(Type::String, Type::String),        // pipeline-in
-                                     (Type::Nothing, Type::String)])      // arg-in
+            .input_output_types(vec![
+                (Type::String, Type::String), // pipeline-in
+                (Type::Nothing, Type::String),
+            ]) // arg-in
             .optional(
                 "tensor_id",
                 SyntaxShape::String,
@@ -154,7 +156,7 @@ impl PluginCommand for CommandNeg {
     ) -> Result<PipelineData, LabeledError> {
         // -------- figure out where the tensor ID comes from ----------------
         let piped = match input {
-            PipelineData::Empty         => None,
+            PipelineData::Empty => None,
             PipelineData::Value(v, _span) => Some(v),
             _ => {
                 return Err(LabeledError::new("Unsupported input")
@@ -164,33 +166,39 @@ impl PluginCommand for CommandNeg {
         let arg0 = call.nth(0);
 
         let tensor_id = match (piped, arg0) {
-            (Some(_), Some(_)) =>
-                return Err(LabeledError::new("Conflicting input")
-                    .with_label("Provide tensor ID either via pipeline OR argument, not both", call.head)),
-            (None, None)      =>
-                return Err(LabeledError::new("Missing input")
-                    .with_label("Tensor ID must be supplied via pipeline or argument", call.head)),
-            (Some(v), None)   =>
-                v.as_str().map(|s| s.to_string()).map_err(|_|{
-                    LabeledError::new("Invalid input")
-                        .with_label("Pipeline input must be a tensor ID (string)", call.head)
-                })?,
-            (None, Some(a))   =>
-                a.as_str().map(|s| s.to_string()).map_err(|_|{
-                    LabeledError::new("Invalid input")
-                        .with_label("Argument must be a tensor ID (string)", call.head)
-                })?,
+            (Some(_), Some(_)) => {
+                return Err(LabeledError::new("Conflicting input").with_label(
+                    "Provide tensor ID either via pipeline OR argument, not both",
+                    call.head,
+                ))
+            }
+            (None, None) => {
+                return Err(LabeledError::new("Missing input").with_label(
+                    "Tensor ID must be supplied via pipeline or argument",
+                    call.head,
+                ))
+            }
+            (Some(v), None) => v.as_str().map(|s| s.to_string()).map_err(|_| {
+                LabeledError::new("Invalid input")
+                    .with_label("Pipeline input must be a tensor ID (string)", call.head)
+            })?,
+            (None, Some(a)) => a.as_str().map(|s| s.to_string()).map_err(|_| {
+                LabeledError::new("Invalid input")
+                    .with_label("Argument must be a tensor ID (string)", call.head)
+            })?,
         };
 
         // -------- fetch tensor from registry -------------------------------
         let mut reg = TENSOR_REGISTRY.lock().unwrap();
-        let tensor = reg.get(&tensor_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found")
-                .with_label("Invalid tensor ID", call.head)
-        })?.shallow_clone();
+        let tensor = reg
+            .get(&tensor_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
+            })?
+            .shallow_clone();
 
         // -------- perform negation -----------------------------------------
-        let result_tensor = -tensor;      // std::ops::Neg is implemented for tch::Tensor
+        let result_tensor = -tensor; // std::ops::Neg is implemented for tch::Tensor
 
         // -------- store & return -------------------------------------------
         let new_id = Uuid::new_v4().to_string();
@@ -214,7 +222,10 @@ impl PluginCommand for CommandShape {
 
     fn signature(&self) -> Signature {
         Signature::build("torch shape")
-            .input_output_types(vec![(Type::String, Type::List(Box::new(Type::Int))), (Type::Nothing, Type::List(Box::new(Type::Int)))])
+            .input_output_types(vec![
+                (Type::String, Type::List(Box::new(Type::Int))),
+                (Type::Nothing, Type::List(Box::new(Type::Int))),
+            ])
             .optional(
                 "tensor_id",
                 SyntaxShape::String,
@@ -234,7 +245,7 @@ impl PluginCommand for CommandShape {
                 description: "Get the shape of a tensor using argument",
                 example: "let t1 = (torch full [2, 3] 1); torch shape $t1",
                 result: None,
-            }
+            },
         ]
     }
 
@@ -261,25 +272,25 @@ impl PluginCommand for CommandShape {
         // Validate that exactly one data source is provided
         let tensor_id: String = match (pipeline_input, arg_input) {
             (None, None) => {
-                return Err(LabeledError::new("Missing input")
-                    .with_label("Tensor ID must be provided via pipeline or as an argument", call.head));
+                return Err(LabeledError::new("Missing input").with_label(
+                    "Tensor ID must be provided via pipeline or as an argument",
+                    call.head,
+                ));
             }
             (Some(_), Some(_)) => {
-                return Err(LabeledError::new("Conflicting input")
-                    .with_label("Tensor ID cannot be provided both via pipeline and as an argument", call.head));
+                return Err(LabeledError::new("Conflicting input").with_label(
+                    "Tensor ID cannot be provided both via pipeline and as an argument",
+                    call.head,
+                ));
             }
-            (Some(input_val), None) => {
-                input_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input")
-                        .with_label("Pipeline input must be a tensor ID (string)", call.head)
-                })?
-            }
-            (None, Some(arg_val)) => {
-                arg_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input")
-                        .with_label("Argument must be a tensor ID (string)", call.head)
-                })?
-            }
+            (Some(input_val), None) => input_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                LabeledError::new("Invalid input")
+                    .with_label("Pipeline input must be a tensor ID (string)", call.head)
+            })?,
+            (None, Some(arg_val)) => arg_val.as_str().map(|s| s.to_string()).map_err(|_| {
+                LabeledError::new("Invalid input")
+                    .with_label("Argument must be a tensor ID (string)", call.head)
+            })?,
         };
 
         // Look up tensor in registry
@@ -290,7 +301,8 @@ impl PluginCommand for CommandShape {
 
         // Get the shape (dimensions) of the tensor
         let shape = tensor.size();
-        let shape_values: Vec<Value> = shape.into_iter()
+        let shape_values: Vec<Value> = shape
+            .into_iter()
             .map(|dim| Value::int(dim, call.head))
             .collect();
         let shape_list = Value::list(shape_values, call.head);
@@ -374,51 +386,71 @@ impl PluginCommand for CommandMul {
         let total_count = pipeline_count + arg_count;
 
         if total_count != 2 {
-            return Err(LabeledError::new("Invalid input count")
-                .with_label("Exactly two tensors must be provided via pipeline and/or arguments", call.head));
+            return Err(LabeledError::new("Invalid input count").with_label(
+                "Exactly two tensors must be provided via pipeline and/or arguments",
+                call.head,
+            ));
         }
 
         // Determine the two tensor IDs based on input sources
         let (tensor1_id, tensor2_id) = match (pipeline_input, arg1, arg2) {
             (Some(input_val), Some(arg_val), None) => {
                 let input_id = input_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input").with_label("Unable to parse tensor ID from pipeline input", call.head)
+                    LabeledError::new("Invalid input")
+                        .with_label("Unable to parse tensor ID from pipeline input", call.head)
                 })?;
                 let arg_id = arg_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input").with_label("Unable to parse tensor ID from argument", call.head)
+                    LabeledError::new("Invalid input")
+                        .with_label("Unable to parse tensor ID from argument", call.head)
                 })?;
                 (input_id, arg_id)
             }
             (None, Some(arg1_val), Some(arg2_val)) => {
                 let arg1_id = arg1_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input").with_label("Unable to parse first tensor ID from argument", call.head)
+                    LabeledError::new("Invalid input")
+                        .with_label("Unable to parse first tensor ID from argument", call.head)
                 })?;
                 let arg2_id = arg2_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input").with_label("Unable to parse second tensor ID from argument", call.head)
+                    LabeledError::new("Invalid input")
+                        .with_label("Unable to parse second tensor ID from argument", call.head)
                 })?;
                 (arg1_id, arg2_id)
             }
             _ => {
-                return Err(LabeledError::new("Invalid input configuration")
-                    .with_label("Must provide exactly two tensors via pipeline and/or arguments", call.head));
+                return Err(LabeledError::new("Invalid input configuration").with_label(
+                    "Must provide exactly two tensors via pipeline and/or arguments",
+                    call.head,
+                ));
             }
         };
 
         // Look up tensors in registry
         let mut registry = TENSOR_REGISTRY.lock().unwrap();
-        let tensor1 = registry.get(&tensor1_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found").with_label("Invalid first tensor ID", call.head)
-        })?.shallow_clone();
-        let tensor2 = registry.get(&tensor2_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found").with_label("Invalid second tensor ID", call.head)
-        })?.shallow_clone();
+        let tensor1 = registry
+            .get(&tensor1_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found")
+                    .with_label("Invalid first tensor ID", call.head)
+            })?
+            .shallow_clone();
+        let tensor2 = registry
+            .get(&tensor2_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found")
+                    .with_label("Invalid second tensor ID", call.head)
+            })?
+            .shallow_clone();
 
         // Handle optional alpha argument (as a tensor ID)
         let result_tensor = match call.get_flag::<String>("alpha")? {
             Some(alpha_id) => {
-                let alpha_tensor = registry.get(&alpha_id).ok_or_else(|| {
-                    LabeledError::new("Tensor not found").with_label("Invalid alpha tensor ID", call.head)
-                })?.shallow_clone();
+                let alpha_tensor = registry
+                    .get(&alpha_id)
+                    .ok_or_else(|| {
+                        LabeledError::new("Tensor not found")
+                            .with_label("Invalid alpha tensor ID", call.head)
+                    })?
+                    .shallow_clone();
                 tensor1 * (alpha_tensor * tensor2)
             }
             None => {
@@ -509,51 +541,71 @@ impl PluginCommand for CommandDiv {
         let total_count = pipeline_count + arg_count;
 
         if total_count != 2 {
-            return Err(LabeledError::new("Invalid input count")
-                .with_label("Exactly two tensors must be provided via pipeline and/or arguments", call.head));
+            return Err(LabeledError::new("Invalid input count").with_label(
+                "Exactly two tensors must be provided via pipeline and/or arguments",
+                call.head,
+            ));
         }
 
         // Determine the two tensor IDs based on input sources
         let (tensor1_id, tensor2_id) = match (pipeline_input, arg1, arg2) {
             (Some(input_val), Some(arg_val), None) => {
                 let input_id = input_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input").with_label("Unable to parse tensor ID from pipeline input", call.head)
+                    LabeledError::new("Invalid input")
+                        .with_label("Unable to parse tensor ID from pipeline input", call.head)
                 })?;
                 let arg_id = arg_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input").with_label("Unable to parse tensor ID from argument", call.head)
+                    LabeledError::new("Invalid input")
+                        .with_label("Unable to parse tensor ID from argument", call.head)
                 })?;
                 (input_id, arg_id)
             }
             (None, Some(arg1_val), Some(arg2_val)) => {
                 let arg1_id = arg1_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input").with_label("Unable to parse first tensor ID from argument", call.head)
+                    LabeledError::new("Invalid input")
+                        .with_label("Unable to parse first tensor ID from argument", call.head)
                 })?;
                 let arg2_id = arg2_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input").with_label("Unable to parse second tensor ID from argument", call.head)
+                    LabeledError::new("Invalid input")
+                        .with_label("Unable to parse second tensor ID from argument", call.head)
                 })?;
                 (arg1_id, arg2_id)
             }
             _ => {
-                return Err(LabeledError::new("Invalid input configuration")
-                    .with_label("Must provide exactly two tensors via pipeline and/or arguments", call.head));
+                return Err(LabeledError::new("Invalid input configuration").with_label(
+                    "Must provide exactly two tensors via pipeline and/or arguments",
+                    call.head,
+                ));
             }
         };
 
         // Look up tensors in registry
         let mut registry = TENSOR_REGISTRY.lock().unwrap();
-        let tensor1 = registry.get(&tensor1_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found").with_label("Invalid first tensor ID", call.head)
-        })?.shallow_clone();
-        let tensor2 = registry.get(&tensor2_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found").with_label("Invalid second tensor ID", call.head)
-        })?.shallow_clone();
+        let tensor1 = registry
+            .get(&tensor1_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found")
+                    .with_label("Invalid first tensor ID", call.head)
+            })?
+            .shallow_clone();
+        let tensor2 = registry
+            .get(&tensor2_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found")
+                    .with_label("Invalid second tensor ID", call.head)
+            })?
+            .shallow_clone();
 
         // Handle optional alpha argument (as a tensor ID)
         let result_tensor = match call.get_flag::<String>("alpha")? {
             Some(alpha_id) => {
-                let alpha_tensor = registry.get(&alpha_id).ok_or_else(|| {
-                    LabeledError::new("Tensor not found").with_label("Invalid alpha tensor ID", call.head)
-                })?.shallow_clone();
+                let alpha_tensor = registry
+                    .get(&alpha_id)
+                    .ok_or_else(|| {
+                        LabeledError::new("Tensor not found")
+                            .with_label("Invalid alpha tensor ID", call.head)
+                    })?
+                    .shallow_clone();
                 tensor1 / (alpha_tensor * tensor2)
             }
             None => {
@@ -644,51 +696,71 @@ impl PluginCommand for CommandAdd {
         let total_count = pipeline_count + arg_count;
 
         if total_count != 2 {
-            return Err(LabeledError::new("Invalid input count")
-                .with_label("Exactly two tensors must be provided via pipeline and/or arguments", call.head));
+            return Err(LabeledError::new("Invalid input count").with_label(
+                "Exactly two tensors must be provided via pipeline and/or arguments",
+                call.head,
+            ));
         }
 
         // Determine the two tensor IDs based on input sources
         let (tensor1_id, tensor2_id) = match (pipeline_input, arg1, arg2) {
             (Some(input_val), Some(arg_val), None) => {
                 let input_id = input_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input").with_label("Unable to parse tensor ID from pipeline input", call.head)
+                    LabeledError::new("Invalid input")
+                        .with_label("Unable to parse tensor ID from pipeline input", call.head)
                 })?;
                 let arg_id = arg_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input").with_label("Unable to parse tensor ID from argument", call.head)
+                    LabeledError::new("Invalid input")
+                        .with_label("Unable to parse tensor ID from argument", call.head)
                 })?;
                 (input_id, arg_id)
             }
             (None, Some(arg1_val), Some(arg2_val)) => {
                 let arg1_id = arg1_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input").with_label("Unable to parse first tensor ID from argument", call.head)
+                    LabeledError::new("Invalid input")
+                        .with_label("Unable to parse first tensor ID from argument", call.head)
                 })?;
                 let arg2_id = arg2_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input").with_label("Unable to parse second tensor ID from argument", call.head)
+                    LabeledError::new("Invalid input")
+                        .with_label("Unable to parse second tensor ID from argument", call.head)
                 })?;
                 (arg1_id, arg2_id)
             }
             _ => {
-                return Err(LabeledError::new("Invalid input configuration")
-                    .with_label("Must provide exactly two tensors via pipeline and/or arguments", call.head));
+                return Err(LabeledError::new("Invalid input configuration").with_label(
+                    "Must provide exactly two tensors via pipeline and/or arguments",
+                    call.head,
+                ));
             }
         };
 
         // Look up tensors in registry
         let mut registry = TENSOR_REGISTRY.lock().unwrap();
-        let tensor1 = registry.get(&tensor1_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found").with_label("Invalid first tensor ID", call.head)
-        })?.shallow_clone();
-        let tensor2 = registry.get(&tensor2_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found").with_label("Invalid second tensor ID", call.head)
-        })?.shallow_clone();
+        let tensor1 = registry
+            .get(&tensor1_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found")
+                    .with_label("Invalid first tensor ID", call.head)
+            })?
+            .shallow_clone();
+        let tensor2 = registry
+            .get(&tensor2_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found")
+                    .with_label("Invalid second tensor ID", call.head)
+            })?
+            .shallow_clone();
 
         // Handle optional alpha argument (as a tensor ID)
         let result_tensor = match call.get_flag::<String>("alpha")? {
             Some(alpha_id) => {
-                let alpha_tensor = registry.get(&alpha_id).ok_or_else(|| {
-                    LabeledError::new("Tensor not found").with_label("Invalid alpha tensor ID", call.head)
-                })?.shallow_clone();
+                let alpha_tensor = registry
+                    .get(&alpha_id)
+                    .ok_or_else(|| {
+                        LabeledError::new("Tensor not found")
+                            .with_label("Invalid alpha tensor ID", call.head)
+                    })?
+                    .shallow_clone();
                 tensor1 + (alpha_tensor * tensor2)
             }
             None => {
@@ -779,51 +851,71 @@ impl PluginCommand for CommandSub {
         let total_count = pipeline_count + arg_count;
 
         if total_count != 2 {
-            return Err(LabeledError::new("Invalid input count")
-                .with_label("Exactly two tensors must be provided via pipeline and/or arguments", call.head));
+            return Err(LabeledError::new("Invalid input count").with_label(
+                "Exactly two tensors must be provided via pipeline and/or arguments",
+                call.head,
+            ));
         }
 
         // Determine the two tensor IDs based on input sources
         let (tensor1_id, tensor2_id) = match (pipeline_input, arg1, arg2) {
             (Some(input_val), Some(arg_val), None) => {
                 let input_id = input_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input").with_label("Unable to parse tensor ID from pipeline input", call.head)
+                    LabeledError::new("Invalid input")
+                        .with_label("Unable to parse tensor ID from pipeline input", call.head)
                 })?;
                 let arg_id = arg_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input").with_label("Unable to parse tensor ID from argument", call.head)
+                    LabeledError::new("Invalid input")
+                        .with_label("Unable to parse tensor ID from argument", call.head)
                 })?;
                 (input_id, arg_id)
             }
             (None, Some(arg1_val), Some(arg2_val)) => {
                 let arg1_id = arg1_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input").with_label("Unable to parse first tensor ID from argument", call.head)
+                    LabeledError::new("Invalid input")
+                        .with_label("Unable to parse first tensor ID from argument", call.head)
                 })?;
                 let arg2_id = arg2_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input").with_label("Unable to parse second tensor ID from argument", call.head)
+                    LabeledError::new("Invalid input")
+                        .with_label("Unable to parse second tensor ID from argument", call.head)
                 })?;
                 (arg1_id, arg2_id)
             }
             _ => {
-                return Err(LabeledError::new("Invalid input configuration")
-                    .with_label("Must provide exactly two tensors via pipeline and/or arguments", call.head));
+                return Err(LabeledError::new("Invalid input configuration").with_label(
+                    "Must provide exactly two tensors via pipeline and/or arguments",
+                    call.head,
+                ));
             }
         };
 
         // Look up tensors in registry
         let mut registry = TENSOR_REGISTRY.lock().unwrap();
-        let tensor1 = registry.get(&tensor1_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found").with_label("Invalid first tensor ID", call.head)
-        })?.shallow_clone();
-        let tensor2 = registry.get(&tensor2_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found").with_label("Invalid second tensor ID", call.head)
-        })?.shallow_clone();
+        let tensor1 = registry
+            .get(&tensor1_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found")
+                    .with_label("Invalid first tensor ID", call.head)
+            })?
+            .shallow_clone();
+        let tensor2 = registry
+            .get(&tensor2_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found")
+                    .with_label("Invalid second tensor ID", call.head)
+            })?
+            .shallow_clone();
 
         // Handle optional alpha argument (as a tensor ID)
         let result_tensor = match call.get_flag::<String>("alpha")? {
             Some(alpha_id) => {
-                let alpha_tensor = registry.get(&alpha_id).ok_or_else(|| {
-                    LabeledError::new("Tensor not found").with_label("Invalid alpha tensor ID", call.head)
-                })?.shallow_clone();
+                let alpha_tensor = registry
+                    .get(&alpha_id)
+                    .ok_or_else(|| {
+                        LabeledError::new("Tensor not found")
+                            .with_label("Invalid alpha tensor ID", call.head)
+                    })?
+                    .shallow_clone();
                 tensor1 - (alpha_tensor * tensor2)
             }
             None => {
@@ -855,7 +947,10 @@ impl PluginCommand for CommandCat {
 
     fn signature(&self) -> Signature {
         Signature::build("torch cat")
-            .input_output_types(vec![(Type::List(Box::new(Type::String)), Type::String), (Type::Nothing, Type::String)])
+            .input_output_types(vec![
+                (Type::List(Box::new(Type::String)), Type::String),
+                (Type::Nothing, Type::String),
+            ])
             .optional(
                 "tensor_ids",
                 SyntaxShape::List(Box::new(SyntaxShape::String)),
@@ -909,35 +1004,43 @@ impl PluginCommand for CommandCat {
         // Validate that exactly one data source is provided
         let tensor_ids: Vec<String> = match (pipeline_input, arg_input) {
             (None, None) => {
-                return Err(LabeledError::new("Missing input")
-                    .with_label("Tensor IDs must be provided via pipeline or as an argument", call.head));
+                return Err(LabeledError::new("Missing input").with_label(
+                    "Tensor IDs must be provided via pipeline or as an argument",
+                    call.head,
+                ));
             }
             (Some(_), Some(_)) => {
-                return Err(LabeledError::new("Conflicting input")
-                    .with_label("Tensor IDs cannot be provided both via pipeline and as an argument", call.head));
+                return Err(LabeledError::new("Conflicting input").with_label(
+                    "Tensor IDs cannot be provided both via pipeline and as an argument",
+                    call.head,
+                ));
             }
-            (Some(input_val), None) => {
-                input_val.as_list().map_err(|_| {
+            (Some(input_val), None) => input_val
+                .as_list()
+                .map_err(|_| {
                     LabeledError::new("Invalid input")
                         .with_label("Pipeline input must be a list of tensor IDs", call.head)
-                })?.iter()
-                    .map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect::<Result<Vec<String>, _>>()?
-            }
-            (None, Some(arg_val)) => {
-                arg_val.as_list().map_err(|_| {
+                })?
+                .iter()
+                .map(|v| v.as_str().map(|s| s.to_string()))
+                .collect::<Result<Vec<String>, _>>()?,
+            (None, Some(arg_val)) => arg_val
+                .as_list()
+                .map_err(|_| {
                     LabeledError::new("Invalid input")
                         .with_label("Argument must be a list of tensor IDs", call.head)
-                })?.iter()
-                    .map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect::<Result<Vec<String>, _>>()?
-            }
+                })?
+                .iter()
+                .map(|v| v.as_str().map(|s| s.to_string()))
+                .collect::<Result<Vec<String>, _>>()?,
         };
 
         // Validate that at least two tensors are provided
         if tensor_ids.len() < 2 {
-            return Err(LabeledError::new("Invalid input")
-                .with_label("At least two tensor IDs must be provided for concatenation", call.head));
+            return Err(LabeledError::new("Invalid input").with_label(
+                "At least two tensor IDs must be provided for concatenation",
+                call.head,
+            ));
         }
 
         // Get the dimension to concatenate along (default to 0)
@@ -1250,15 +1353,20 @@ impl PluginCommand for CommandFull {
     ) -> Result<PipelineData, LabeledError> {
         // Get the size (list of dimensions)
         let size_val = call.nth(0).unwrap();
-        let dims: Vec<i64> = size_val.as_list().map_err(|_| {
-            LabeledError::new("Invalid input")
-                .with_label("Size must be a list of integers", call.head)
-        })?.iter()
+        let dims: Vec<i64> = size_val
+            .as_list()
+            .map_err(|_| {
+                LabeledError::new("Invalid input")
+                    .with_label("Size must be a list of integers", call.head)
+            })?
+            .iter()
             .map(|v| v.as_int())
             .collect::<Result<Vec<i64>, _>>()?;
         if dims.is_empty() {
-            return Err(LabeledError::new("Invalid input")
-                .with_label("At least one dimension must be provided in size list", call.head));
+            return Err(LabeledError::new("Invalid input").with_label(
+                "At least one dimension must be provided in size list",
+                call.head,
+            ));
         }
         if dims.iter().any(|&d| d < 1) {
             return Err(LabeledError::new("Invalid input")
@@ -1561,32 +1669,47 @@ impl PluginCommand for CommandMm {
     }
 
     fn description(&self) -> &str {
-        "Perform matrix multiplication of two 2D tensors (similar to torch.mm)"
+        "Matrix multiply two 2-D tensors (like torch.mm)"
     }
 
     fn signature(&self) -> Signature {
         Signature::build("torch mm")
-            .required(
+            // tensor id(s) may come from pipeline or args
+            .input_output_types(vec![
+                (Type::String, Type::String),  // single ID via pipe
+                (Type::Nothing, Type::String), // both IDs via args
+            ])
+            .optional(
                 "tensor1_id",
                 SyntaxShape::String,
-                "ID of the first tensor for matrix multiplication",
+                "First tensor ID (if not piped)",
             )
-            .required(
-                "tensor2_id",
-                SyntaxShape::String,
-                "ID of the second tensor for matrix multiplication",
-            )
-            .input_output_types(vec![(Type::Nothing, Type::String)])
+            .optional("tensor2_id", SyntaxShape::String, "Second tensor ID")
             .category(Category::Custom("torch".into()))
     }
 
     fn examples(&self) -> Vec<Example> {
         vec![
             Example {
-                description: "Perform matrix multiplication between two tensors",
-                example: "let t1 = (torch linspace 0 5 6 | torch repeat 2); let t2 = (torch linspace 0 2 3 | torch repeat 2); torch mm $t1 $t2 | torch value",
+                description: "Pipeline first tensor, argument second tensor",
+                example: r#"
+let a = ([[1 2] [3 4]] | torch tensor)      # 2×2
+let b = ([[5] [6]]     | torch tensor)      # 2×1
+$a | torch mm $b | torch value              # → [[17] [39]]
+"#
+                .trim(),
                 result: None,
-            }
+            },
+            Example {
+                description: "Both tensors as arguments",
+                example: r#"
+let a = ([[1 2] [3 4]] | torch tensor)
+let b = ([[5] [6]]     | torch tensor)
+torch mm $a $b | torch value
+"#
+                .trim(),
+                result: None,
+            },
         ]
     }
 
@@ -1595,62 +1718,85 @@ impl PluginCommand for CommandMm {
         _plugin: &NutorchPlugin,
         _engine: &nu_plugin::EngineInterface,
         call: &nu_plugin::EvaluatedCall,
-        _input: PipelineData,
+        input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
-        // Get tensor1 ID from first required argument
-        let tensor1_id_opt = call.nth(0).unwrap();
-        let tensor1_id = tensor1_id_opt.as_str()?;
-        // Get tensor2 ID from second required argument
-        let tensor2_id_opt = call.nth(1).unwrap();
-        let tensor2_id = tensor2_id_opt.as_str()?;
+        // -------- Collect exactly two tensor IDs --------------------------
+        let mut ids: Vec<String> = Vec::new();
 
-        // Look up tensors in registry
-        let mut registry = TENSOR_REGISTRY.lock().unwrap();
-        let tensor1 = registry
-            .get(tensor1_id)
-            .ok_or_else(|| {
-                LabeledError::new("Tensor not found").with_label("Invalid tensor1 ID", call.head)
-            })?
-            .shallow_clone();
-        let tensor2 = registry
-            .get(tensor2_id)
-            .ok_or_else(|| {
-                LabeledError::new("Tensor not found").with_label("Invalid tensor2 ID", call.head)
-            })?
-            .shallow_clone();
+        // pipeline contribution
+        if let PipelineData::Value(v, _) = input {
+            if !v.is_nothing() {
+                ids.push(v.as_str().map(|s| s.to_string()).map_err(|_| {
+                    LabeledError::new("Invalid input")
+                        .with_label("Pipeline input must be a tensor ID (string)", call.head)
+                })?);
+            }
+        }
 
-        // Check if tensors are 2D
-        let dims1 = tensor1.size();
-        let dims2 = tensor2.size();
-        if dims1.len() != 2 {
-            return Err(LabeledError::new("Invalid tensor dimension").with_label(
-                format!("First tensor must be 2D, got {}D", dims1.len()),
+        // positional args (max two)
+        for i in 0..2 {
+            if let Some(arg) = call.nth(i) {
+                ids.push(arg.as_str()?.to_string());
+            }
+        }
+
+        if ids.len() != 2 {
+            return Err(LabeledError::new("Invalid input count").with_label(
+                "Exactly two tensor IDs are required (pipeline+arg or two args)",
                 call.head,
             ));
         }
-        if dims2.len() != 2 {
+        let (id_a, id_b) = (ids.remove(0), ids.remove(0));
+
+        // -------- Fetch tensors -------------------------------------------
+        let mut reg = TENSOR_REGISTRY.lock().unwrap();
+        let a = reg
+            .get(&id_a)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found")
+                    .with_label("Invalid first tensor ID", call.head)
+            })?
+            .shallow_clone();
+
+        let b = reg
+            .get(&id_b)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found")
+                    .with_label("Invalid second tensor ID", call.head)
+            })?
+            .shallow_clone();
+
+        // -------- Validate shapes (must be 2-D and inner dims equal) -------
+        let sa = a.size();
+        let sb = b.size();
+        if sa.len() != 2 {
             return Err(LabeledError::new("Invalid tensor dimension").with_label(
-                format!("Second tensor must be 2D, got {}D", dims2.len()),
+                format!("First tensor must be 2-D, got {}-D", sa.len()),
                 call.head,
             ));
         }
-        // Check if matrix multiplication is possible (columns of first == rows of second)
-        if dims1[1] != dims2[0] {
+        if sb.len() != 2 {
+            return Err(LabeledError::new("Invalid tensor dimension").with_label(
+                format!("Second tensor must be 2-D, got {}-D", sb.len()),
+                call.head,
+            ));
+        }
+        if sa[1] != sb[0] {
             return Err(LabeledError::new("Incompatible dimensions").with_label(
                 format!(
-                    "Cannot multiply {}x{} with {}x{}",
-                    dims1[0], dims1[1], dims2[0], dims2[1]
+                    "Cannot multiply {}×{} with {}×{}",
+                    sa[0], sa[1], sb[0], sb[1]
                 ),
                 call.head,
             ));
         }
 
-        // Perform matrix multiplication
-        let result_tensor = tensor1.mm(&tensor2);
-        // Store result in registry with new ID
+        // -------- Compute mm ----------------------------------------------
+        let result = a.mm(&b);
+
+        // -------- Store & return ------------------------------------------
         let new_id = Uuid::new_v4().to_string();
-        registry.insert(new_id.clone(), result_tensor);
-        // Return new ID wrapped in PipelineData
+        reg.insert(new_id.clone(), result);
         Ok(PipelineData::Value(Value::string(new_id, call.head), None))
     }
 }
@@ -1672,8 +1818,8 @@ impl PluginCommand for CommandLogSoftmax {
         Signature::build("torch log_softmax")
             // tensor id may come from pipeline or from a single argument
             .input_output_types(vec![
-                (Type::String,  Type::String),   // pipeline-in
-                (Type::Nothing, Type::String)    // arg-in
+                (Type::String, Type::String),  // pipeline-in
+                (Type::Nothing, Type::String), // arg-in
             ])
             .optional(
                 "tensor_id",
@@ -1721,8 +1867,8 @@ impl PluginCommand for CommandLogSoftmax {
         // Fetch tensor id: either from pipeline or from first argument
         // -------------------------------------------------------------
         let piped = match input {
-            PipelineData::Empty        => None,
-            PipelineData::Value(v, _)  => Some(v),
+            PipelineData::Empty => None,
+            PipelineData::Value(v, _) => Some(v),
             _ => {
                 return Err(LabeledError::new("Unsupported input")
                     .with_label("Only Empty or single Value inputs are supported", call.head))
@@ -1731,29 +1877,36 @@ impl PluginCommand for CommandLogSoftmax {
         let arg0 = call.nth(0);
 
         let tensor_id = match (piped, arg0) {
-            (Some(_), Some(_)) =>
-                return Err(LabeledError::new("Conflicting input")
-                    .with_label("Provide tensor ID via pipeline OR argument, not both", call.head)),
-            (None, None)      =>
-                return Err(LabeledError::new("Missing input")
-                    .with_label("Tensor ID must be supplied via pipeline or argument", call.head)),
-            (Some(v), None) =>
-                v.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input")
-                        .with_label("Pipeline input must be a tensor ID (string)", call.head)
-                })?,
-            (None, Some(a)) =>
-                a.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input")
-                        .with_label("Argument must be a tensor ID (string)", call.head)
-                })?,
+            (Some(_), Some(_)) => {
+                return Err(LabeledError::new("Conflicting input").with_label(
+                    "Provide tensor ID via pipeline OR argument, not both",
+                    call.head,
+                ))
+            }
+            (None, None) => {
+                return Err(LabeledError::new("Missing input").with_label(
+                    "Tensor ID must be supplied via pipeline or argument",
+                    call.head,
+                ))
+            }
+            (Some(v), None) => v.as_str().map(|s| s.to_string()).map_err(|_| {
+                LabeledError::new("Invalid input")
+                    .with_label("Pipeline input must be a tensor ID (string)", call.head)
+            })?,
+            (None, Some(a)) => a.as_str().map(|s| s.to_string()).map_err(|_| {
+                LabeledError::new("Invalid input")
+                    .with_label("Argument must be a tensor ID (string)", call.head)
+            })?,
         };
 
         // -------------------- fetch tensor ---------------------------
         let mut registry = TENSOR_REGISTRY.lock().unwrap();
-        let tensor = registry.get(&tensor_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
-        })?.shallow_clone();
+        let tensor = registry
+            .get(&tensor_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
+            })?
+            .shallow_clone();
 
         // -------------------- dtype flag -----------------------------
         let kind = get_kind_from_call(call)?;
@@ -1763,10 +1916,10 @@ impl PluginCommand for CommandLogSoftmax {
             Some(d) => {
                 let n = tensor.size().len() as i64;
                 if d < 0 || d >= n {
-                    return Err(
-                        LabeledError::new("Invalid dimension")
-                            .with_label(format!("Dimension {d} out of bounds for tensor with {n} dimensions"), call.head)
-                    );
+                    return Err(LabeledError::new("Invalid dimension").with_label(
+                        format!("Dimension {d} out of bounds for tensor with {n} dimensions"),
+                        call.head,
+                    ));
                 }
                 d
             }
@@ -1793,7 +1946,9 @@ struct CommandSqueeze;
 impl PluginCommand for CommandSqueeze {
     type Plugin = NutorchPlugin;
 
-    fn name(&self) -> &str { "torch squeeze" }
+    fn name(&self) -> &str {
+        "torch squeeze"
+    }
 
     fn description(&self) -> &str {
         "Remove a dimension of size 1 from a tensor (similar to tensor.squeeze(dim) in PyTorch). \
@@ -1802,7 +1957,7 @@ impl PluginCommand for CommandSqueeze {
 
     fn signature(&self) -> Signature {
         Signature::build("torch squeeze")
-            .input_output_types(vec![(Type::String, Type::String)])   // tensor id in, tensor id out
+            .input_output_types(vec![(Type::String, Type::String)]) // tensor id in, tensor id out
             .required(
                 "dim",
                 SyntaxShape::Int,
@@ -1812,38 +1967,30 @@ impl PluginCommand for CommandSqueeze {
     }
 
     fn examples(&self) -> Vec<Example> {
-        vec![
-            Example {
-                description: "Squeeze dimension 0 of a [1,2,3] tensor",
-                example: r#"let t = (torch full [1,2,3] 1); $t | torch squeeze 0 | torch shape"#,
-                result: None,
-            },
-        ]
+        vec![Example {
+            description: "Squeeze dimension 0 of a [1,2,3] tensor",
+            example: r#"let t = (torch full [1,2,3] 1); $t | torch squeeze 0 | torch shape"#,
+            result: None,
+        }]
     }
 
     fn run(
         &self,
-        _plugin : &NutorchPlugin,
-        _engine : &nu_plugin::EngineInterface,
-        call    : &nu_plugin::EvaluatedCall,
-        input   : PipelineData,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
-
         // ------ tensor ID must come from the pipeline --------------------
         let PipelineData::Value(tensor_id_val, _) = input else {
-            return Err(
-                LabeledError::new("Unsupported input")
-                    .with_label("Only Value inputs are supported", call.head)
-            );
+            return Err(LabeledError::new("Unsupported input")
+                .with_label("Only Value inputs are supported", call.head));
         };
 
-        let tensor_id = tensor_id_val
-            .as_str()
-            .map(|s| s.to_string())
-            .map_err(|_| {
-                LabeledError::new("Invalid input")
-                    .with_label("Pipeline input must be a tensor ID (string)", call.head)
-            })?;
+        let tensor_id = tensor_id_val.as_str().map(|s| s.to_string()).map_err(|_| {
+            LabeledError::new("Invalid input")
+                .with_label("Pipeline input must be a tensor ID (string)", call.head)
+        })?;
 
         // ------ dimension argument ---------------------------------------
         let dim_val = call.nth(0).ok_or_else(|| {
@@ -1858,25 +2005,27 @@ impl PluginCommand for CommandSqueeze {
 
         // ------ fetch tensor ---------------------------------------------
         let mut reg = TENSOR_REGISTRY.lock().unwrap();
-        let tensor = reg.get(&tensor_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found")
-                .with_label("Invalid tensor ID", call.head)
-        })?.shallow_clone();
+        let tensor = reg
+            .get(&tensor_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
+            })?
+            .shallow_clone();
 
         // ------ validate dimension ---------------------------------------
         let shape = tensor.size();
         let ndims = shape.len() as i64;
         if dim < 0 || dim >= ndims {
-            return Err(
-                LabeledError::new("Invalid dimension")
-                    .with_label(format!("Dim {dim} out of bounds for tensor with {ndims} dims"), call.head)
-            );
+            return Err(LabeledError::new("Invalid dimension").with_label(
+                format!("Dim {dim} out of bounds for tensor with {ndims} dims"),
+                call.head,
+            ));
         }
         if shape[dim as usize] != 1 {
-            return Err(
-                LabeledError::new("Cannot squeeze")
-                    .with_label(format!("Dim {dim} has size {} (expected 1)", shape[dim as usize]), call.head)
-            );
+            return Err(LabeledError::new("Cannot squeeze").with_label(
+                format!("Dim {dim} has size {} (expected 1)", shape[dim as usize]),
+                call.head,
+            ));
         }
 
         // ------ perform squeeze ------------------------------------------
@@ -1898,7 +2047,9 @@ struct CommandUnsqueeze;
 impl PluginCommand for CommandUnsqueeze {
     type Plugin = NutorchPlugin;
 
-    fn name(&self) -> &str { "torch unsqueeze" }
+    fn name(&self) -> &str {
+        "torch unsqueeze"
+    }
 
     fn description(&self) -> &str {
         "Insert a dimension of size 1 into a tensor (similar to tensor.unsqueeze(dim) in PyTorch)"
@@ -1933,27 +2084,21 @@ impl PluginCommand for CommandUnsqueeze {
 
     fn run(
         &self,
-        _plugin : &NutorchPlugin,
-        _engine : &nu_plugin::EngineInterface,
-        call    : &nu_plugin::EvaluatedCall,
-        input   : PipelineData,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
-
         // ---- tensor ID must come from pipeline --------------------------
         let PipelineData::Value(tensor_id_val, _) = input else {
-            return Err(
-                LabeledError::new("Unsupported input")
-                    .with_label("Tensor ID must be supplied via the pipeline", call.head)
-            );
+            return Err(LabeledError::new("Unsupported input")
+                .with_label("Tensor ID must be supplied via the pipeline", call.head));
         };
 
-        let tensor_id = tensor_id_val
-            .as_str()
-            .map(|s| s.to_string())
-            .map_err(|_| {
-                LabeledError::new("Invalid input")
-                    .with_label("Pipeline input must be a tensor ID (string)", call.head)
-            })?;
+        let tensor_id = tensor_id_val.as_str().map(|s| s.to_string()).map_err(|_| {
+            LabeledError::new("Invalid input")
+                .with_label("Pipeline input must be a tensor ID (string)", call.head)
+        })?;
 
         // ---- parse dimension argument -----------------------------------
         let dim_val = call.nth(0).ok_or_else(|| {
@@ -1968,18 +2113,21 @@ impl PluginCommand for CommandUnsqueeze {
 
         // ---- fetch tensor ------------------------------------------------
         let mut reg = TENSOR_REGISTRY.lock().unwrap();
-        let tensor = reg.get(&tensor_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
-        })?.shallow_clone();
+        let tensor = reg
+            .get(&tensor_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
+            })?
+            .shallow_clone();
 
         // ---- validate dim ------------------------------------------------
         let ndims = tensor.size().len() as i64;
         // In PyTorch unsqueeze allows dim == ndims (insert at end)
         if dim < 0 || dim > ndims {
-            return Err(
-                LabeledError::new("Invalid dimension")
-                    .with_label(format!("Dim {dim} out of bounds for tensor with {ndims} dims"), call.head)
-            );
+            return Err(LabeledError::new("Invalid dimension").with_label(
+                format!("Dim {dim} out of bounds for tensor with {ndims} dims"),
+                call.head,
+            ));
         }
 
         // ---- perform unsqueeze ------------------------------------------
@@ -1999,7 +2147,9 @@ struct CommandGather;
 impl PluginCommand for CommandGather {
     type Plugin = NutorchPlugin;
 
-    fn name(&self) -> &str { "torch gather" }
+    fn name(&self) -> &str {
+        "torch gather"
+    }
 
     fn description(&self) -> &str {
         "Gather values along an axis using an index tensor \
@@ -2010,72 +2160,93 @@ impl PluginCommand for CommandGather {
         Signature::build("torch gather")
             // source tensor id must arrive through the pipeline
             .input_output_types(vec![(Type::String, Type::String)])
-            .required("dim",        SyntaxShape::Int,    "Dimension along which to gather")
-            .required("index_id",   SyntaxShape::String, "ID of the index tensor (int64)")
+            .required("dim", SyntaxShape::Int, "Dimension along which to gather")
+            .required(
+                "index_id",
+                SyntaxShape::String,
+                "ID of the index tensor (int64)",
+            )
             .category(Category::Custom("torch".into()))
     }
 
     fn examples(&self) -> Vec<Example> {
-        vec![
-            Example {
-                description: "Gather columns 2,1,0 from each row (dim=1)",
-                example: r#"
+        vec![Example {
+            description: "Gather columns 2,1,0 from each row (dim=1)",
+            example: r#"
 let src  = ([[10 11 12] [20 21 22]] | torch tensor)
 let idx  = ([[2 1 0]   [0 0 2]]     | torch tensor --dtype int64)
 $src | torch gather 1 $idx | torch value
-"#.trim(),
-                result: None,
-            }
-        ]
+"#
+            .trim(),
+            result: None,
+        }]
     }
 
     fn run(
         &self,
-        _plugin : &NutorchPlugin,
-        _engine : &nu_plugin::EngineInterface,
-        call    : &nu_plugin::EvaluatedCall,
-        input   : PipelineData,
-    ) -> Result<PipelineData, LabeledError>
-    {
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
         //--------------------------------------------------------------
         // 1. get tensor-id from pipeline, dim and index-id from args
         //--------------------------------------------------------------
         let PipelineData::Value(source_id_val, _) = input else {
-            return Err(LabeledError::new("Missing input")
-                .with_label("Source tensor ID must be supplied via the pipeline", call.head));
+            return Err(LabeledError::new("Missing input").with_label(
+                "Source tensor ID must be supplied via the pipeline",
+                call.head,
+            ));
         };
-        let source_id = source_id_val.as_str()
+        let source_id = source_id_val.as_str().map(|s| s.to_string()).map_err(|_| {
+            LabeledError::new("Invalid input")
+                .with_label("Pipeline input must be a tensor ID (string)", call.head)
+        })?;
+
+        let dim = call
+            .nth(0)
+            .ok_or_else(|| {
+                LabeledError::new("Missing dim")
+                    .with_label("Dimension argument is required", call.head)
+            })?
+            .as_int()
+            .map_err(|_| {
+                LabeledError::new("Invalid dim")
+                    .with_label("Dimension must be an integer", call.head)
+            })?;
+
+        let index_id = call
+            .nth(1)
+            .ok_or_else(|| {
+                LabeledError::new("Missing index tensor")
+                    .with_label("Index tensor ID argument is required", call.head)
+            })?
+            .as_str()
             .map(|s| s.to_string())
-            .map_err(|_| LabeledError::new("Invalid input")
-                .with_label("Pipeline input must be a tensor ID (string)", call.head))?;
-
-        let dim = call.nth(0).ok_or_else(|| {
-            LabeledError::new("Missing dim")
-                .with_label("Dimension argument is required", call.head)
-        })?.as_int().map_err(|_| {
-            LabeledError::new("Invalid dim")
-                .with_label("Dimension must be an integer", call.head)
-        })?;
-
-        let index_id = call.nth(1).ok_or_else(|| {
-            LabeledError::new("Missing index tensor")
-                .with_label("Index tensor ID argument is required", call.head)
-        })?.as_str().map(|s| s.to_string()).map_err(|_| {
-            LabeledError::new("Invalid index tensor ID")
-                .with_label("Must be a string", call.head)
-        })?;
+            .map_err(|_| {
+                LabeledError::new("Invalid index tensor ID")
+                    .with_label("Must be a string", call.head)
+            })?;
 
         //--------------------------------------------------------------
         // 2. fetch tensors
         //--------------------------------------------------------------
         let mut reg = TENSOR_REGISTRY.lock().unwrap();
-        let source = reg.get(&source_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found").with_label("Invalid source tensor ID", call.head)
-        })?.shallow_clone();
+        let source = reg
+            .get(&source_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found")
+                    .with_label("Invalid source tensor ID", call.head)
+            })?
+            .shallow_clone();
 
-        let mut index = reg.get(&index_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found").with_label("Invalid index tensor ID", call.head)
-        })?.shallow_clone();
+        let mut index = reg
+            .get(&index_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found")
+                    .with_label("Invalid index tensor ID", call.head)
+            })?
+            .shallow_clone();
 
         // ensure int64
         if index.kind() != Kind::Int64 {
@@ -2085,32 +2256,37 @@ $src | torch gather 1 $idx | torch value
         //--------------------------------------------------------------
         // 3. validate shapes & index-range
         //--------------------------------------------------------------
-        let src_shape  = source.size();
-        let idx_shape  = index.size();
-        let ndims      = src_shape.len() as i64;
+        let src_shape = source.size();
+        let idx_shape = index.size();
+        let ndims = src_shape.len() as i64;
 
         // dim bounds
         if dim < 0 || dim >= ndims {
-            return Err(LabeledError::new("Invalid dimension")
-                .with_label(format!("Dim {dim} out of bounds for tensor with {ndims} dims"), call.head));
+            return Err(LabeledError::new("Invalid dimension").with_label(
+                format!("Dim {dim} out of bounds for tensor with {ndims} dims"),
+                call.head,
+            ));
         }
 
         // same rank
         if idx_shape.len() != src_shape.len() {
-            return Err(LabeledError::new("Shape mismatch")
-                .with_label(format!(
+            return Err(LabeledError::new("Shape mismatch").with_label(
+                format!(
                     "Index tensor rank {} differs from source rank {}",
-                    idx_shape.len(), src_shape.len()
-                ), call.head));
+                    idx_shape.len(),
+                    src_shape.len()
+                ),
+                call.head,
+            ));
         }
 
         // all dims except 'dim' must match exactly
         for (d, (&s, &i)) in src_shape.iter().zip(idx_shape.iter()).enumerate() {
             if d as i64 != dim && s != i {
-                return Err(LabeledError::new("Shape mismatch")
-                    .with_label(format!(
-                        "Size mismatch at dim {d}: source={s}, index={i}", 
-                    ), call.head));
+                return Err(LabeledError::new("Shape mismatch").with_label(
+                    format!("Size mismatch at dim {d}: source={s}, index={i}",),
+                    call.head,
+                ));
             }
         }
 
@@ -2118,11 +2294,15 @@ $src | torch gather 1 $idx | torch value
         let max_idx = index.max().int64_value(&[]);
         let min_idx = index.min().int64_value(&[]);
         if min_idx < 0 || max_idx >= src_shape[dim as usize] {
-            return Err(LabeledError::new("Index out of range")
-                .with_label(format!(
+            return Err(LabeledError::new("Index out of range").with_label(
+                format!(
                     "Index values must be between 0 and {} (exclusive); found [{}, {}]",
-                    src_shape[dim as usize] - 1, min_idx, max_idx
-                ), call.head));
+                    src_shape[dim as usize] - 1,
+                    min_idx,
+                    max_idx
+                ),
+                call.head,
+            ));
         }
 
         //--------------------------------------------------------------
@@ -2242,7 +2422,9 @@ struct CommandMaximum;
 impl PluginCommand for CommandMaximum {
     type Plugin = NutorchPlugin;
 
-    fn name(&self) -> &str { "torch maximum" }
+    fn name(&self) -> &str {
+        "torch maximum"
+    }
 
     fn description(&self) -> &str {
         "Element-wise maximum of two tensors with broadcasting (like torch.maximum)"
@@ -2251,12 +2433,20 @@ impl PluginCommand for CommandMaximum {
     fn signature(&self) -> Signature {
         Signature::build("torch maximum")
             .input_output_types(vec![
-                (Type::String,  Type::String),                               // single id via pipe
-                (Type::List(Box::new(Type::String)), Type::String),          // list via pipe
-                (Type::Nothing, Type::String)                                // all by args
+                (Type::String, Type::String),                       // single id via pipe
+                (Type::List(Box::new(Type::String)), Type::String), // list via pipe
+                (Type::Nothing, Type::String),                      // all by args
             ])
-            .optional("tensor1_id", SyntaxShape::String, "ID of 1st tensor (if not piped)")
-            .optional("tensor2_id", SyntaxShape::String, "ID of 2nd tensor (or 1st if one piped)")
+            .optional(
+                "tensor1_id",
+                SyntaxShape::String,
+                "ID of 1st tensor (if not piped)",
+            )
+            .optional(
+                "tensor2_id",
+                SyntaxShape::String,
+                "ID of 2nd tensor (or 1st if one piped)",
+            )
             .category(Category::Custom("torch".into()))
     }
 
@@ -2268,7 +2458,8 @@ impl PluginCommand for CommandMaximum {
 let a = (torch full [2,3] 1)
 let b = (torch full [2,3] 2)
 [$a $b] | torch maximum | torch value
-"#.trim(),
+"#
+                .trim(),
                 result: None,
             },
             Example {
@@ -2277,7 +2468,8 @@ let b = (torch full [2,3] 2)
 let a = (torch full [2,3] 1)
 let b = (torch full [2,3] 2)
 $a | torch maximum $b | torch value
-"#.trim(),
+"#
+                .trim(),
                 result: None,
             },
         ]
@@ -2285,12 +2477,11 @@ $a | torch maximum $b | torch value
 
     fn run(
         &self,
-        _plugin : &NutorchPlugin,
-        _engine : &nu_plugin::EngineInterface,
-        call    : &nu_plugin::EvaluatedCall,
-        input   : PipelineData,
-    ) -> Result<PipelineData, LabeledError>
-    {
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
         //------------------------------------------------------------------
         // collect exactly two tensor IDs  (pipeline list / pipeline single /
         // positional args)  –– same logic as before
@@ -2330,11 +2521,19 @@ $a | torch maximum $b | torch value
         // fetch tensors
         //------------------------------------------------------------------
         let mut reg = TENSOR_REGISTRY.lock().unwrap();
-        let t1 = reg.get(&id1)
-            .ok_or_else(|| LabeledError::new("Tensor not found").with_label("Invalid first tensor ID", call.head))?
+        let t1 = reg
+            .get(&id1)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found")
+                    .with_label("Invalid first tensor ID", call.head)
+            })?
             .shallow_clone();
-        let t2 = reg.get(&id2)
-            .ok_or_else(|| LabeledError::new("Tensor not found").with_label("Invalid second tensor ID", call.head))?
+        let t2 = reg
+            .get(&id2)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found")
+                    .with_label("Invalid second tensor ID", call.head)
+            })?
             .shallow_clone();
 
         //------------------------------------------------------------------
@@ -2359,16 +2558,13 @@ $a | torch maximum $b | torch value
         let shape1 = t1.size();
         let shape2 = t2.size();
         if !broadcast_ok(&shape1, &shape2) {
-            return Err(
-                LabeledError::new("Shape mismatch")
-                    .with_label(
-                        format!(
-                            "Tensors cannot be broadcast together: {:?} vs {:?}",
-                            shape1, shape2
-                        ),
-                        call.head,
-                    ),
-            );
+            return Err(LabeledError::new("Shape mismatch").with_label(
+                format!(
+                    "Tensors cannot be broadcast together: {:?} vs {:?}",
+                    shape1, shape2
+                ),
+                call.head,
+            ));
         }
 
         //------------------------------------------------------------------
