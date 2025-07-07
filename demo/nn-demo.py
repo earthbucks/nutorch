@@ -146,7 +146,7 @@ if __name__ == "__main__":
     X, y = generate_data()
     plot_raw_data(X, y)
 
-    net = model_init()
+    net = model_init(inp=2, hid=20, out=3)
     losses, steps = train(net, X, y, epochs=3000, lr=0.1, record_every=100)
 
     plt.plot(steps, losses)

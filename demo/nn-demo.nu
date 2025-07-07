@@ -76,10 +76,10 @@ def model_init [
   --output_size: int = 3 # Number of output classes
 ]: [nothing -> record<w1: string, b1: string, w2: string, b2: string>] {
   {
-    w1: (torch.randn $hidden_size $input_size --requires_grad true)
-    b1: (torch.randn $hidden_size --requires_grad true)
-    w2: (torch.randn $output_size $hidden_size --requires_grad true)
-    b2: (torch.randn $output_size --requires_grad true)
+    w1: (torch randn $hidden_size $input_size --requires_grad true)
+    b1: (torch randn $hidden_size --requires_grad true)
+    w2: (torch randn $output_size $hidden_size --requires_grad true)
+    b2: (torch randn $output_size --requires_grad true)
   }
 }
 
@@ -98,7 +98,7 @@ def model_forward_pass [
   --model: record<w1: string, b1: string, w2: string, b2: string>
 ]: [string -> string] {
   # input tensor id -> output tensor id
-  torch mm $in ($model.w1 | torch t) # Matrix multiplication with input and first layer weights
+  torch mm ($model.w1 | torch t) # Matrix multiplication with input and first layer weights
   | torch add $model.b1 # Add bias for first layer
   | torch maximum ([0.0] | torch tensor) # ReLU activation
   | torch mm ($model.w2 | torch t) # Matrix multiplication with second layer weights
@@ -129,10 +129,10 @@ def train [
     $loss | torch backward
     torch sgd_step $ps --lr $lr
 
-    if (epoch + 1) mod record_every == 0 {
-      $losses = $losses | append ($loss | torch value | get 0)
+    if ($epoch + 1) mod $record_every == 0 {
+      $losses = $losses | append ($loss | torch value)
       $steps = $steps | append ($epoch + 1)
-      print $"epoch: $($epoch + 1)/$($epochs), loss: $($loss | torch value | get 0)"
+      print $"epoch: ($epoch + 1)/$($epochs), loss: ($loss | torch value)"
     }
   }
 
@@ -143,5 +143,8 @@ def train [
   }
 }
 
-let res = (generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3)
-plot_raw_data $res
+let raw_data = (generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3)
+plot_raw_data $raw_data
+
+let net = model_init --input_size 2 --hidden_size 20 --output_size 3
+let model_res = train --model $net --X $raw_data.X --y $raw_data.y --epochs 1000 --lr 0.1 --record_every 100
