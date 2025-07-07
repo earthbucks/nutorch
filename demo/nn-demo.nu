@@ -98,10 +98,10 @@ def model_forward_pass [
   --model: record<w1: string, b1: string, w2: string, b2: string>
 ]: [string -> string] {
   # input tensor id -> output tensor id
-  torch mm $in $model.w1 # Matrix multiplication with input and first layer weights
+  torch mm $in ($model.w1 | torch t) # Matrix multiplication with input and first layer weights
   | torch add $model.b1 # Add bias for first layer
   | torch maximum ([0.0] | torch tensor) # ReLU activation
-  | torch mm $model.w2 # Matrix multiplication with second layer weights
+  | torch mm ($model.w2 | torch t) # Matrix multiplication with second layer weights
   | torch add $model.b2 # Add bias for second layer
 }
 
