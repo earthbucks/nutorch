@@ -7117,3 +7117,240 @@ These five blocks provide:
 All use the same PASS/​FAIL reporting style you requested.
 
 # === USER ===
+
+does pytorch have the ability to get a grad, such as with `tensor.grad()`? would
+it make sense to expose a function like this in the nushell function? something
+that gets the grad and returns a tensor corresponding to the grad? please don't
+write the function - just let me know if this makes sense.
+
+# === ASSISTANT ===
+
+In PyTorch a tensor’s gradient is accessed through the `.grad` attribute\
+(not a method like `tensor.grad()`). After back-propagation you simply inspect:
+
+```python
+loss.backward()
+print(weight.grad)          # Tensor or None
+```
+
+So, yes—there is a direct way to fetch the gradient tensor for any leaf
+parameter.
+
+For Nushell it would be perfectly reasonable to expose an analogous command,
+e.g.
+
+```
+$param | torch grad        # returns the gradient tensor’s ID, or 'null'
+```
+
+or
+
+```
+torch grad $param
+```
+
+That command would:
+
+1. Accept one parameter tensor ID (pipeline or argument).
+2. Look up `p.grad()` in `tch-rs`; if `grad.defined()` return a new tensor ID
+   pointing to the grad, otherwise perhaps return `null` or raise an error.
+3. Store the gradient in the registry so it can be inspected with `torch value`
+   or used in further computations.
+
+This keeps the workflow consistent with PyTorch’s introspection and would be
+useful for debugging, logging, or writing custom optimizers.
+
+# === USER ===
+
+what happens when you call `tensor.grad` in python if there is no grad? what
+does it return `nil`?
+
+# === ASSISTANT ===
+
+In PyTorch the attribute `tensor.grad` returns **`None`** (Python’s `None`
+object) when no gradient is currently stored for that tensor.\
+That happens in several situations:
+
+• The tensor is a leaf with `requires_grad=True` but you haven’t run
+`backward()` yet.\
+• You ran `backward()` but the tensor’s gradient was cleared with
+`tensor.grad.zero_()` or `tensor.grad = None`.\
+• The tensor is **not** a leaf (an intermediate result) and you did not call
+`retain_grad()` on it before back-propagation.
+
+If a gradient is present, `tensor.grad` returns a `torch.Tensor` of the same
+shape containing the gradient values.
+
+(There is no `nil` in Python; the sentinel for “doesn’t exist” is `None`.)
+
+# === USER ===
+
+it seems to me like it would be useful for testing the `sgd_step` method and
+anything else involved in looking at the computed gradient. how function
+presumably will have to get the gradient and also store it in the registry so it
+can be inspected later. can you write this function? as you said, it should take either a tensor as input or an argument, but not both.
+
+# === ASSISTANT ===
+
+Below is a `CommandGrad` implementation that lets a Nushell user fetch the
+stored gradient associated with a tensor.  Behaviour is intentionally close to
+PyTorch:
+
+• If no gradient is currently defined the command returns **`null`**  
+  (`Value::nothing()`), mirroring Python’s `None`.  
+  That lets test-scripts use `is-null` or `!= null` to branch.
+
+• Otherwise the gradient tensor is copied into the registry, a fresh UUID is
+  generated, and that ID is returned so the user can pipe it to `torch value`
+  or further ops.
+
+The command accepts the tensor ID either from the pipeline or as the first
+argument, but not both.
+
+```rust
+//--------------------------------------------------------------------------
+// torch grad
+//
+// Return the gradient tensor associated with a leaf tensor.
+//
+//    $param | torch grad
+//    torch grad $param
+//
+// – If no grad exists, returns Nushell `null`.
+// – If a grad exists, stores it in the registry and returns its UUID string.
+//--------------------------------------------------------------------------
+struct CommandGrad;
+
+impl PluginCommand for CommandGrad {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str { "torch grad" }
+
+    fn description(&self) -> &str {
+        "Fetch the .grad of a tensor. Returns null if no gradient is defined."
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch grad")
+            .input_output_types(vec![
+                (Type::String,  Type::String),          // tensor id via pipeline → string (uuid) or null
+                (Type::Nothing, Type::String)           // tensor id as arg       → "
+            ])
+            .optional(
+                "tensor_id",
+                SyntaxShape::String,
+                "Tensor ID (if not supplied through the pipeline)",
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Inspect a gradient that exists",
+                example: r#"
+let w   = (torch full [1] 3 --requires_grad true)
+let loss = ($w | torch mean)
+$loss | torch backward
+$w | torch grad | torch value        # shows 1-tensor gradient
+"#.trim(),
+                result: None,
+            },
+            Example {
+                description: "Returns null when no grad defined",
+                example: r#"
+let w = (torch full [1] 5 --requires_grad true)
+torch grad $w              # → null
+"#.trim(),
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin : &NutorchPlugin,
+        _engine : &nu_plugin::EngineInterface,
+        call    : &nu_plugin::EvaluatedCall,
+        input   : PipelineData,
+    ) -> Result<PipelineData, LabeledError>
+    {
+        //---------------- obtain tensor ID ------------------------------
+        let piped   = match &input {
+            PipelineData::Value(v, _) => Some(v.clone()),
+            PipelineData::Empty       => None,
+            _ => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Empty or Value pipeline inputs accepted", call.head))
+            }
+        };
+        let arg0    = call.nth(0);
+
+        match (&piped, &arg0) {
+            (None, None) => {
+                return Err(LabeledError::new("Missing input")
+                    .with_label("Provide tensor ID via pipeline or argument", call.head))
+            }
+            (Some(_), Some(_)) => {
+                return Err(LabeledError::new("Conflicting input")
+                    .with_label("Provide tensor ID via pipeline OR argument, not both", call.head))
+            }
+            _ => {}
+        }
+        let id_val = piped.or(arg0).unwrap();
+        let tensor_id = id_val.as_str()?.to_string();
+
+        //---------------- fetch tensor & its grad -----------------------
+        let mut reg = TENSOR_REGISTRY.lock().unwrap();
+        let t = reg.get(&tensor_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found")
+                .with_label("Invalid tensor ID", call.head)
+        })?.shallow_clone();
+
+        let g = t.grad();          // always returns Tensor
+        if !g.defined() {
+            // Return null to Nushell
+            return Ok(PipelineData::Value(Value::nothing(call.head), None));
+        }
+
+        //---------------- store grad in registry ------------------------
+        let gid = Uuid::new_v4().to_string();
+        reg.insert(gid.clone(), g);
+
+        Ok(PipelineData::Value(Value::string(gid, call.head), None))
+    }
+}
+```
+
+Add `CommandGrad` to your plugin’s `commands()` list.
+
+--------------------------------------------------------------------
+### Quick Nushell tests (same SUCCESS / FAILURE style)
+
+```nu
+plugin use torch
+
+def ok  [m] { print ((ansi green) + "SUCCESS" + (ansi reset) + " - test/grad - " + $m) }
+def err [m] { print ((ansi red)   + "FAILURE" + (ansi reset) + " - test/grad - " + $m) }
+
+# 1. tensor with grad
+let w = (torch full [1] 2 --requires_grad true)
+($w | torch zero_grad)        # ensure grad nil
+let loss = ($w | torch mean)
+$loss | torch backward
+
+let gid = ($w | torch grad)   # should be id (not null)
+if ($gid != null) { ok "grad existed" } else { err "expected grad, got null"; error make {msg:"grad test failed"} }
+
+# 2. tensor without grad
+let v = (torch full [1] 7 --requires_grad true)
+let gnull = (torch grad $v)
+if ($gnull == null) { ok "grad null as expected" } else { err "expected null"; error make {msg:"grad null test failed"} }
+```
+
+These tests confirm `torch grad` returns a UUID when a gradient tensor exists
+and `null` when it does not.
+
+# === USER ===
+
+
