@@ -6040,17 +6040,19 @@ that implies i should set:
 p = p.f_sub_(&(g * lr)).unwrap(); // p -= lr * g   (in-place)
 ```
 
-however ... the whole point of this is that we should be operating on tensors in place, so that when we clear the gradients, we are clearing the *same* tensor. is there a way to verify that the `f_sub_` method returns the *same* tensor, and therefore we don't need to "reset" `p`?
-
+however ... the whole point of this is that we should be operating on tensors in
+place, so that when we clear the gradients, we are clearing the _same_ tensor.
+is there a way to verify that the `f_sub_` method returns the _same_ tensor, and
+therefore we don't need to "reset" `p`?
 
 # === ASSISTANT ===
 
-`f_sub_` (the trailing **underscore** marks it as *in-place*) works like every
+`f_sub_` (the trailing **underscore** marks it as _in-place_) works like every
 other in-place method in `tch-rs` / LibTorch:
 
-• It mutates the storage referenced by `self`.  
+• It mutates the storage referenced by `self`.\
 • For convenience it **also returns a new `Tensor` handle** that points to that
-  same storage.  You can capture it or simply ignore it.
+same storage. You can capture it or simply ignore it.
 
 So the idiom
 
@@ -6074,9 +6076,9 @@ let r = p.f_sub_(&(g * lr)).unwrap();
 assert_eq!(before_ptr, r.data_ptr());   // same memory
 ```
 
-Re the `mut` in the `for` loop: you only need `mut p` when you *re-assign*
-`p` (e.g. `p = …`). If you keep the statement that simply calls the
-in-place function and discards its result, `mut` is **not** required:
+Re the `mut` in the `for` loop: you only need `mut p` when you _re-assign_ `p`
+(e.g. `p = …`). If you keep the statement that simply calls the in-place
+function and discards its result, `mut` is **not** required:
 
 ```rust
 for p in &tensors {
@@ -6088,7 +6090,7 @@ for p in &tensors {
 }
 ```
 
-(Here `p` is an immutable handle; the *storage* it points to is modified by
+(Here `p` is an immutable handle; the _storage_ it points to is modified by
 LibTorch.)
 
 So you can safely keep the shorter version without re-assignment and without
@@ -6096,22 +6098,24 @@ So you can safely keep the shorter version without re-assignment and without
 
 # === USER ===
 
-what about `p.zero_grad_`? is that in-place? it does not end with a `_`. isn't it imperative that we perform that one in-place, to delete the gradients for the next forward pass?
+what about `p.zero_grad_`? is that in-place? it does not end with a `_`. isn't
+it imperative that we perform that one in-place, to delete the gradients for the
+next forward pass?
 
 # === ASSISTANT ===
 
 In the `tch-rs` API the rule of thumb is:
 
-• methods whose *name* already makes it clear they mutate an internal buffer
-  (`zero_grad`, `detach_`, `requires_grad_`) do **not** get an extra
-  underscore, even though they are in-place.  
-• arithmetic helpers that have both functional and in-place versions
-  (`add`, `add_`, `f_add_`, …) use the underscore (and the `f_` prefix for the
-  `Result`‐returning variants) to distinguish the in-place form.
+• methods whose _name_ already makes it clear they mutate an internal buffer
+(`zero_grad`, `detach_`, `requires_grad_`) do **not** get an extra underscore,
+even though they are in-place.\
+• arithmetic helpers that have both functional and in-place versions (`add`,
+`add_`, `f_add_`, …) use the underscore (and the `f_` prefix for the
+`Result`‐returning variants) to distinguish the in-place form.
 
 `Tensor::zero_grad()` therefore **is** an in-place operation; it clears (or
 detaches and frees) the gradient tensor that belongs to the parameter and
-returns `Result<()>`.  Nothing is allocated or copied, and the data pointer of
+returns `Result<()>`. Nothing is allocated or copied, and the data pointer of
 the parameter itself remains unchanged.
 
 So the canonical SGD loop is still
@@ -6124,33 +6128,36 @@ if g.defined() {
 }
 ```
 
-No underscore is missing—`zero_grad()` is already the in-place version you
-need.
+No underscore is missing—`zero_grad()` is already the in-place version you need.
 
 # === USER ===
 
-ok great, i added the 'assert' version just to be sure. if there is an error, we will know right away.
+ok great, i added the 'assert' version just to be sure. if there is an error, we
+will know right away.
 
-now, in your nushell demo, you use a `set_grad` command, which we have actually not implemented. can you find another way to test this? what methods can we perform that will automatically set the gradient? we have a `sin` method - can we use that? if `requires_grad` is true, doesn't that mean the gradient will be tracked when we perform a sin method on it?
+now, in your nushell demo, you use a `set_grad` command, which we have actually
+not implemented. can you find another way to test this? what methods can we
+perform that will automatically set the gradient? we have a `sin` method - can
+we use that? if `requires_grad` is true, doesn't that mean the gradient will be
+tracked when we perform a sin method on it?
 
 # === ASSISTANT ===
 
-Below are revised Nushell demos that use *real* autograd instead of the
-placeholder `torch set_grad`.  
+Below are revised Nushell demos that use _real_ autograd instead of the
+placeholder `torch set_grad`.\
 They rely only on commands that already exist (or that have been sketched in
 earlier messages):
 
-• `torch full … --requires_grad true` – create a parameter that tracks grads.  
-• `torch sin`, `torch mean`, `torch neg`, etc. – build a scalar loss.  
+• `torch full … --requires_grad true` – create a parameter that tracks grads.\
+• `torch sin`, `torch mean`, `torch neg`, etc. – build a scalar loss.\
 • `torch backward` – we have used this in past examples to trigger
-  back-propagation on a scalar.*
+back-propagation on a scalar.*
 
 (*If you have not yet implemented `torch backward`, add the very small command
-that simply calls `tensor.backward()`.  It needs no arguments.)
+that simply calls `tensor.backward()`. It needs no arguments.)
 
 When `tensor.backward()` is invoked on a scalar loss, PyTorch / LibTorch stores
-`dLoss/dParam` in `param.grad`.  That gives us real gradients to test
-`sgd_step`.
+`dLoss/dParam` in `param.grad`. That gives us real gradients to test `sgd_step`.
 
 ### Test 1 – pipeline style (`[$w1 $w2] | torch sgd_step …`)
 
@@ -6190,18 +6197,18 @@ $p | torch value               # should now be < 5 everywhere
 ### Why this works
 
 1. Creating the tensors with `--requires_grad true` tells LibTorch to track
-   gradients.  
-2. Every differentiable op (`sin`, `add`, `mean`, …) builds the autograd graph.  
-3. Calling `backward` on the scalar loss produces `.grad` tensors.  
-4. `torch sgd_step` (inside `tch::no_grad`) performs  
-   `p -= lr * p.grad` and `p.zero_grad()` in-place.  
-   The same tensor handle remains in the registry; only its values change.  
+   gradients.
+2. Every differentiable op (`sin`, `add`, `mean`, …) builds the autograd graph.
+3. Calling `backward` on the scalar loss produces `.grad` tensors.
+4. `torch sgd_step` (inside `tch::no_grad`) performs\
+   `p -= lr * p.grad` and `p.zero_grad()` in-place.\
+   The same tensor handle remains in the registry; only its values change.
 5. The tests simply inspect `torch value` afterward to confirm an update.
 
 ### Note on `zero_grad`
 
 `Tensor::zero_grad()` **is** an in-place operation even though its name does not
-contain the trailing underscore.  The returned `Result<()>` can be ignored.  
+contain the trailing underscore. The returned `Result<()>` can be ignored.\
 `f_sub_` is also in-place; the extra returned `Tensor` shares the same storage,
 so discarding it is fine.
 
@@ -6210,9 +6217,14 @@ after genuine autograd gradients have been produced.
 
 # === USER ===
 
-ok, unfortunately we don't have a `backward` method either, so we will have to implement that. we should have done that first. however, before we do that, i want to take a moment to consider the python api.
+ok, unfortunately we don't have a `backward` method either, so we will have to
+implement that. we should have done that first. however, before we do that, i
+want to take a moment to consider the python api.
 
-i'm going to provide two methods in python which we are trying to re-implement in nushell using our plugin written in rust. now, in the python code, which i wrote with your help, there are two calls to zero the grad which i believe are duplicates:
+i'm going to provide two methods in python which we are trying to re-implement
+in nushell using our plugin written in rust. now, in the python code, which i
+wrote with your help, there are two calls to zero the grad which i believe are
+duplicates:
 
 ```python
 def sgd_step(ps: List[torch.Tensor], lr: float = 0.1) -> None:
@@ -6261,15 +6273,21 @@ def train(
     return losses, steps
 ```
 
-is it not the case that we don't actually need to zero the grad twice? wouldn't it be logical to zero the grad only once? my question pertains to how we reimplement the `sgd_step` function in rust. what will a typical user expect? do they expect the `sgd_step` funciton to zero the grad? or do they manually expect to have to zero the grad themselves after they call it? if they intend to zero the grad themselves, then we shouldn't include that part in the rust code (and we should also remove it from the python code).
+is it not the case that we don't actually need to zero the grad twice? wouldn't
+it be logical to zero the grad only once? my question pertains to how we
+reimplement the `sgd_step` function in rust. what will a typical user expect? do
+they expect the `sgd_step` funciton to zero the grad? or do they manually expect
+to have to zero the grad themselves after they call it? if they intend to zero
+the grad themselves, then we shouldn't include that part in the rust code (and
+we should also remove it from the python code).
 
 # === ASSISTANT ===
 
-You are right – in the snippet you pasted the gradients are cleared twice,
-and one of those calls is redundant.
+You are right – in the snippet you pasted the gradients are cleared twice, and
+one of those calls is redundant.
 
-How PyTorch normally handles this
----------------------------------
+## How PyTorch normally handles this
+
 In “real” PyTorch you use an **optimizer** object:
 
 ```python
@@ -6279,7 +6297,7 @@ optimizer.step()        # p <- p - lr * grad   (does *not* clear grads)
 ```
 
 `step()` updates the parameters but leaves `p.grad` intact so the user (or an
-`autocast` context) can inspect or log the gradients if desired.  The usual
+`autocast` context) can inspect or log the gradients if desired. The usual
 workflow is therefore
 
 ```
@@ -6287,23 +6305,24 @@ zero_grad  → backward  → step
 ```
 
 Hence:
-* You **must** zero the gradients before the forward/back-prop of the next
+
+- You **must** zero the gradients before the forward/back-prop of the next
   iteration.
-* You **do not** need to zero them inside `step()` (though you may if you want
+- You **do not** need to zero them inside `step()` (though you may if you want
   to).
 
-What that means for your handcrafted `sgd_step`
------------------------------------------------
+## What that means for your handcrafted `sgd_step`
+
 The version you wrote in Python zeroes gradients **inside** `sgd_step`, while
-the training loop also zeroes them **before** the `backward()` call – the
-second clear is enough, the first one is optional or even wasteful.
+the training loop also zeroes them **before** the `backward()` call – the second
+clear is enough, the first one is optional or even wasteful.
 
 Therefore you have two reasonable design options for the plugin:
 
-1. **Mimic PyTorch optimizers**  
-   • Provide two separate commands  
-     – `torch zero_grad` (or `torch clear_grads`)  
-     – `torch sgd_step` (updates but does *not* clear)  
+1. **Mimic PyTorch optimizers**\
+   • Provide two separate commands\
+   – `torch zero_grad` (or `torch clear_grads`)\
+   – `torch sgd_step` (updates but does _not_ clear)\
    • Users will write the familiar idiom
 
    ```nu
@@ -6312,32 +6331,31 @@ Therefore you have two reasonable design options for the plugin:
    [$params] | torch sgd_step --lr 0.1
    ```
 
-2. **Keep `sgd_step` self-contained** (convenience mode)  
+2. **Keep `sgd_step` self-contained** (convenience mode)\
    • Leave the `p.zero_grad()` inside `sgd_step` so that one call both updates
-     and clears.  
+   and clears.\
    • Users then do **not** call `torch zero_grad` separately.
 
-Which to choose?
-----------------
+## Which to choose?
+
 Staying closest to the PyTorch mental model usually pays off:
 
-* People coming from Python will expect to have to call “zero grad” themselves
-  – if they forget, they’ll see the same “gradient accumulation” behaviour they
+- People coming from Python will expect to have to call “zero grad” themselves –
+  if they forget, they’ll see the same “gradient accumulation” behaviour they
   would in Python.
 
-* It keeps `sgd_step` lightweight: update the parameters and nothing else.
+- It keeps `sgd_step` lightweight: update the parameters and nothing else.
 
 So I recommend:
 
-* **Remove** the internal `zero_grad` from the Rust `CommandSgdStep`.  
-* **Add** a tiny `CommandZeroGrad` that takes the same list-of-tensor-IDs
+- **Remove** the internal `zero_grad` from the Rust `CommandSgdStep`.
+- **Add** a tiny `CommandZeroGrad` that takes the same list-of-tensor-IDs
   (pipeline or argument) and just calls `p.zero_grad()` on each.
 
 If you prefer the convenience variant you can keep the call inside; just make
 sure the documentation says “also clears gradients”.
 
-Verification
-------------
+## Verification
 
 Either way, you only need one explicit clear in the training loop:
 
@@ -6352,7 +6370,7 @@ $params | torch sgd_step --lr 0.1
 $params | torch sgd_step --lr 0.1   # grads cleared here
 ```
 
-Technically `zero_grad()` *is* in-place even though its name lacks the trailing
+Technically `zero_grad()` _is_ in-place even though its name lacks the trailing
 underscore; it mutates the gradient buffer of the tensor and returns
 `Result<()>`.
 
@@ -6363,21 +6381,23 @@ i agree. we will need to implement some new methods in rust soon:
 - zero_grad
 - backward
 
-having these methods will be "low level" and also consistent with python/pytorch. we can add high level convenience methods, like `torch.optim.SGD`, later.
+having these methods will be "low level" and also consistent with
+python/pytorch. we can add high level convenience methods, like
+`torch.optim.SGD`, later.
 
 here is my updated rust code with zero_grad removed:
 
 ```rust
-        tch::no_grad(|| {
-            for mut p in tensors {
-                let g = p.grad();
-                if g.defined() {
-                    let before_ptr = p.data_ptr();
-                    let r = p.f_sub_(&(g * lr)).unwrap();
-                    assert_eq!(before_ptr, r.data_ptr()); // same memory
-                }
-            }
-        });
+tch::no_grad(|| {
+    for mut p in tensors {
+        let g = p.grad();
+        if g.defined() {
+            let before_ptr = p.data_ptr();
+            let r = p.f_sub_(&(g * lr)).unwrap();
+            assert_eq!(before_ptr, r.data_ptr()); // same memory
+        }
+    }
+});
 ```
 
 and here is the python function with the redundant zero_grad removed:
@@ -6401,7 +6421,8 @@ does this look right to you?
 Yes—both revisions match the “low-level / PyTorch-like” behaviour we just
 discussed.
 
-Rust side  
+Rust side
+
 ```rust
 tch::no_grad(|| {
     for mut p in tensors {
@@ -6415,14 +6436,15 @@ tch::no_grad(|| {
 });
 ```
 
-• `no_grad` ensures the update is not recorded in the autograd graph.  
+• `no_grad` ensures the update is not recorded in the autograd graph.\
 • We no longer call `p.zero_grad()`, so gradients remain intact; the user (or a
 future `torch zero_grad` command) must clear them explicitly before the next
-back-prop.  
-• The pointer equality check confirms `f_sub_` is truly in-place.  
+back-prop.\
+• The pointer equality check confirms `f_sub_` is truly in-place.\
 (Strictly speaking the `mut` on `p` isn’t required, but it doesn’t hurt.)
 
-Python side  
+Python side
+
 ```python
 def sgd_step(ps: List[torch.Tensor], lr: float = 0.1) -> None:
     with torch.no_grad():
@@ -6434,8 +6456,9 @@ def sgd_step(ps: List[torch.Tensor], lr: float = 0.1) -> None:
 This mirrors the Rust implementation: the step updates parameters but leaves
 `p.grad` alone, exactly like `optim.SGD.step()` in PyTorch.
 
-Next steps (as you noted)  
-1. implement `torch zero_grad` that clears gradients for a list of parameters  
+Next steps (as you noted)
+
+1. implement `torch zero_grad` that clears gradients for a list of parameters
 2. implement `torch backward` that calls `tensor.backward()` on a scalar loss
 
 With those two low-level commands the canonical training loop in Nushell will
@@ -6451,6 +6474,441 @@ $params | torch sgd_step --lr 0.1
 ```
 
 Everything is now consistent and ready for further testing.
+
+# === USER ===
+
+ok, now, we have the `sgd_step` function implemented, but i can't easily test it
+because i don't yet have `backward` or `zero_grad`. so, we need to implement
+those. let's do this one at a time. can you produce the `CommandZeroGrad`
+implementation, and then we will test it in nushell? like other commands, this
+should operate on a tensor two ways: either the tensor is piped in, or it is
+passed as an argument, but not both.
+
+# === ASSISTANT ===
+
+Below is the implementation of `CommandZeroGrad`, followed by a couple of quick
+Nushell tests.\
+It clears (`zero_grad`) the gradient buffer of one or many tensors. The list of
+tensor IDs can arrive
+
+1. through the pipeline (`$t | torch zero_grad`) or
+2. as the first positional argument (`torch zero_grad [$t1 $t2]`).
+
+If both sources are supplied or none is supplied an error is raised.\
+The command returns the same list of IDs so it can be chained.
+
+```rust
+// torch zero_grad  ---------------------------------------------------------
+// Clear .grad buffers for one or several tensors.
+//
+//   [$id1 $id2] | torch zero_grad
+//   torch zero_grad [$id1 $id2]
+//
+// Returns the list of IDs unchanged.
+// --------------------------------------------------------------------------
+struct CommandZeroGrad;
+
+impl PluginCommand for CommandZeroGrad {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str { "torch zero_grad" }
+
+    fn description(&self) -> &str {
+        "Set the .grad field of the given tensor(s) to zero (like Tensor.zero_grad() in PyTorch)"
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch zero_grad")
+            .input_output_types(vec![
+                (Type::String, Type::String),                      // single ID via pipe
+                (Type::List(Box::new(Type::String)),
+                 Type::List(Box::new(Type::String))),              // list via pipe
+                (Type::Nothing,
+                 Type::List(Box::new(Type::String)))               // list as arg
+            ])
+            .optional(
+                "tensors",
+                SyntaxShape::List(Box::new(SyntaxShape::String)),
+                "List of tensor IDs (if not given by pipeline)",
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Clear gradients of a single tensor via pipeline",
+                example: r#"
+let w = (torch full [2,2] 1 --requires_grad true)
+$w | torch zero_grad
+"#.trim(),
+                result: None,
+            },
+            Example {
+                description: "Clear gradients of several tensors via argument",
+                example: r#"
+let w1 = (torch full [1] 1 --requires_grad true)
+let w2 = (torch full [1] 2 --requires_grad true)
+torch zero_grad [$w1, $w2]
+"#.trim(),
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin : &NutorchPlugin,
+        _engine : &nu_plugin::EngineInterface,
+        call    : &nu_plugin::EvaluatedCall,
+        input   : PipelineData,
+    ) -> Result<PipelineData, LabeledError>
+    {
+        //------------------------------------------------------------------
+        // 1. Collect tensor IDs either from pipeline or argument
+        //------------------------------------------------------------------
+        let piped_val: Option<Value> = match &input {
+            PipelineData::Value(v, _) => Some(v.clone()),
+            PipelineData::Empty       => None,
+            _ => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Empty or Value inputs are supported", call.head))
+            }
+        };
+
+        let arg_val: Option<Value> = call.nth(0);
+
+        match (&piped_val, &arg_val) {
+            (None, None) => {
+                return Err(LabeledError::new("Missing input")
+                    .with_label("Provide tensor IDs via pipeline or as an argument", call.head));
+            }
+            (Some(_), Some(_)) => {
+                return Err(LabeledError::new("Conflicting input")
+                    .with_label("Provide tensor IDs via pipeline OR argument, not both", call.head));
+            }
+            _ => {}
+        }
+
+        let list_val = piped_val.or(arg_val).unwrap();
+
+        // Accept either single-ID string or list-of-IDs
+        let ids: Vec<String> = if let Ok(lst) = list_val.as_list() {
+            lst.iter()
+               .map(|v| v.as_str().map(|s| s.to_string()))
+               .collect::<Result<Vec<_>, _>>()?
+        } else {
+            vec![list_val.as_str().map(|s| s.to_string())?]
+        };
+
+        //------------------------------------------------------------------
+        // 2. Fetch tensors and clear grads
+        //------------------------------------------------------------------
+        let mut reg = TENSOR_REGISTRY.lock().unwrap();
+        tch::no_grad(|| {
+            for id in &ids {
+                let t = reg.get(id).ok_or_else(|| {
+                    LabeledError::new("Tensor not found")
+                        .with_label(format!("Invalid tensor ID: {id}"), call.head)
+                })?;
+                t.zero_grad().unwrap();     // in-place; ignore returned Result
+            }
+            Ok::<(), LabeledError>(())      // propagate any not-found error
+        })?;                                 // ? outside closure
+
+        //------------------------------------------------------------------
+        // 3. Return the same list of IDs
+        //------------------------------------------------------------------
+        let out_vals: Vec<Value> =
+            ids.into_iter().map(|id| Value::string(id, call.head)).collect();
+
+        Ok(PipelineData::Value(Value::list(out_vals, call.head), None))
+    }
+}
+```
+
+### Quick Nushell tests
+
+```nu
+# Create a parameter and force a gradient so .grad is defined
+let w = (torch full [2,2] 3 --requires_grad true)
+let loss = ($w | torch mean)
+$loss | torch backward     # populates w.grad
+
+# Pipeline style zeroing
+$w | torch zero_grad
+# Verify
+($w | torch grad_defined?)   # should print false  (assuming that helper exists)
+
+# Two tensors via argument
+let w1 = (torch full [1] 1 --requires_grad true)
+let w2 = (torch full [1] 2 --requires_grad true)
+torch zero_grad [$w1, $w2]
+```
+
+These tests show that `torch zero_grad` clears gradient buffers whether the IDs
+come from the pipeline or from an argument list.
+
+# === USER ===
+
+i had to update your code slightly because the tensor from the registry is not
+mutable, so i made a shallow clone. does this look right to you?
+
+```rust
+let reg = TENSOR_REGISTRY.lock().unwrap();
+tch::no_grad(|| {
+    for id in &ids {
+        let t = reg.get(id).ok_or_else(|| {
+            LabeledError::new("Tensor not found")
+                .with_label(format!("Invalid tensor ID: {id}"), call.head)
+        })?;
+        let mut tensor: Tensor = t.shallow_clone();
+        tensor.zero_grad();     // in-place; ignore returned Result
+    }
+    Ok::<(), LabeledError>(())      // propagate any not-found error
+})?;                                 // ? outside closure
+```
+
+# === ASSISTANT ===
+
+`Tensor::zero_grad()` (and the other in-place methods in `tch-rs`) take `&self`,
+not `&mut self`, so they can be called on an **immutable** `Tensor` handle.\
+Consequently you don’t actually need either
+
+1. the `mut` binding or
+2. the extra `shallow_clone()` just for mutability.
+
+The only reason you might want to clone is to **drop the `MutexGuard`** before
+you enter `no_grad`, so that other commands can access the registry while the
+grad-clearing loop runs. That’s the pattern I suggested earlier:
+
+```rust
+// --- fetch handles first, drop the lock ---
+let ids_clone = ids.clone();
+let tensors: Vec<Tensor> = {
+    let reg = TENSOR_REGISTRY.lock().unwrap();
+    ids_clone.iter()
+        .map(|id| {
+            reg.get(id).ok_or_else(|| {
+                LabeledError::new("Tensor not found")
+                    .with_label(format!("Invalid tensor ID: {id}"), call.head)
+            })
+            .map(|t| t.shallow_clone())
+        })
+        .collect::<Result<_, _>>()?
+};   // MutexGuard drops here
+
+// --- now we’re free, run no_grad ---
+tch::no_grad(|| {
+    for t in &tensors {
+        t.zero_grad().unwrap();   // &Tensor is fine
+    }
+});
+```
+
+If you keep the guard locked inside `no_grad` (your current snippet) it still
+works, but it isn’t necessary to clone **or** to mark the variable `mut`:
+
+```rust
+let reg = TENSOR_REGISTRY.lock().unwrap();
+tch::no_grad(|| {
+    for id in &ids {
+        let t = reg.get(id).ok_or_else(|| {
+            LabeledError::new("Tensor not found")
+                .with_label(format!("Invalid tensor ID: {id}"), call.head)
+        })?;
+        t.zero_grad().unwrap();   // works; &Tensor, no ‘mut’
+    }
+    Ok::<(), LabeledError>(())
+})?;
+```
+
+Either version is correct; the first one just releases the registry lock earlier
+and avoids holding it during the gradient-clearing loop.
+
+# === USER ===
+
+your early version gives compiler errors and does not build. your new version
+gives the same error. first of all, `.unwrap` doesn't exist, so i have to remove
+it. secondly, if `t` is not mutable, i get this error and cannot build:
+
+```rust
+Diagnostics:
+1. cannot borrow `*t` as mutable, as it is behind a `&` reference
+   `t` is a `&` reference, so the data it refers to cannot be borrowed as mutable [E0596]
+```
+
+AFAICT my solution by simply making `t` mutable with a shallow clone is the
+simplest way to fix this build error.
+
+please keep my solution in mind and be sure to use my solution, which passes the
+rust build step. you must use a mutable tensor for in-place operations,
+otherwise there is a build error.
+
+the rest of your solution looks good, but we can't test it yet. we need one more
+operation: `backward`.
+
+can you please implement this command next?
+
+# === ASSISTANT ===
+
+Below is an implementation of `CommandBackward`, plus a short Nushell
+demonstration that chains the new command with the `zero_grad` and `sgd_step`
+commands you already have.
+
+--------------------------------------------------------------------
+Command `torch backward`
+--------------------------------------------------------------------
+
+```rust
+/// torch backward
+/// Usage :   <loss-tensor-id> | torch backward
+///        or torch backward <loss-tensor-id>
+///
+/// Calls Tensor::backward() on a scalar loss tensor so that gradients are
+/// accumulated into all leaf tensors that have `requires_grad == true`.
+///
+/// The command returns the same tensor-id so the value can still be piped.
+struct CommandBackward;
+
+impl PluginCommand for CommandBackward {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str { "torch backward" }
+
+    fn description(&self) -> &str {
+        "Run back-propagation from a scalar loss tensor (loss.backward())."
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch backward")
+            .input_output_types(vec![
+                (Type::String,  Type::String),   // tensor id via pipeline
+                (Type::Nothing, Type::String),   // tensor id via arg
+            ])
+            .optional(
+                "loss_id",
+                SyntaxShape::String,
+                "ID of the scalar loss tensor (if not supplied by pipeline)",
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Backward via pipeline",
+                example: r#"
+let w = (torch full [1] 2 --requires_grad true)
+let loss = ($w | torch mean)
+$loss | torch backward
+"#.trim(),
+                result: None,
+            },
+            Example {
+                description: "Backward via argument",
+                example: r#"
+let w = (torch full [1] 2 --requires_grad true)
+let loss = ($w | torch mean)
+torch backward $loss
+"#.trim(),
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin : &NutorchPlugin,
+        _engine : &nu_plugin::EngineInterface,
+        call    : &nu_plugin::EvaluatedCall,
+        input   : PipelineData,
+    ) -> Result<PipelineData, LabeledError>
+    {
+        // ───── collect loss tensor-id either from pipeline or arg ─────
+        let piped : Option<Value> = match input {
+            PipelineData::Value(v, _) => Some(v),
+            PipelineData::Empty       => None,
+            _ => {
+                return Err(
+                    LabeledError::new("Unsupported input")
+                        .with_label("Only Empty or single Value inputs accepted", call.head)
+                )
+            }
+        };
+
+        let arg0  : Option<Value> = call.nth(0);
+
+        match (&piped, &arg0) {
+            (None, None)   => return Err(
+                LabeledError::new("Missing input")
+                    .with_label("Provide loss tensor ID via pipeline or argument", call.head)),
+            (Some(_), Some(_)) => return Err(
+                LabeledError::new("Conflicting input")
+                    .with_label("Provide loss tensor ID via pipeline OR argument, not both", call.head)),
+            _ => {}
+        }
+
+        let loss_id_val = piped.or(arg0).unwrap();
+        let loss_id = loss_id_val.as_str()?.to_string();
+
+        // ───── fetch the loss tensor ─────
+        let reg = TENSOR_REGISTRY.lock().unwrap();
+        let loss = reg.get(&loss_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found")
+                .with_label("Invalid loss tensor ID", call.head)
+        })?.shallow_clone();
+
+        // ───── ensure it is scalar (numel == 1)  (PyTorch expectation) ──
+        if loss.numel() != 1 {
+            return Err(
+                LabeledError::new("Invalid loss tensor")
+                    .with_label("Backward currently supports only scalar losses", call.head));
+        }
+
+        // ───── run backward  (grad-mode ON by default) ─────
+        loss.backward();
+
+        // return the same id for convenience
+        Ok(PipelineData::Value(Value::string(loss_id, call.head), None))
+    }
+}
+```
+
+Add `CommandBackward` to the plugin’s `commands()` list just as you did with the
+other commands.
+
+--------------------------------------------------------------------
+Quick Nushell test sequence
+--------------------------------------------------------------------
+
+This shows a full training-step style chain using the new
+`torch backward`, existing `torch zero_grad`, and `torch sgd_step`.
+
+```nu
+# 1. parameter with grad
+let w = (torch full [1] 5 --requires_grad true)
+
+# 2. clear old grads (there are none yet, but mimics real loop)
+[$w] | torch zero_grad
+
+# 3. forward pass + scalar loss:  loss = mean( sin(w) )
+let loss = ($w | torch sin | torch mean)
+
+# 4. backward
+$loss | torch backward
+
+# 5. SGD update (lr = 0.1)
+[$w] | torch sgd_step --lr 0.1
+
+# 6. inspect new parameter value (should be < 5)
+$w | torch value
+```
+
+If everything is wired correctly the final value printed for `w` will be slightly
+less than `5`, confirming that gradients were created, `backward` stored them in
+`w.grad`, and `sgd_step` used them to update the parameter.
+
 
 # === USER ===
 
