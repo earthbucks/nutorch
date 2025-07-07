@@ -4,8 +4,7 @@ Nutorch is a [Nushell](https://github.com/nushell/nushell) plugin that wraps
 [tch-rs](https://github.com/LaurentMazare/tch-rs), which itself is a wrapper for
 libtorch, the C++ backend of [PyTorch](https://pytorch.org/).
 
-In other words, **Nutorch is the same thing as PyTorch**, but in Nushell instead
-of Python.
+In other words, **Nutorch is PyTorch but in Nushell instead of Python**.
 
 ## Why?
 
