@@ -83,7 +83,6 @@ def sgd_step(ps: List[torch.Tensor], lr: float = 0.1) -> None:
         for p in ps:
             if p.grad is not None:
                 p -= lr * p.grad
-                p.grad.zero_() if p.grad is not None else None
 
 
 # ------------------------------------------------------------------ #
