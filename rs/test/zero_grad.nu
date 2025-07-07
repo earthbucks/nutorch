@@ -11,20 +11,19 @@ def print_failure [message: string] {
   print ((ansi red) + "FAILURE" + (ansi reset) + " - test/zero_grad - " + $message)
 }
 
-# 1. parameter with grad
-let w = (torch full [1] 5 --requires_grad true)
+let p = (torch full [1] 5 --requires_grad true)
+let loss = ($p | torch mean)
+$loss | torch backward                # create grad
+[$p] | torch zero_grad                # clear grad
 
-# 2. clear old grads (there are none yet, but mimics real loop)
-[$w] | torch zero_grad
+# run sgd_step with giant lr; value should NOT change (grad == 0)
+let before = ($p | torch value | get 0)
+[$p] | torch sgd_step --lr 10
+let after = ($p | torch value | get 0)
 
-# 3. forward pass + scalar loss:  loss = mean( sin(w) )
-let loss = ($w | torch sin | torch mean)
-
-# 4. backward
-$loss | torch backward
-
-# 5. SGD update (lr = 0.1)
-[$w] | torch sgd_step --lr 0.1
-
-# 6. inspect new parameter value (should be < 5)
-$w | torch value
+if ($before == $after) {
+    print_success "Gradients cleared, parameter unchanged"
+} else {
+    print_failure "Parameter changed ($before → $after) — zero_grad failed"
+    error make {msg:"zero_grad-pipeline failed"}
+}

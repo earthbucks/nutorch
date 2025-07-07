@@ -6756,9 +6756,9 @@ Below is an implementation of `CommandBackward`, plus a short Nushell
 demonstration that chains the new command with the `zero_grad` and `sgd_step`
 commands you already have.
 
---------------------------------------------------------------------
-Command `torch backward`
---------------------------------------------------------------------
+---
+
+## Command `torch backward`
 
 ```rust
 /// torch backward
@@ -6878,12 +6878,12 @@ torch backward $loss
 Add `CommandBackward` to the plugin’s `commands()` list just as you did with the
 other commands.
 
---------------------------------------------------------------------
-Quick Nushell test sequence
---------------------------------------------------------------------
+---
 
-This shows a full training-step style chain using the new
-`torch backward`, existing `torch zero_grad`, and `torch sgd_step`.
+## Quick Nushell test sequence
+
+This shows a full training-step style chain using the new `torch backward`,
+existing `torch zero_grad`, and `torch sgd_step`.
 
 ```nu
 # 1. parameter with grad
@@ -6905,11 +6905,215 @@ $loss | torch backward
 $w | torch value
 ```
 
-If everything is wired correctly the final value printed for `w` will be slightly
-less than `5`, confirming that gradients were created, `backward` stored them in
-`w.grad`, and `sgd_step` used them to update the parameter.
-
+If everything is wired correctly the final value printed for `w` will be
+slightly less than `5`, confirming that gradients were created, `backward`
+stored them in `w.grad`, and `sgd_step` used them to update the parameter.
 
 # === USER ===
 
+great. things are working so far. i have written a small test for `sgd_step`.
+can you please use my same test `framework` as you can see demonstrated in this
+nushell test to write one more test for `sgd_step`, and then also write two
+tests each for `backward` and `zero_grad`? using the same pattern demonstrated
+in this test. basically, create two values `result1` and `result2` and confirm
+you get the correct result, or otherwise throw an error.
 
+```nu
+plugin use torch
+
+# Function to print SUCCESS in green with an uncolored message
+def print_success [message: string] {
+  print ((ansi green) + "SUCCESS" + (ansi reset) + " - test/sgd_step - " + $message)
+}
+
+# Function to print FAILURE in red with an uncolored message
+def print_failure [message: string] {
+  print ((ansi red) + "FAILURE" + (ansi reset) + " - test/sgd_step - " + $message)
+}
+
+# 1. parameter with grad
+let w = (torch full [1] 5 --requires_grad true)
+
+# 2. clear old grads (there are none yet, but mimics real loop)
+[$w] | torch zero_grad
+
+# 3. forward pass + scalar loss:  loss = mean( sin(w) )
+let loss = ($w | torch sin | torch mean)
+
+# 4. backward
+$loss | torch backward
+
+# 5. SGD update (lr = 0.1)
+[$w] | torch sgd_step --lr 0.1
+
+# 6. inspect new parameter value (should be < 5)
+let result = $w | torch value | get 0
+if ($result < 5) {
+  print_success "SGD step test passed: Parameter updated successfully"
+} else {
+  print_failure "SGD step test failed: Expected value < 5, got $result"
+  error make {msg: "SGD step test failed: Expected value < 5, got $result"}
+}
+```
+
+# === ASSISTANT ===
+
+Below are five self-contained Nu tests that follow the same green/​red
+SUCCESS/​FAILURE pattern you used. They assume the commands `torch backward`,
+`torch zero_grad`, and `torch sgd_step` have been added and that
+`plugin use torch` is already done at the top of the file (omit the extra
+`plugin use torch` if all tests sit in the same script).
+
+Each test block defines its own `print_success` / `print_failure` helper with
+the test-name hard-wired so the output is easy to spot.
+
+---
+
+## 1 Extra test for `sgd_step`
+
+```nu
+###############################################################################
+# test/sgd_step-two-params
+###############################################################################
+def print_success [msg] { print ((ansi green) + "SUCCESS" + (ansi reset) +
+        " - test/sgd_step-two-params - " + $msg) }
+def print_failure [msg] { print ((ansi red)   + "FAILURE" + (ansi reset) +
+        " - test/sgd_step-two-params - " + $msg) }
+
+let w1 = (torch full [1] 3 --requires_grad true)
+let w2 = (torch full [1] 4 --requires_grad true)
+
+[$w1 $w2] | torch zero_grad
+let loss = ([$w1 $w2] | torch sin | torch mean)   # simple scalar loss
+$loss | torch backward
+[$w1 $w2] | torch sgd_step --lr 0.25               # big lr so change is visible
+
+let r1 = ($w1 | torch value | get 0)
+let r2 = ($w2 | torch value | get 0)
+if ($r1 < 3 and $r2 < 4) {
+    print_success "Both parameters decreased as expected"
+} else {
+    print_failure "Parameters not updated: w1=$r1 w2=$r2"
+    error make {msg:"sgd_step-two-params failed"}
+}
+```
+
+---
+
+## 2 Tests for `backward`
+
+```nu
+###############################################################################
+# test/backward-grad-defined
+###############################################################################
+def print_success [m] { print ((ansi green) + "SUCCESS" + (ansi reset) +
+        " - test/backward-grad-defined - " + $m) }
+def print_failure [m] { print ((ansi red)   + "FAILURE" + (ansi reset) +
+        " - test/backward-grad-defined - " + $m) }
+
+let p = (torch full [5] 1 --requires_grad true)
+let loss = ($p | torch sin | torch mean)
+$p | torch zero_grad                # make sure grad starts undefined
+$loss | torch backward              # populate grad
+
+# a gradient-aware op should now work: do one step and value must change
+let before = ($p | torch value | get 0)
+[$p] | torch sgd_step --lr 0.2
+let after = ($p | torch value | get 0)
+
+if ($after != $before) {
+    print_success "Gradient produced and parameter changed (before $before → after $after)"
+} else {
+    print_failure "Parameter unchanged; backward may have failed"
+    error make {msg:"backward-grad-defined failed"}
+}
+```
+
+```nu
+###############################################################################
+# test/backward-scalar-only (expect error)
+###############################################################################
+def print_success [m] { print ((ansi green) + "SUCCESS" + (ansi reset) +
+        " - test/backward-scalar-only - " + $m) }
+def print_failure [m] { print ((ansi red)   + "FAILURE" + (ansi reset) +
+        " - test/backward-scalar-only - " + $m) }
+
+let t = (torch full [2 2] 1 --requires_grad true)   # NOT scalar
+let result = (try { $t | torch backward } catch { "err" })
+
+if ($result == "err") {
+    print_success "Non-scalar backward correctly raised an error"
+} else {
+    print_failure "Backward on non-scalar tensor unexpectedly succeeded"
+    error make {msg:"backward-scalar-only failed"}
+}
+```
+
+---
+
+## 3 Tests for `zero_grad`
+
+```nu
+###############################################################################
+# test/zero_grad-pipeline
+###############################################################################
+def print_success [m] { print ((ansi green) + "SUCCESS" + (ansi reset) +
+        " - test/zero_grad-pipeline - " + $m) }
+def print_failure [m] { print ((ansi red)   + "FAILURE" + (ansi reset) +
+        " - test/zero_grad-pipeline - " + $m) }
+
+let p = (torch full [1] 5 --requires_grad true)
+let loss = ($p | torch mean)
+$loss | torch backward                # create grad
+[$p] | torch zero_grad                # clear grad
+
+# run sgd_step with giant lr; value should NOT change (grad == 0)
+let before = ($p | torch value | get 0)
+[$p] | torch sgd_step --lr 10
+let after = ($p | torch value | get 0)
+
+if ($before == $after) {
+    print_success "Gradients cleared, parameter unchanged"
+} else {
+    print_failure "Parameter changed ($before → $after) — zero_grad failed"
+    error make {msg:"zero_grad-pipeline failed"}
+}
+```
+
+```nu
+###############################################################################
+# test/zero_grad-argument-list
+###############################################################################
+def print_success [m] { print ((ansi green) + "SUCCESS" + (ansi reset) +
+        " - test/zero_grad-argument-list - " + $m) }
+def print_failure [m] { print ((ansi red)   + "FAILURE" + (ansi reset) +
+        " - test/zero_grad-argument-list - " + $m) }
+
+let p1 = (torch full [1] 8 --requires_grad true)
+let p2 = (torch full [1] 9 --requires_grad true)
+let loss = ([$p1 $p2] | torch mean)
+$loss | torch backward                       # create grads
+torch zero_grad [$p1 $p2]                   # via argument list
+
+let change = (
+    [$p1 $p2] | torch sgd_step --lr 5
+    | torch value                            # value of the list
+)
+#  expect no change => both elements still 8 & 9
+if ($change.0 == 8 and $change.1 == 9) {
+    print_success "zero_grad via argument list worked"
+} else {
+    print_failure "Parameters updated unexpectedly ($change)"
+    error make {msg:"zero_grad-argument-list failed"}
+}
+```
+
+These five blocks provide:
+
+• one extra `sgd_step` test\
+• two `backward` tests (success on scalar, error on non-scalar)\
+• two `zero_grad` tests (pipeline & argument forms)
+
+All use the same PASS/​FAIL reporting style you requested.
+
+# === USER ===
