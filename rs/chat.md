@@ -7353,4 +7353,138 @@ and `null` when it does not.
 
 # === USER ===
 
+i rewrote your test slightly to use the same template as the other tests.
+
+is there any way to add a test to this that computes the sign method of a tensor, and then checks the derivative of that? we could check the result with cos, correct? note that we don't yet have `torch cos`, however, the nushell standard library does have `math cos`.
+
+```nu
+plugin use torch
+
+# Function to print SUCCESS in green with an uncolored message
+def print_success [message: string] {
+  print ((ansi green) + "SUCCESS" + (ansi reset) + " - test/grad - " + $message)
+}
+
+# Function to print FAILURE in red with an uncolored message
+def print_failure [message: string] {
+  print ((ansi red) + "FAILURE" + (ansi reset) + " - test/grad - " + $message)
+}
+
+# 1. tensor with grad
+let w = (torch full [1] 2 --requires_grad true)
+($w | torch zero_grad) # ensure grad nil
+let loss = ($w | torch mean)
+$loss | torch backward
+
+let gid = ($w | torch grad) # should be id (not null)
+if ($gid != null) {
+  print_success "grad test passed: grad is not null"
+} else {
+  print_failure "grad test failed: expected non-null grad, got null"
+  error make {msg: "grad test failed"}
+}
+
+# 2. tensor without grad
+let v = (torch full [1] 7 --requires_grad true)
+let gnull = (torch grad $v)
+if ($gnull == null) {
+  print_success "grad null test passed: grad is null as expected"
+} else {
+  print_failure "grad null test failed: expected null grad, got $gnull"
+  error make {msg: "grad null test failed"}
+}
+```
+
+# === ASSISTANT ===
+
+Below is an expanded test script that keeps your same SUCCESS / FAILURE helpers
+and adds a third check that verifies the automatic-differentiation of `sin`
+against the analytical derivative `cos`.  
+Because we don’t yet have a `torch cos` command we use Nushell’s built-in
+`math cos` on the input scalar to compute the expected value.
+
+```nu
+plugin use torch
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+def print_success [msg] {
+  print ((ansi green) + "SUCCESS" + (ansi reset) + " - test/grad - " + $msg)
+}
+def print_failure [msg] {
+  print ((ansi red) + "FAILURE" + (ansi reset) + " - test/grad - " + $msg)
+}
+
+# ---------------------------------------------------------------------------
+# 1. grad exists after backward
+# ---------------------------------------------------------------------------
+let w = (torch full [1] 2 --requires_grad true)
+[$w] | torch zero_grad              # clear grads
+let loss = ($w | torch mean)        # dummy scalar loss
+$loss | torch backward
+
+let gid = ($w | torch grad)
+if ($gid != null) {
+    print_success "grad present after backward"
+} else {
+    print_failure "grad expected but null"
+    error make {msg: "grad present test failed"}
+}
+
+# ---------------------------------------------------------------------------
+# 2. grad is null when backward not yet run
+# ---------------------------------------------------------------------------
+let v = (torch full [1] 7 --requires_grad true)
+let gnull = (torch grad $v)
+if ($gnull == null) {
+    print_success "grad correctly null before backward"
+} else {
+    print_failure "grad unexpectedly defined"
+    error make {msg: "grad null test failed"}
+}
+
+# ---------------------------------------------------------------------------
+# 3. derivative check  :  d/dx sin(x)  ==  cos(x)
+# ---------------------------------------------------------------------------
+let xval = 0.5
+let x    = (torch full [1] $xval --requires_grad true)
+
+[$x] | torch zero_grad
+let loss2 = ($x | torch sin | torch mean)
+$loss2 | torch backward
+
+let g_id   = ($x | torch grad)
+if ($g_id == null) {
+    print_failure "sin derivative test: grad is null"
+    error make {msg: "sin derivative test failed (null grad)"}
+}
+
+let grad_val = ($g_id | torch value | get 0)
+let expected = ($xval | math cos)
+
+# allow tiny numerical tolerance
+let diff = (if ($grad_val > $expected) { $grad_val - $expected } else { $expected - $grad_val })
+if ($diff < 1e-6) {
+    print_success "sin derivative test passed (grad=$grad_val  expected=$expected)"
+} else {
+    print_failure "sin derivative test failed (grad=$grad_val  expected=$expected)"
+    error make {msg: "sin derivative mismatch"}
+}
+```
+
+What the new section does
+
+1. Creates a scalar parameter `x = 0.5` with `requires_grad=true`.
+2. Computes `loss = mean(sin(x))`, calls `backward`, and fetches the gradient.
+3. Converts the gradient tensor to a plain number with `torch value`.
+4. Computes the analytical derivative `cos(0.5)` using Nushell’s `math cos`.
+5. Compares them, passing if the absolute difference is < 1 × 10⁻⁶.
+
+This complements the earlier two tests and exercises `torch grad`, `torch
+backward`, `torch zero_grad`, `torch sin`, and the numerical correctness of AD
+through the new gradient-inspection command.
+
+# === USER ===
+
 
