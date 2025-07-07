@@ -45,9 +45,10 @@ impl Plugin for NutorchPlugin {
             Box::new(CommandSin),
             Box::new(CommandSqueeze),
             Box::new(CommandSub),
-            Box::new(CommandUnsqueeze),
             Box::new(CommandTensor),
+            Box::new(CommandUnsqueeze),
             Box::new(CommandValue),
+            Box::new(CommandZeroGrad),
         ]
     }
 
