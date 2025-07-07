@@ -1,14 +1,13 @@
-
 plugin use torch
 
 # Function to print SUCCESS in green with an uncolored message
 def print_success [message: string] {
-  print ((ansi green) + "SUCCESS" + (ansi reset) + " - test/zero_grad - " + $message)
+  print ((ansi green) + "SUCCESS" + (ansi reset) + " - test/sgd_step - " + $message)
 }
 
 # Function to print FAILURE in red with an uncolored message
 def print_failure [message: string] {
-  print ((ansi red) + "FAILURE" + (ansi reset) + " - test/zero_grad - " + $message)
+  print ((ansi red) + "FAILURE" + (ansi reset) + " - test/sgd_step - " + $message)
 }
 
 # 1. parameter with grad
@@ -27,4 +26,10 @@ $loss | torch backward
 [$w] | torch sgd_step --lr 0.1
 
 # 6. inspect new parameter value (should be < 5)
-$w | torch value
+let result = $w | torch value | get 0
+if ($result < 5) {
+  print_success "SGD step test passed: Parameter updated successfully"
+} else {
+  print_failure "SGD step test failed: Expected value < 5, got $result"
+  error make {msg: "SGD step test failed: Expected value < 5, got $result"}
+}
