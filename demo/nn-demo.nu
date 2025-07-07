@@ -116,6 +116,10 @@ def train [
   let losses = []
   let steps = []
   let ps = model_get_parameters --model $model
+
+  for epoch in (seq 0 ($epochs - 1)) {
+    let logits = $X | model_forward_pass --model $model
+  }
 }
 
 let res = (generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3)
