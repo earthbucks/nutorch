@@ -3647,11 +3647,11 @@ let transposed = t.transpose(0, 1); // transpose(0,1)
 Yes—your fix is exactly what we need.
 
 • PyTorch’s Python API offers both `tensor.t()` (convenience for
-  `transpose(0, 1)` on 2-D tensors) and the more general
-  `tensor.transpose(dim1, dim2)`.
+`transpose(0, 1)` on 2-D tensors) and the more general
+`tensor.transpose(dim1, dim2)`.
 
 • `tch-rs` only exposes the general form
-  `Tensor::transpose(dim1, dim2) -> Tensor`.
+`Tensor::transpose(dim1, dim2) -> Tensor`.
 
 Therefore replacing
 
@@ -3665,12 +3665,226 @@ with
 let transposed = t.transpose(0, 1);   // same semantics as .t()
 ```
 
-is correct and produces a new 2-D tensor with rows and columns swapped.  
+is correct and produces a new 2-D tensor with rows and columns swapped.\
 Everything else in the command (dim-check, registry insert, etc.) can stay
 unchanged.
 
 When you later add a full `torch transpose` command you can simply surface the
 two-index version and keep `torch t` as the 2-D shorthand.
+
+# === USER ===
+
+remarkably, i've been able to build a full neural network training loop with
+this code so far and it actually works. this is a major milestone. now, i need
+to move onto some more finishing touches with the MVP before we move onto
+finishing all the wrapper methods for torch/tch-rs.
+
+it occurs to me we have a big of a memory problem in that we provide mechanisms
+to create tensors, but no mechanism to free them from memory. this is not a
+problem most of the time, beacuse nushell will automatically close the plugin
+process after 10 seconds of inactivity by default, freeing all tensors.
+
+nonetheless, if someone wanted to do some very complex, long-lived calculations
+with nutorch, they're going to need a way to free tensors. so my question is,
+how do we do this? presumably libtorch has a mechanism to clean up freed
+tensors. but how this works in rust is less clear. because we are using a hash
+map as a tensor registry, perhaps we can just remove the tensor from the
+registry to delete it? We are using `Box` for everything. i'm not experienced
+with this. how do we free a tensor from memory?
+
+# === ASSISTANT ===
+
+How tensor memory is managed right now ─────────────────────────────────────── •
+A `tch::Tensor` is internally a reference-counted handle (roughly an
+`Arc<at::TensorImpl>`).\
+• Whenever the last Rust handle is dropped the C++ reference count reaches zero,
+and LibTorch immediately frees the underlying storage.
+
+What our plugin does • We store _one_ handle per tensor ID in a global
+`HashMap<String, Tensor>` that is protected by a `Mutex`.\
+• All commands that need a tensor obtain a `shallow_clone()` of that handle and
+use it for the operation. When they return, that clone is dropped, but the copy
+that sits in the registry stays alive.
+
+Therefore: **as long as an entry remains in the registry the tensor is never
+freed**; once we remove that entry the handle is dropped and—provided the user
+has not manually kept other copies—LibTorch will free the memory for us.
+
+So the solution is simply to provide a command that removes IDs from the
+registry.
+
+Suggested command ───────────────── torch free <id>… # via arguments [$id1 $id2]
+| torch free # via pipeline list $id | torch free # single ID through pipe
+
+Implementation outline
+
+1. Collect one or more IDs exactly the same way we do in `torch zero_grad`.
+2. Lock the registry, call `registry.remove(&id)` for each ID. • The returned
+   `Tensor` handle drops at end-of-scope → memory released. • If an ID is
+   unknown raise an error (or optionally ignore with a `--quiet` flag).
+3. Return e.g. the number of tensors freed, or the list of removed IDs, so the
+   user gets feedback.
+
+Caveats • Any other live handle—including those stashed in Nushell variables
+with `let x = $some_id`—will keep the tensor alive until that variable goes out
+of scope. This mirrors ordinary PyTorch semantics. • For GPU tensors the same
+rule applies: freeing the last handle releases the CUDA memory.
+
+In short, no explicit LibTorch “free” API is needed; dropping the last Rust
+`Tensor` handle is sufficient. A simple `torch free` command that deletes
+registry entries provides users with manual control over memory.
+
+# === USER ===
+
+great, then we need to implement a `torch free` command that either takes a tensor ID from the pipeline or as the first argument (but not both). can you write this method?
+
+# === ASSISTANT ===
+
+```rust
+// torch free  ---------------------------------------------------------------
+// Explicitly drop tensors from the global registry so their memory can be
+// reclaimed.  Accepts IDs via pipeline OR as the first positional argument
+// (string or list of strings) but not both.
+//
+//     $id  | torch free
+//     [$id1 $id2] | torch free
+//     torch free $id
+//     torch free [$id1 $id2]
+//
+// Returns the list of IDs that were successfully removed.
+// ---------------------------------------------------------------------------
+struct CommandFree;
+
+impl PluginCommand for CommandFree {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str { "torch free" }
+
+    fn description(&self) -> &str {
+        "Remove tensor(s) from the internal registry, freeing their memory \
+         when no other references exist."
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch free")
+            .input_output_types(vec![
+                (Type::String,                               Type::List(Box::new(Type::String))),
+                (Type::List(Box::new(Type::String)),         Type::List(Box::new(Type::String))),
+                (Type::Nothing,                              Type::List(Box::new(Type::String))),
+            ])
+            .optional(
+                "tensor_ids",
+                SyntaxShape::List(Box::new(SyntaxShape::String)),
+                "Tensor ID or list of IDs to free (if not provided by pipeline)",
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Free a single tensor via pipeline",
+                example: r#"
+let t = (torch full [1000] 1)
+$t | torch free
+"#.trim(),
+                result: None,
+            },
+            Example {
+                description: "Free several tensors in one call",
+                example: r#"
+let a = (torch randn [1000 1000])
+let b = (torch randn [1000 1000])
+torch free [$a $b]
+"#.trim(),
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin : &NutorchPlugin,
+        _engine : &nu_plugin::EngineInterface,
+        call    : &nu_plugin::EvaluatedCall,
+        input   : PipelineData,
+    ) -> Result<PipelineData, LabeledError>
+    {
+        // ── gather IDs from pipeline or argument ───────────────────────
+        let piped : Option<Value> = match &input {
+            PipelineData::Value(v, _) => Some(v.clone()),
+            PipelineData::Empty       => None,
+            _ => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Empty or Value inputs accepted", call.head))
+            }
+        };
+        let arg0 : Option<Value> = call.nth(0);
+
+        match (&piped, &arg0) {
+            (None, None)   =>
+                return Err(LabeledError::new("Missing input")
+                    .with_label("Provide tensor ID(s) via pipeline or argument", call.head)),
+            (Some(_), Some(_)) =>
+                return Err(LabeledError::new("Conflicting input")
+                    .with_label("Provide IDs via pipeline OR argument, not both", call.head)),
+            _ => {}
+        }
+
+        let ids_val = piped.or(arg0).unwrap();
+
+        // accept single string or list-of-strings
+        let ids: Vec<String> = if let Ok(list) = ids_val.as_list() {
+            list.iter()
+                .map(|v| v.as_str().map(|s| s.to_string()))
+                .collect::<Result<Vec<_>, _>>()?
+        } else {
+            vec![ids_val.as_str()?.to_string()]
+        };
+
+        if ids.is_empty() {
+            return Err(LabeledError::new("Empty list")
+                .with_label("No tensor IDs supplied", call.head));
+        }
+
+        // ── remove from registry ───────────────────────────────────────
+        let mut reg = TENSOR_REGISTRY.lock().unwrap();
+        let mut freed: Vec<Value> = Vec::new();
+
+        for id in ids {
+            if reg.remove(&id).is_some() {
+                // entry removed; push to return list
+                freed.push(Value::string(id, call.head));
+            } else {
+                return Err(LabeledError::new("Tensor not found")
+                    .with_label(format!("Invalid tensor ID: {id}"), call.head));
+            }
+        }
+
+        // returning list of IDs that were freed
+        Ok(PipelineData::Value(Value::list(freed, call.head), None))
+    }
+}
+```
+
+Usage examples in Nushell
+
+```nu
+plugin use torch
+
+# create and free a tensor
+let x = (torch randn [1000])
+$x | torch free      # returns ["<same-id>"]
+
+# free multiple tensors given as argument list
+let a = (torch full [2 2] 1)
+let b = (torch full [3 3] 2)
+torch free [$a $b]   # returns ["<a-id>", "<b-id>"]
+```
+
+Removing the entry from the registry drops the last owned `Tensor` handle (unless
+the user still holds another copy), letting LibTorch immediately reclaim CPU or
+CUDA memory.
 
 # === USER ===
 
