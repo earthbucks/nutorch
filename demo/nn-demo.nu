@@ -64,7 +64,7 @@ def plot_raw_data [res: record<X: string, y: string>] {
 def cross_entropy_loss [
   --outputs: string # tensor id of model outputs
   --targets: string # tensor id of target labels
-] {
+]: [nothing -> string] {
   let logp = $outputs | torch log_softmax --dim 1
   let loss = $logp | torch gather 1 ($targets | torch unsqueeze 1) | torch squeeze 1 | torch mean | torch neg
   $loss
@@ -112,13 +112,34 @@ def train [
   --epochs: int = 1000
   --lr: float = 0.1
   --record_every: int = 100
-] {
-  let losses = []
-  let steps = []
+]: [nothing -> record<model: record<w1: string, b1: string, w2: string, b2: string>, losses: list<number>, steps: list<number>>] {
+  mut losses: list<number> = []
+  mut steps: list<number> = []
   let ps = model_get_parameters --model $model
 
   for epoch in (seq 0 ($epochs - 1)) {
+    # forward and loss
     let logits = $X | model_forward_pass --model $model
+    let loss = cross_entropy_loss --outputs $logits --targets $y
+
+    # zero existing grads, back-prop, SGD upadate
+    for p in $ps {
+      $p | torch zero_grad
+    }
+    $loss | torch backward
+    torch sgd_step $ps --lr $lr
+
+    if (epoch + 1) mod record_every == 0 {
+      $losses = $losses | append ($loss | torch value | get 0)
+      $steps = $steps | append ($epoch + 1)
+      print $"epoch: $($epoch + 1)/$($epochs), loss: $($loss | torch value | get 0)"
+    }
+  }
+
+  return {
+    model: $model
+    losses: $losses
+    steps: $steps
   }
 }
 
