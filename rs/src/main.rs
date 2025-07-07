@@ -1464,7 +1464,9 @@ struct CommandZeroGrad;
 impl PluginCommand for CommandZeroGrad {
     type Plugin = NutorchPlugin;
 
-    fn name(&self) -> &str { "torch zero_grad" }
+    fn name(&self) -> &str {
+        "torch zero_grad"
+    }
 
     fn description(&self) -> &str {
         "Set the .grad field of the given tensor(s) to zero (like Tensor.zero_grad() in PyTorch)"
@@ -1473,11 +1475,12 @@ impl PluginCommand for CommandZeroGrad {
     fn signature(&self) -> Signature {
         Signature::build("torch zero_grad")
             .input_output_types(vec![
-                (Type::String, Type::String),                      // single ID via pipe
-                (Type::List(Box::new(Type::String)),
-                 Type::List(Box::new(Type::String))),              // list via pipe
-                (Type::Nothing,
-                 Type::List(Box::new(Type::String)))               // list as arg
+                (Type::String, Type::String), // single ID via pipe
+                (
+                    Type::List(Box::new(Type::String)),
+                    Type::List(Box::new(Type::String)),
+                ), // list via pipe
+                (Type::Nothing, Type::List(Box::new(Type::String))), // list as arg
             ])
             .optional(
                 "tensors",
@@ -1494,7 +1497,8 @@ impl PluginCommand for CommandZeroGrad {
                 example: r#"
 let w = (torch full [2,2] 1 --requires_grad true)
 $w | torch zero_grad
-"#.trim(),
+"#
+                .trim(),
                 result: None,
             },
             Example {
@@ -1503,7 +1507,8 @@ $w | torch zero_grad
 let w1 = (torch full [1] 1 --requires_grad true)
 let w2 = (torch full [1] 2 --requires_grad true)
 torch zero_grad [$w1, $w2]
-"#.trim(),
+"#
+                .trim(),
                 result: None,
             },
         ]
@@ -1511,18 +1516,17 @@ torch zero_grad [$w1, $w2]
 
     fn run(
         &self,
-        _plugin : &NutorchPlugin,
-        _engine : &nu_plugin::EngineInterface,
-        call    : &nu_plugin::EvaluatedCall,
-        input   : PipelineData,
-    ) -> Result<PipelineData, LabeledError>
-    {
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
         //------------------------------------------------------------------
         // 1. Collect tensor IDs either from pipeline or argument
         //------------------------------------------------------------------
         let piped_val: Option<Value> = match &input {
             PipelineData::Value(v, _) => Some(v.clone()),
-            PipelineData::Empty       => None,
+            PipelineData::Empty => None,
             _ => {
                 return Err(LabeledError::new("Unsupported input")
                     .with_label("Only Empty or Value inputs are supported", call.head))
@@ -1533,12 +1537,16 @@ torch zero_grad [$w1, $w2]
 
         match (&piped_val, &arg_val) {
             (None, None) => {
-                return Err(LabeledError::new("Missing input")
-                    .with_label("Provide tensor IDs via pipeline or as an argument", call.head));
+                return Err(LabeledError::new("Missing input").with_label(
+                    "Provide tensor IDs via pipeline or as an argument",
+                    call.head,
+                ));
             }
             (Some(_), Some(_)) => {
-                return Err(LabeledError::new("Conflicting input")
-                    .with_label("Provide tensor IDs via pipeline OR argument, not both", call.head));
+                return Err(LabeledError::new("Conflicting input").with_label(
+                    "Provide tensor IDs via pipeline OR argument, not both",
+                    call.head,
+                ));
             }
             _ => {}
         }
@@ -1548,8 +1556,8 @@ torch zero_grad [$w1, $w2]
         // Accept either single-ID string or list-of-IDs
         let ids: Vec<String> = if let Ok(lst) = list_val.as_list() {
             lst.iter()
-               .map(|v| v.as_str().map(|s| s.to_string()))
-               .collect::<Result<Vec<_>, _>>()?
+                .map(|v| v.as_str().map(|s| s.to_string()))
+                .collect::<Result<Vec<_>, _>>()?
         } else {
             vec![list_val.as_str().map(|s| s.to_string())?]
         };
@@ -1565,16 +1573,18 @@ torch zero_grad [$w1, $w2]
                         .with_label(format!("Invalid tensor ID: {id}"), call.head)
                 })?;
                 let mut tensor: Tensor = t.shallow_clone();
-                tensor.zero_grad();     // in-place; ignore returned Result
+                tensor.zero_grad(); // in-place; ignore returned Result
             }
-            Ok::<(), LabeledError>(())      // propagate any not-found error
-        })?;                                 // ? outside closure
+            Ok::<(), LabeledError>(()) // propagate any not-found error
+        })?; // ? outside closure
 
         //------------------------------------------------------------------
         // 3. Return the same list of IDs
         //------------------------------------------------------------------
-        let out_vals: Vec<Value> =
-            ids.into_iter().map(|id| Value::string(id, call.head)).collect();
+        let out_vals: Vec<Value> = ids
+            .into_iter()
+            .map(|id| Value::string(id, call.head))
+            .collect();
 
         Ok(PipelineData::Value(Value::list(out_vals, call.head), None))
     }
@@ -1593,7 +1603,9 @@ struct CommandBackward;
 impl PluginCommand for CommandBackward {
     type Plugin = NutorchPlugin;
 
-    fn name(&self) -> &str { "torch backward" }
+    fn name(&self) -> &str {
+        "torch backward"
+    }
 
     fn description(&self) -> &str {
         "Run back-propagation from a scalar loss tensor (loss.backward())."
@@ -1602,8 +1614,8 @@ impl PluginCommand for CommandBackward {
     fn signature(&self) -> Signature {
         Signature::build("torch backward")
             .input_output_types(vec![
-                (Type::String,  Type::String),   // tensor id via pipeline
-                (Type::Nothing, Type::String),   // tensor id via arg
+                (Type::String, Type::String),  // tensor id via pipeline
+                (Type::Nothing, Type::String), // tensor id via arg
             ])
             .optional(
                 "loss_id",
@@ -1621,7 +1633,8 @@ impl PluginCommand for CommandBackward {
 let w = (torch full [1] 2 --requires_grad true)
 let loss = ($w | torch mean)
 $loss | torch backward
-"#.trim(),
+"#
+                .trim(),
                 result: None,
             },
             Example {
@@ -1630,7 +1643,8 @@ $loss | torch backward
 let w = (torch full [1] 2 --requires_grad true)
 let loss = ($w | torch mean)
 torch backward $loss
-"#.trim(),
+"#
+                .trim(),
                 result: None,
             },
         ]
@@ -1638,33 +1652,34 @@ torch backward $loss
 
     fn run(
         &self,
-        _plugin : &NutorchPlugin,
-        _engine : &nu_plugin::EngineInterface,
-        call    : &nu_plugin::EvaluatedCall,
-        input   : PipelineData,
-    ) -> Result<PipelineData, LabeledError>
-    {
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
         // ───── collect loss tensor-id either from pipeline or arg ─────
-        let piped : Option<Value> = match input {
+        let piped: Option<Value> = match input {
             PipelineData::Value(v, _) => Some(v),
-            PipelineData::Empty       => None,
+            PipelineData::Empty => None,
             _ => {
-                return Err(
-                    LabeledError::new("Unsupported input")
-                        .with_label("Only Empty or single Value inputs accepted", call.head)
-                )
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Empty or single Value inputs accepted", call.head))
             }
         };
 
-        let arg0  : Option<Value> = call.nth(0);
+        let arg0: Option<Value> = call.nth(0);
 
         match (&piped, &arg0) {
-            (None, None)   => return Err(
-                LabeledError::new("Missing input")
-                    .with_label("Provide loss tensor ID via pipeline or argument", call.head)),
-            (Some(_), Some(_)) => return Err(
-                LabeledError::new("Conflicting input")
-                    .with_label("Provide loss tensor ID via pipeline OR argument, not both", call.head)),
+            (None, None) => {
+                return Err(LabeledError::new("Missing input")
+                    .with_label("Provide loss tensor ID via pipeline or argument", call.head))
+            }
+            (Some(_), Some(_)) => {
+                return Err(LabeledError::new("Conflicting input").with_label(
+                    "Provide loss tensor ID via pipeline OR argument, not both",
+                    call.head,
+                ))
+            }
             _ => {}
         }
 
@@ -1673,16 +1688,18 @@ torch backward $loss
 
         // ───── fetch the loss tensor ─────
         let reg = TENSOR_REGISTRY.lock().unwrap();
-        let loss = reg.get(&loss_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found")
-                .with_label("Invalid loss tensor ID", call.head)
-        })?.shallow_clone();
+        let loss = reg
+            .get(&loss_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found")
+                    .with_label("Invalid loss tensor ID", call.head)
+            })?
+            .shallow_clone();
 
         // ───── ensure it is scalar (numel == 1)  (PyTorch expectation) ──
         if loss.numel() != 1 {
-            return Err(
-                LabeledError::new("Invalid loss tensor")
-                    .with_label("Backward currently supports only scalar losses", call.head));
+            return Err(LabeledError::new("Invalid loss tensor")
+                .with_label("Backward currently supports only scalar losses", call.head));
         }
 
         // ───── run backward  (grad-mode ON by default) ─────
@@ -3407,7 +3424,9 @@ struct CommandGrad;
 impl PluginCommand for CommandGrad {
     type Plugin = NutorchPlugin;
 
-    fn name(&self) -> &str { "torch grad" }
+    fn name(&self) -> &str {
+        "torch grad"
+    }
 
     fn description(&self) -> &str {
         "Fetch the .grad of a tensor. Returns null if no gradient is defined."
@@ -3416,8 +3435,8 @@ impl PluginCommand for CommandGrad {
     fn signature(&self) -> Signature {
         Signature::build("torch grad")
             .input_output_types(vec![
-                (Type::String,  Type::String),          // tensor id via pipeline → string (uuid) or null
-                (Type::Nothing, Type::String)           // tensor id as arg       → "
+                (Type::String, Type::String), // tensor id via pipeline → string (uuid) or null
+                (Type::Nothing, Type::String), // tensor id as arg       → "
             ])
             .optional(
                 "tensor_id",
@@ -3436,7 +3455,8 @@ let w   = (torch full [1] 3 --requires_grad true)
 let loss = ($w | torch mean)
 $loss | torch backward
 $w | torch grad | torch value        # shows 1-tensor gradient
-"#.trim(),
+"#
+                .trim(),
                 result: None,
             },
             Example {
@@ -3444,7 +3464,8 @@ $w | torch grad | torch value        # shows 1-tensor gradient
                 example: r#"
 let w = (torch full [1] 5 --requires_grad true)
 torch grad $w              # → null
-"#.trim(),
+"#
+                .trim(),
                 result: None,
             },
         ]
@@ -3452,22 +3473,21 @@ torch grad $w              # → null
 
     fn run(
         &self,
-        _plugin : &NutorchPlugin,
-        _engine : &nu_plugin::EngineInterface,
-        call    : &nu_plugin::EvaluatedCall,
-        input   : PipelineData,
-    ) -> Result<PipelineData, LabeledError>
-    {
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
         //---------------- obtain tensor ID ------------------------------
-        let piped   = match &input {
+        let piped = match &input {
             PipelineData::Value(v, _) => Some(v.clone()),
-            PipelineData::Empty       => None,
+            PipelineData::Empty => None,
             _ => {
                 return Err(LabeledError::new("Unsupported input")
                     .with_label("Only Empty or Value pipeline inputs accepted", call.head))
             }
         };
-        let arg0    = call.nth(0);
+        let arg0 = call.nth(0);
 
         match (&piped, &arg0) {
             (None, None) => {
@@ -3475,8 +3495,10 @@ torch grad $w              # → null
                     .with_label("Provide tensor ID via pipeline or argument", call.head))
             }
             (Some(_), Some(_)) => {
-                return Err(LabeledError::new("Conflicting input")
-                    .with_label("Provide tensor ID via pipeline OR argument, not both", call.head))
+                return Err(LabeledError::new("Conflicting input").with_label(
+                    "Provide tensor ID via pipeline OR argument, not both",
+                    call.head,
+                ))
             }
             _ => {}
         }
@@ -3485,12 +3507,14 @@ torch grad $w              # → null
 
         //---------------- fetch tensor & its grad -----------------------
         let mut reg = TENSOR_REGISTRY.lock().unwrap();
-        let t = reg.get(&tensor_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found")
-                .with_label("Invalid tensor ID", call.head)
-        })?.shallow_clone();
+        let t = reg
+            .get(&tensor_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
+            })?
+            .shallow_clone();
 
-        let g = t.grad();          // always returns Tensor
+        let g = t.grad(); // always returns Tensor
         if !g.defined() {
             // Return null to Nushell
             return Ok(PipelineData::Value(Value::nothing(call.head), None));
