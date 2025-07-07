@@ -5215,7 +5215,12 @@ description of what we added to the command.
 
 # === USER ===
 
-ok, thanks. we're going to have to deal with more broadcasting issues soon. however, first, i want to fix a different issue with `torch mm`. like other methods we have fixed recently, this method has a problem in that it requires two tensors as arguments, and does not allow one of them to be piped in. we should fix this. can you update this function to allow both configurations:
+ok, thanks. we're going to have to deal with more broadcasting issues soon.
+however, first, i want to fix a different issue with `torch mm`. like other
+methods we have fixed recently, this method has a problem in that it requires
+two tensors as arguments, and does not allow one of them to be piped in. we
+should fix this. can you update this function to allow both configurations:
+
 1. the first tensor is piped in, and the second tensor is an argument, or
 2. both tensors are listed as arguments.
 
@@ -5330,7 +5335,7 @@ impl PluginCommand for CommandMm {
 Below is an updated `CommandMm` that accepts the two tensor IDs in a flexible
 way:
 
-• first-tensor ID through the pipeline + second-tensor ID as argument  
+• first-tensor ID through the pipeline + second-tensor ID as argument\
 • or both tensor IDs as positional arguments (back-compat)
 
 It collects the IDs, ensures exactly two, checks the tensors are 2-D and shape–
@@ -5483,52 +5488,611 @@ can you please summarize this chat so far, including:
 - information about our use of python
 - code demonstrations
 
-your summary shouldn't be too long, just detailed enough to provide all the most important points discussed so far.
+your summary shouldn't be too long, just detailed enough to provide all the most
+important points discussed so far.
 
 # === ASSISTANT ===
 
-Nutorch — project overview  
-• Goal: a Nushell plugin that exposes PyTorch-style tensor functionality from Rust.  
-• The compiled binary is named `nu_plugin_torch`; commands are invoked with the top-level word `torch` (e.g. `torch full`).  
-• All tensors are stored in a global registry (UUID → `tch::Tensor`). Commands return the UUID string; other values (e.g. shapes) are returned as plain Nushell lists.
+Nutorch — project overview\
+• Goal: a Nushell plugin that exposes PyTorch-style tensor functionality from
+Rust.\
+• The compiled binary is named `nu_plugin_torch`; commands are invoked with the
+top-level word `torch` (e.g. `torch full`).\
+• All tensors are stored in a global registry (UUID → `tch::Tensor`). Commands
+return the UUID string; other values (e.g. shapes) are returned as plain Nushell
+lists.
 
-Rust side  
-• Written as a single plugin crate; each CLI verb is a `Command*` struct implementing `PluginCommand`.  
-• Shape/​type checks, broadcasting checks, etc. are done manually because LibTorch C++ errors are not caught by `tch-rs`.  
-• Registry access is protected by a `Mutex<HashMap<String, Tensor>>`.  
-• Helper utilities: `get_device_from_call`, `get_kind_from_call`, `add_grad_from_call`, and broadcasting validation.
+Rust side\
+• Written as a single plugin crate; each CLI verb is a `Command*` struct
+implementing `PluginCommand`.\
+• Shape/​type checks, broadcasting checks, etc. are done manually because
+LibTorch C++ errors are not caught by `tch-rs`.\
+• Registry access is protected by a `Mutex<HashMap<String, Tensor>>`.\
+• Helper utilities: `get_device_from_call`, `get_kind_from_call`,
+`add_grad_from_call`, and broadcasting validation.
 
-Nushell usage patterns  
-• Wherever reasonable we allow the *first* tensor to come through the pipeline and subsequent operands as arguments (e.g. `| torch add $b`, `| torch maximum $b`, `| torch squeeze 0`).  
-• Some commands require list input for parity with PyTorch (`torch cat [$t1 $t2] --dim 1`).  
-• Commands that only query metadata (e.g. `torch shape`) return a list and do **not** store the result in the registry.
+Nushell usage patterns\
+• Wherever reasonable we allow the _first_ tensor to come through the pipeline
+and subsequent operands as arguments (e.g. `| torch add $b`,
+`| torch maximum $b`, `| torch squeeze 0`).\
+• Some commands require list input for parity with PyTorch
+(`torch cat [$t1 $t2] --dim 1`).\
+• Commands that only query metadata (e.g. `torch shape`) return a list and do
+**not** store the result in the registry.
 
-tch-rs / LibTorch integration  
-• `tch-rs` is the Rust binding to LibTorch; we rely on operators (`+  -  *  /`), `maximum`, `log_softmax`, `gather`, `unsqueeze`, `squeeze_dim`, `mm`, `cat`, etc.  
-• Certain features (pin-memory, `.add_scaled`) were removed/​reworked to match available API.  
+tch-rs / LibTorch integration\
+• `tch-rs` is the Rust binding to LibTorch; we rely on operators (`+  -  *  /`),
+`maximum`, `log_softmax`, `gather`, `unsqueeze`, `squeeze_dim`, `mm`, `cat`,
+etc.\
+• Certain features (pin-memory, `.add_scaled`) were removed/​reworked to match
+available API.\
 • We propagate `is_sparse()` as the `sparse_grad` flag when calling `gather`.
 
-Implemented tensor commands (highlights)  
-• Creation: `torch tensor`, `torch full [size] value`, `torch linspace`, `torch randn`, `torch repeat`, `torch manual_seed`.  
-• Unary ops: `log_softmax`, `mean`, `neg`, `squeeze`, `unsqueeze`, `shape`.  
-• Binary/​element-wise ops with broadcasting: `add`, `sub`, `mul`, `div`, `maximum`.  
-• Matrix/​concat ops: `mm`, `cat`.  
-• Indexing: `gather` (pipeline-source, `(dim index)` arguments).  
-• Each command validates dimensions, broadcasting, dtype, etc., and returns a new tensor UUID.
+Implemented tensor commands (highlights)\
+• Creation: `torch tensor`, `torch full [size] value`, `torch linspace`,
+`torch randn`, `torch repeat`, `torch manual_seed`.\
+• Unary ops: `log_softmax`, `mean`, `neg`, `squeeze`, `unsqueeze`, `shape`.\
+• Binary/​element-wise ops with broadcasting: `add`, `sub`, `mul`, `div`,
+`maximum`.\
+• Matrix/​concat ops: `mm`, `cat`.\
+• Indexing: `gather` (pipeline-source, `(dim index)` arguments).\
+• Each command validates dimensions, broadcasting, dtype, etc., and returns a
+new tensor UUID.
 
-Python reference  
-• We continuously compare behavior to PyTorch examples (e.g. `torch.full`, `torch.max`, `torch.log_softmax`, operator overloading like `-tensor`).  
-• A helper Nu function `cross_entropy_loss` was written, mirroring Python logic (`log_softmax → gather → mean → neg`).
+Python reference\
+• We continuously compare behavior to PyTorch examples (e.g. `torch.full`,
+`torch.max`, `torch.log_softmax`, operator overloading like `-tensor`).\
+• A helper Nu function `cross_entropy_loss` was written, mirroring Python logic
+(`log_softmax → gather → mean → neg`).
 
-Code demonstrations & tests  
-• One-liner Nushell tests accompany every new command (e.g. broadcasting failure case for `maximum`; shape checks for `gather`; pipeline vs argument examples).  
-• Small Nu test scripts have been created to automatically assert expected output or expected errors using helper functions like `compare_nested_lists`.
+Code demonstrations & tests\
+• One-liner Nushell tests accompany every new command (e.g. broadcasting failure
+case for `maximum`; shape checks for `gather`; pipeline vs argument examples).\
+• Small Nu test scripts have been created to automatically assert expected
+output or expected errors using helper functions like `compare_nested_lists`.
 
-Key design decisions  
-1. Always store only `Tensor`s in the registry; non-tensor metadata is returned directly.  
-2. Follow PyTorch argument order when possible (`torch full [size] value`).  
-3. Prefer pipeline-first style for unary/​binary ops; allow list-or-arg fall-backs where unambiguous.  
+Key design decisions
+
+1. Always store only `Tensor`s in the registry; non-tensor metadata is returned
+   directly.
+2. Follow PyTorch argument order when possible (`torch full [size] value`).
+3. Prefer pipeline-first style for unary/​binary ops; allow list-or-arg
+   fall-backs where unambiguous.
 4. Manual broadcasting and shape checks to pre-empt LibTorch runtime panics.
+
+# === USER ===
+
+great, now i need your help to make the next command: `torch sgd_step`. this
+function is slightly different than most of the other functions we have created,
+or at least i think it is. we need the an `sgd_step` function which is a
+gradient descent step. it should take a list of parameters (tensors) and a
+learning rate, and update the parameters in place. it should also return the
+updated parameters as a list.
+
+this is slightly different than most of the othe functions we have created,
+because it needs to perform several operations (unless `sgd_step` is directly
+supported by tch-rs). the difference is, if i understand the tch-rs interface
+correctly, we will need to use the 'no grad' closure to wrap the methods inside.
+normally, i would prefer to implement all of this in nushell, and wrap each
+elementary function with rust. however, in this case, i don't believe that will
+be possible, because there is no way (AFAICT) to export the closure we need in
+this case.
+
+here is some demo python code of the `sgd_step` function:
+
+```python
+def sgd_step(ps: List[torch.Tensor], lr: float = 0.1) -> None:
+    """
+    Vanilla gradient descent:  p ← p - lr * p.grad , then reset gradients.
+    Operates in-place; returns nothing.
+    """
+    with torch.no_grad():
+        for p in ps:
+            if p.grad is not None:
+                p -= lr * p.grad
+                p.grad.zero_() if p.grad is not None else None
+```
+
+and meanwhile, here is a similar implementation in rust (possibly not fully
+correct):
+
+```rust
+use tch::{Tensor, no_grad_guard};
+
+fn sgd_step(params: &[Tensor], lr: f64) {
+    let _nog = no_grad_guard();            // grad-mode OFF inside this scope
+    for p in params {
+        if let Some(g) = p.grad_opt() {
+            p.f_sub_(&(g * lr)).unwrap();  // p -= lr * g
+            p.zero_grad();                 // clear gradient buffer
+        }
+    }
+}   // guard drops here → grad-mode restored
+```
+
+and here is another implementation in rust using the closure mechanism:
+
+```rust
+use tch::{Tensor, no_grad};
+
+fn sgd_step(params: &[Tensor], lr: f64) {
+    no_grad(|| {
+        for p in params {
+            if let Some(g) = p.grad_opt() {         // get Option<Tensor>
+                // p -= lr * g      (in-place update)
+                p.f_sub_(&( &g * lr )).unwrap();
+                p.zero_grad();                      // reset gradient
+            }
+        }
+    });
+}
+```
+
+now, similar to some other rust/nutorch commands we have created before, we're
+going to need to accept two types of input
+
+- a list of tensor IDs piped in, or
+- a list of tensor IDs as an argument
+- but not both at the same time
+
+first of all, before implmenting this, please give me your interpretation of
+this plan, and whether you agree that implementing an `sgd_step` function is the
+best way to implement gradient descent in our nushell plugin. if you have a
+better way to expose this functionality in nushell, such as a way to somehow
+expose the closure to nushell (which, as far as i can tell, is impossible), then
+please let me know. after you confirm my plan (if you agree), we will then
+implement it.
+
+# === ASSISTANT ===
+
+My understanding of what you want and why it has to be done in Rust (rather than
+pieced-together Nushell) is:
+
+1 SGD in PyTorch is really just “assign to the parameter in place while
+grad-tracking is OFF, then zero the grad buffer”.\
+2 Turning grad-tracking “OFF” is done in `tch-rs` with `no_grad(..)` or the
+guard object and must wrap the _whole_ in-place assignment. Nushell can’t
+express such a closure around arbitrary Rust code, so we need one dedicated
+command.\
+3 Therefore a single plugin command `torch sgd_step` that: • temporarily
+disables grad mode,\
+• walks a list of tensors,\
+• performs `p -= lr * p.grad` in-place,\
+• clears `p.grad`,\
+is the most direct and safest solution.
+
+I don’t see a better Nushell-level alternative:
+
+• Having the user call `torch sub_`, `torch mul`, etc. would require keeping
+grad-tracking ON for the intermediate ops (wrong) or inventing a “grad-off”
+shell block construct (non-trivial to implement).\
+• Exposing a general “with_no_grad { … }” command that executes arbitrary nested
+Nushell pipeline isn’t possible with today’s Nushell plugin API because a plugin
+can’t execute a block of Nushell code on the engine’s behalf.
+
+So a dedicated `torch sgd_step` command implemented in Rust is the practical
+route. It will:
+
+• Accept the parameter list either as – pipeline input (a Nushell list of tensor
+IDs) or\
+– a first positional argument (same list), but never both.\
+• Take a `--lr` flag (float, default say 0.01).\
+• Update each parameter in-place under `no_grad`, zero its grad, and return the
+same list of IDs (the tensors were mutated, IDs stay the same).
+
+That matches PyTorch semantics, keeps our plugin-style consistent, and avoids
+grad-tracking pitfalls.
+
+If you agree with that design I’ll provide the full `CommandSgdStep`
+implementation plus example Nu tests.
+
+# === USER ===
+
+perfect. yes, please provide the `CommandSgdStep` implementation, and some nu
+tests.
+
+# === ASSISTANT ===
+
+### `CommandSgdStep`
+
+```rust
+// torch sgd_step  -----------------------------------------------------------
+// Performs *in-place* SGD update:  p -= lr * p.grad  (and zeroes the grad).
+// Accept a list of tensor-IDs either from the pipeline **or** as the first
+// positional argument (but not both).  Returns the *same* list of IDs.
+//
+// Example usage
+//     [$w1 $w2] | torch sgd_step --lr 0.05
+//     torch sgd_step [$w1 $w2] --lr 0.05
+// ---------------------------------------------------------------------------
+
+struct CommandSgdStep;
+
+impl PluginCommand for CommandSgdStep {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str { "torch sgd_step" }
+
+    fn description(&self) -> &str {
+        "Vanilla stochastic-gradient-descent step: p -= lr * p.grad (in-place) \
+         and p.grad is zeroed."
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch sgd_step")
+            // list of ids in  -> list of ids out
+            .input_output_types(vec![
+                (Type::List(Box::new(Type::String)), Type::List(Box::new(Type::String))),
+                (Type::Nothing,                       Type::List(Box::new(Type::String))),
+            ])
+            .optional(
+                "params",
+                SyntaxShape::List(Box::new(SyntaxShape::String)),
+                "List of parameter tensor IDs (if not supplied by pipeline)",
+            )
+            .named(
+                "lr",
+                SyntaxShape::Float,
+                "Learning-rate (default 0.01)",
+                None,
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "SGD step with parameter list piped in",
+                example: r#"
+let w1 = (torch full [2,2] 1)      # pretend w1.grad is already populated
+let w2 = (torch full [2,2] 2)
+[$w1, $w2] | torch sgd_step --lr 0.1
+"#.trim(),
+                result: None,
+            },
+            Example {
+                description: "SGD step with parameter list as argument",
+                example: r#"
+let w1 = (torch full [2,2] 1)
+let w2 = (torch full [2,2] 2)
+torch sgd_step [$w1, $w2] --lr 0.05
+"#.trim(),
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin : &NutorchPlugin,
+        _engine : &nu_plugin::EngineInterface,
+        call    : &nu_plugin::EvaluatedCall,
+        input   : PipelineData,
+    ) -> Result<PipelineData, LabeledError>
+    {
+        //--------------------------------------------------------------
+        // 1. Collect parameter IDs
+        //--------------------------------------------------------------
+        let list_from_pipe: Option<Value> = match &input {
+            PipelineData::Value(v, _) => Some(v.clone()),
+            PipelineData::Empty       => None,
+            _ => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Value or Empty pipeline inputs are supported", call.head))
+            }
+        };
+
+        let list_from_arg: Option<Value> = call.nth(0);
+
+        match (&list_from_pipe, &list_from_arg) {
+            (None, None) => {
+                return Err(LabeledError::new("Missing input")
+                    .with_label("Provide parameter list via pipeline or argument", call.head));
+            }
+            (Some(_), Some(_)) => {
+                return Err(LabeledError::new("Conflicting input")
+                    .with_label("Provide parameter list via pipeline OR argument, not both", call.head));
+            }
+            _ => {}
+        };
+
+        let list_val = list_from_pipe.or(list_from_arg).unwrap();
+
+        let param_ids: Vec<String> = list_val.as_list().map_err(|_|{
+                LabeledError::new("Invalid input")
+                    .with_label("Parameter list must be a list of tensor IDs", call.head)
+            })?
+            .iter()
+            .map(|v| v.as_str().map(|s| s.to_string()))
+            .collect::<Result<Vec<String>, _>>()?;
+
+        if param_ids.is_empty() {
+            return Err(LabeledError::new("Invalid input")
+                .with_label("Parameter list is empty", call.head));
+        }
+
+        //--------------------------------------------------------------
+        // 2. Learning-rate flag (default 0.01)
+        //--------------------------------------------------------------
+        let lr: f64 = call.get_flag("lr")?.unwrap_or(0.01);
+
+        //--------------------------------------------------------------
+        // 3. Fetch tensors and perform in-place update under no_grad
+        //--------------------------------------------------------------
+        let mut reg = TENSOR_REGISTRY.lock().unwrap();
+
+        {
+            // disable grad-mode for the duration of the update
+            tch::no_grad(|| {
+                for id in &param_ids {
+                    let p = reg.get(id).ok_or_else(|| {
+                        LabeledError::new("Tensor not found")
+                            .with_label(format!("Invalid tensor ID: {id}"), call.head)
+                    })?;
+
+                    if let Some(g) = p.grad_opt() {
+                        // p -= lr * g   (in-place)
+                        // f_sub_ consumes &Tensor but returns Result
+                        p.f_sub_(&(g * lr)).unwrap();
+                        p.zero_grad();
+                    }
+                }
+            });
+        }
+
+        //--------------------------------------------------------------
+        // 4. Return the (still the same) list of parameter IDs
+        //--------------------------------------------------------------
+        let out_vals: Vec<Value> =
+            param_ids.iter().map(|id| Value::string(id, call.head)).collect();
+        Ok(PipelineData::Value(Value::list(out_vals, call.head), None))
+    }
+}
+```
+
+### Quick Nushell tests
+
+```nu
+# Create two parameters and fake their gradients
+let w1 = (torch full [2,2] 1)          # initial value [[1 1] [1 1]]
+let w2 = (torch full [2,2] 2)          # initial value [[2 2] [2 2]]
+
+# Manually attach gradients (for demo we reuse tensors of ones)
+# (Assume you added a helper command torch set_grad <param> <grad>)
+torch set_grad $w1 (torch full [2,2] 0.5)
+torch set_grad $w2 (torch full [2,2] 0.1)
+
+# Pipeline style
+[$w1, $w2] | torch sgd_step --lr 0.2
+
+# Inspect updated params
+$w1 | torch value      # should now be [[0.9 0.9] [0.9 0.9]]
+$w2 | torch value      # should now be [[1.98 1.98] [1.98 1.98]]
+
+# Argument style
+let params = [$w1, $w2]
+torch sgd_step $params --lr 0.4
+```
+
+The command:
+
+1. Accepts a list of tensor IDs via pipeline **or** as first argument (not
+   both).
+2. Uses `--lr` (default 0.01) for the learning rate.
+3. Executes the classic in-place SGD update under `tch::no_grad`.
+4. Returns the same list of parameter IDs for further chaining.
+
+# === USER ===
+
+the function .grad_opt doesn't exist. is there another function i should be
+using instead?
+
+# === ASSISTANT ===
+
+`tch-rs` exposes only `Tensor::grad()` (which always returns a `Tensor`), not an
+`Option`.\
+To test whether a gradient actually exists you call `.defined()` on the returned
+tensor.
+
+So replace
+
+```rust
+if let Some(g) = p.grad_opt() {
+    p.f_sub_(&(g * lr)).unwrap();
+    p.zero_grad();
+}
+```
+
+with
+
+```rust
+let g = p.grad();
+if g.defined() {
+    p.f_sub_(&(g * lr)).unwrap();   // p -= lr * g   (in-place)
+    p.zero_grad();                  // clear grad buffer
+}
+```
+
+That is the idiomatic way in `tch-rs` to handle “optional” gradients.
+
+# === USER ===
+
+i'm getting this error:
+
+```
+Diagnostics:
+1. the `?` operator can only be used in a closure that returns `Result` or `Option` (or another type that implements `std::ops::FromResidual`)
+   cannot use the `?` operator in a closure that returns `()` [E0277]
+```
+
+that's on the `let p = ...?;` portion of the code.
+
+after some time, i rewrote the code like this:
+
+```rust
+//--------------------------------------------------------------
+// 3. Fetch tensors and perform in-place update under no_grad
+//--------------------------------------------------------------
+let registry = TENSOR_REGISTRY.lock().unwrap();
+let mut tensors: Vec<Tensor> = Vec::new();
+for id in &param_ids {
+    match registry.get(id) {
+        Some(tensor) => tensors.push(tensor.shallow_clone()),
+        None => {
+            return Err(LabeledError::new("Tensor not found")
+                .with_label(format!("Invalid tensor ID: {}", id), call.head))
+        }
+    }
+}
+// disable grad-mode for the duration of the update
+tch::no_grad(|| {
+    for mut p in tensors {
+        let g = p.grad();
+        if g.defined() {
+            p.f_sub_(&(g * lr)).unwrap(); // p -= lr * g   (in-place)
+            p.zero_grad(); // clear grad buffer
+        };
+    }
+});
+```
+
+does that look right to you?
+
+# === ASSISTANT ===
+
+Your rewrite is essentially correct and eliminates the `?`-operator problem
+because you no longer try to use `?` inside the `no_grad` closure (which returns
+`()`).
+
+Two small polish notes:
+
+1. Don’t keep the `MutexGuard` while you’re inside `no_grad`.\
+   The guard isn’t needed once you’ve copied the `Tensor`s into a local vector
+   (the shallow-clone shares storage), and dropping it early avoids any chance
+   of dead-locking if another thread / command needs to lock the registry while
+   the closure runs.
+
+2. You don’t need `mut p` in the `for` loop – `f_sub_` takes `&self` and still
+   mutates the underlying storage.
+
+A concise version:
+
+```rust
+//--------------------------------------------------------------
+// 3. Fetch tensors first (holding the lock only briefly)
+//--------------------------------------------------------------
+let tensors: Vec<Tensor> = {
+    let registry = TENSOR_REGISTRY.lock().unwrap();
+    let mut tmp = Vec::with_capacity(param_ids.len());
+    for id in &param_ids {
+        match registry.get(id) {
+            Some(t) => tmp.push(t.shallow_clone()),
+            None => {
+                return Err(LabeledError::new("Tensor not found")
+                    .with_label(format!("Invalid tensor ID: {id}"), call.head))
+            }
+        }
+    }
+    tmp   // guard drops here
+};
+
+//--------------------------------------------------------------
+// 4. Perform in-place SGD update with grad mode off
+//--------------------------------------------------------------
+tch::no_grad(|| {
+    for p in &tensors {
+        let g = p.grad();
+        if g.defined() {
+            p.f_sub_(&(g * lr)).unwrap();   // p -= lr * g
+            p.zero_grad();                  // clear gradient
+        }
+    }
+});
+
+//--------------------------------------------------------------
+// 5. Return the same list of parameter IDs
+//--------------------------------------------------------------
+let out: Vec<Value> = param_ids.iter().map(|id| Value::string(id, call.head)).collect();
+Ok(PipelineData::Value(Value::list(out, call.head), None))
+```
+
+Key points:
+
+• `shallow_clone()` ensures the vector elements reference the same storage as
+the registry tensors, so the in-place `f_sub_` updates propagate.\
+• The `Mutex` guard no longer spans the `no_grad` section.\
+• No more mutable binding needed for `p`.
+
+# === USER ===
+
+you're wrong about not using 'mut p'. if i drop the 'mut', i get an error. that
+seems to be a requirement.
+
+i'm getting a warning in my LSP that this line actually returns a tensor:
+
+```rust
+p.f_sub_(&(g * lr)).unwrap(); // p -= lr * g   (in-place)
+```
+
+that implies i should set:
+
+```rust
+p = p.f_sub_(&(g * lr)).unwrap(); // p -= lr * g   (in-place)
+```
+
+however ... the whole point of this is that we should be operating on tensors in place, so that when we clear the gradients, we are clearing the *same* tensor. is there a way to verify that the `f_sub_` method returns the *same* tensor, and therefore we don't need to "reset" `p`?
+
+
+# === ASSISTANT ===
+
+`f_sub_` (the trailing **underscore** marks it as *in-place*) works like every
+other in-place method in `tch-rs` / LibTorch:
+
+• It mutates the storage referenced by `self`.  
+• For convenience it **also returns a new `Tensor` handle** that points to that
+  same storage.  You can capture it or simply ignore it.
+
+So the idiom
+
+```rust
+p.f_sub_(&(g * lr)).unwrap();           // mutate in-place, ignore return value
+```
+
+is totally fine; you do **not** need
+
+```rust
+p = p.f_sub_(&(g * lr)).unwrap();       //     (redundant)
+```
+
+because both `p` and the returned handle share the same underlying buffer.
+
+If you want to convince yourself:
+
+```rust
+let before_ptr = p.data_ptr();
+let r = p.f_sub_(&(g * lr)).unwrap();
+assert_eq!(before_ptr, r.data_ptr());   // same memory
+```
+
+Re the `mut` in the `for` loop: you only need `mut p` when you *re-assign*
+`p` (e.g. `p = …`). If you keep the statement that simply calls the
+in-place function and discards its result, `mut` is **not** required:
+
+```rust
+for p in &tensors {
+    let g = p.grad();
+    if g.defined() {
+        p.f_sub_(&(g * lr)).unwrap();   // OK, no mut re-binding
+        p.zero_grad();
+    }
+}
+```
+
+(Here `p` is an immutable handle; the *storage* it points to is modified by
+LibTorch.)
+
+So you can safely keep the shorter version without re-assignment and without
+`mut` in the loop variable.
 
 # === USER ===
 
