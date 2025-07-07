@@ -113,6 +113,9 @@ def train [
   --lr: float = 0.1
   --record_every: int = 100
 ] {
+  let losses = []
+  let steps = []
+  let ps = model_get_parameters --model $model
 }
 
 let res = (generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3)

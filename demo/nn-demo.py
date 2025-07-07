@@ -57,11 +57,11 @@ def model_init(inp: int = 2, hid: int = 20, out: int = 3) -> Model:
     }
 
 
-def params(model: Model) -> List[torch.Tensor]:
+def model_get_parameters(model: Model) -> List[torch.Tensor]:
     return [model["w1"], model["b1"], model["w2"], model["b2"]]
 
 
-def forward(model: Model, x: torch.Tensor) -> torch.Tensor:
+def model_forward_pass(model: Model, x: torch.Tensor) -> torch.Tensor:
     x = torch.mm(x, model["w1"].t()) + model["b1"]
     x = torch.max(torch.tensor(0.0), x)  # ReLU
     x = torch.mm(x, model["w2"].t()) + model["b2"]
@@ -97,11 +97,11 @@ def train(
     record_every: int = 100,
 ) -> Tuple[List[float], List[int]]:
     losses, steps = [], []
-    ps = params(model)
+    ps = model_get_parameters(model)
 
     for epoch in range(epochs):
         # forward & loss
-        logits = forward(model, X)
+        logits = model_forward_pass(model, X)
         loss = cross_entropy_loss(logits, y)
 
         # zero existing grads, back-prop, SGD update
@@ -132,7 +132,7 @@ def plot_results(X: torch.Tensor, y: torch.Tensor, model: Model) -> None:
     mesh = torch.stack([xx.flatten(), yy.flatten()], dim=1)
 
     with torch.no_grad():
-        logits = forward(model, mesh)
+        logits = model_forward_pass(model, mesh)
         Z = torch.argmax(logits, dim=1).reshape(xx.shape)
 
     plt.contourf(xx, yy, Z, alpha=0.4, cmap="viridis")
