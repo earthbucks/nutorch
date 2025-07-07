@@ -33,5 +33,3 @@ if ($result3 == 9) {
   print_failure "Addition with list input test failed: Expected 9, got $result3"
   error make {msg: "Addition with list input test failed: Expected 9, got $result3"}
 }
-
-
