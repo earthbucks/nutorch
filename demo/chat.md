@@ -6631,9 +6631,9 @@ def sgd_step(ps: List[torch.Tensor], lr: float = 0.1) -> None:
 
 # === ASSISTANT ===
 
-Yes.  
-LibTorch (and therefore `tch-rs`) has the same *“temporarily disable gradient
-tracking”* facility.  
+Yes.\
+LibTorch (and therefore `tch-rs`) has the same _“temporarily disable gradient
+tracking”_ facility.\
 In `tch-rs` it is exposed as a function:
 
 ```rust
@@ -6642,8 +6642,8 @@ tch::no_grad(|| {
 });
 ```
 
-`no_grad` takes a closure; while the closure runs, the global autograd flag
-is cleared, exactly like Python’s
+`no_grad` takes a closure; while the closure runs, the global autograd flag is
+cleared, exactly like Python’s
 
 ```python
 with torch.no_grad():
@@ -6652,7 +6652,8 @@ with torch.no_grad():
 
 When the closure exits the previous grad-mode is automatically restored.
 
---------------------------------------------------------------------
+---
+
 ### Re-writing the `sgd_step` in Rust / `tch-rs`
 
 ```rust
@@ -6672,9 +6673,10 @@ fn sgd_step(params: &[Tensor], lr: f64) {
 ```
 
 Key API points
-* `no_grad(|| { ... })` – disables gradient recording for the closure body.  
-* `Tensor::grad_opt()` – returns `Option<Tensor>` (None if grad is absent).  
-* `f_sub_` / `f_add_` / etc. are the in-place ops that correspond to `p -= …`.
+
+- `no_grad(|| { ... })` – disables gradient recording for the closure body.
+- `Tensor::grad_opt()` – returns `Option<Tensor>` (None if grad is absent).
+- `f_sub_` / `f_add_` / etc. are the in-place ops that correspond to `p -= …`.
 
 If you prefer the RAII style you can also use
 
@@ -6688,41 +6690,53 @@ Python context manager.
 
 # === USER ===
 
-is there any other way to turn off gradient tracking in tch-rs? it is not immediately obvious to me how i am going to wrap this in nushell. i don't see how i could use a rust closure in nushell. the nushell commands each occur in a totally separate context. in order to use the rust closure, i would have to write every conceivable use of 'no grad', write a rust closure for that, and then expose a function into nushell. that would be a horrible user interface. is there any way to port that functionality into nushell?
+is there any other way to turn off gradient tracking in tch-rs? it is not
+immediately obvious to me how i am going to wrap this in nushell. i don't see
+how i could use a rust closure in nushell. the nushell commands each occur in a
+totally separate context. in order to use the rust closure, i would have to
+write every conceivable use of 'no grad', write a rust closure for that, and
+then expose a function into nushell. that would be a horrible user interface. is
+there any way to port that functionality into nushell?
 
 # === ASSISTANT ===
 
-In LibTorch / `tch-rs` you have two ways to tell Autograd *“do not record the
-operations that follow”*.
+In LibTorch / `tch-rs` you have two ways to tell Autograd _“do not record the
+operations that follow”_.
 
-────────────────────────────────────────────────────────────────────
-1 .  Closure helper  
+──────────────────────────────────────────────────────────────────── 1 . Closure
+helper
+
 ```rust
 tch::no_grad(|| {
     … tensor ops …
 });
 ```
-2 .  RAII guard (identical effect, no closure required)  
+
+2 . RAII guard (identical effect, no closure required)
+
 ```rust
 let _guard = tch::no_grad_guard();   // grad recording OFF
 … tensor ops …
 /* when _guard is dropped (end of scope) grad recording is restored */
 ```
+
 Both are just safe wrappers around the global flag
 `at::GradMode::set_enabled(bool)` used by LibTorch.
 
 ────────────────────────────────────────────────────────────────────
+
 ### Why the guard form is useful for Nushell
 
 A Nushell plugin command can create the guard at the beginning of `run`, do any
-in-place updates, and let the guard drop when `run` returns.  The command
-doesn’t have to expose Rust closures to the user.
+in-place updates, and let the guard drop when `run` returns. The command doesn’t
+have to expose Rust closures to the user.
 
 ```
 torch sgd-step <model-id> --lr 0.1
 ```
 
 inside `run`:
+
 ```rust
 fn run(&self, …) -> Result<PipelineData, LabeledError> {
     let _nog = tch::no_grad_guard();      // grad mode off for this call
@@ -6731,18 +6745,19 @@ fn run(&self, …) -> Result<PipelineData, LabeledError> {
 }
 ```
 
-So the user never sees the guard; they just call `torch sgd-step`.  
-If later you need a more general *“execute BLOCK with no-grad”* you can add a
+So the user never sees the guard; they just call `torch sgd-step`.\
+If later you need a more general _“execute BLOCK with no-grad”_ you can add a
 command that receives a Nushell `Block` argument; plugin commands **can** take a
-block (`SyntaxShape::Block`).  Inside `run` you create `no_grad_guard`, ask the
+block (`SyntaxShape::Block`). Inside `run` you create `no_grad_guard`, ask the
 engine to evaluate the block, then return.
 
 ────────────────────────────────────────────────────────────────────
+
 ### Other possibilities
 
-* `Tensor::detach()` returns a view that is forever grad-less, but that is per
+- `Tensor::detach()` returns a view that is forever grad-less, but that is per
   tensor and not what you want for an optimiser step.
-* Manually toggling the global flag with
+- Manually toggling the global flag with
   ```rust
   tch::set_grad_enabled(false);
   … ops …
@@ -6752,39 +6767,48 @@ engine to evaluate the block, then return.
   panic / early-return.
 
 ────────────────────────────────────────────────────────────────────
+
 #### Bottom line
 
-`tch-rs` **does** expose “no-grad” functionality; use
-`no_grad_guard()` inside the Rust implementation of the optimiser command.
-The Nushell user interface stays simple—there is no need to expose Rust closures
-or to require the user to manage Autograd state manually.
+`tch-rs` **does** expose “no-grad” functionality; use `no_grad_guard()` inside
+the Rust implementation of the optimiser command. The Nushell user interface
+stays simple—there is no need to expose Rust closures or to require the user to
+manage Autograd state manually.
 
 # === USER ===
 
-remind me again what does SGD mean? this looks to me like a very general purpose machine learning function. we always want to update the model parameters by subtracting the gradient times the learning rate. is that correct? if SGD is nearly always the method we are going to want to do in machine learning, then creating a `torch sgd` method as you suggest, which in turn either usese a closure or `no_grad_guard`, seems like a good idea. 
+remind me again what does SGD mean? this looks to me like a very general purpose
+machine learning function. we always want to update the model parameters by
+subtracting the gradient times the learning rate. is that correct? if SGD is
+nearly always the method we are going to want to do in machine learning, then
+creating a `torch sgd` method as you suggest, which in turn either usese a
+closure or `no_grad_guard`, seems like a good idea.
 
 # === ASSISTANT ===
 
-Stochastic Gradient Descent (SGD – literally “ random-mini-batch step downhill ”)  
-What it is  
+Stochastic Gradient Descent (SGD – literally “ random-mini-batch step downhill
+”)\
+What it is\
 • For every trainable parameter `p` the gradient engine (autograd) supplies
-  `p.grad = ∂loss/∂p` after `loss.backward()`.  
-• Vanilla SGD performs the in-place update  
-  ```
-  p ← p - lr · p.grad
-  p.grad.zero_()          # reset for next iteration
-  ```  
-  where `lr` is the learning-rate hyper-parameter (a small positive number).
+`p.grad = ∂loss/∂p` after `loss.backward()`.\
+• Vanilla SGD performs the in-place update
+
+```
+p ← p - lr · p.grad
+p.grad.zero_()          # reset for next iteration
+```
+
+where `lr` is the learning-rate hyper-parameter (a small positive number).
 
 That is **all** the optimiser object in PyTorch does when you choose
 `torch.optim.SGD` with no momentum, weight-decay, etc.
 
-Why it is common  
+Why it is common\
 SGD (plus variants such as momentum, Adam, RMSProp) is the standard way to fit
-neural-network weights.  For a first-pass port of your demo it is perfectly fine
-to implement *only* this basic rule.
+neural-network weights. For a first-pass port of your demo it is perfectly fine
+to implement _only_ this basic rule.
 
-Implementing it in the plugin  
+Implementing it in the plugin\
 You do not need to reproduce Python’s context-manager syntax; you just need to
 ensure gradient recording is disabled while you mutate the parameters so that
 those mutations themselves don’t get tracked.
@@ -6811,13 +6835,14 @@ Expose this through a command such as
 torch sgd <model-id> --lr 0.1
 ```
 
-Inside `run` you  
-1. fetch the four parameter tensors (`w1`, `b1`, `w2`, `b2`) from the registry,  
-2. call `sgd_step(&params, lr)`,    
+Inside `run` you
+
+1. fetch the four parameter tensors (`w1`, `b1`, `w2`, `b2`) from the registry,
+2. call `sgd_step(&params, lr)`,
 3. return the updated model.
 
-Because the RAII guard is created and dropped entirely inside the Rust code,
-the Nushell user never has to think about autograd state; they just write
+Because the RAII guard is created and dropped entirely inside the Rust code, the
+Nushell user never has to think about autograd state; they just write
 
 ```nu
 torch backward $loss
@@ -6832,63 +6857,64 @@ enough to translate your current Python example.)
 
 # === USER ===
 
-what are the other most common optimizers? are they variants of SGD? or something else entirely? can we just add momentum to SGD, for example, as a feature or argument?
+what are the other most common optimizers? are they variants of SGD? or
+something else entirely? can we just add momentum to SGD, for example, as a
+feature or argument?
 
 # === ASSISTANT ===
 
 In practice almost every neural-network “optimizer” is just a different way of
-applying the same fundamental idea: start from plain stochastic-gradient
-descent (SGD)
+applying the same fundamental idea: start from plain stochastic-gradient descent
+(SGD)
 
-  p ← p − lr · ∇p                                           (1)
+  p ← p − lr · ∇p (1)
 
-and add one or two extra terms that help convergence.  
+and add one or two extra terms that help convergence.\
 Below are the optimizers you will meet 99 % of the time, grouped by how far they
 deviate from (1).
 
 ─────────────────────────────────────────────────────────────────────────
-1.  “SGD-family” – keep a single running **velocity** per parameter  
-    • Momentum      `v ← β·v + ∇p`      `p ← p − lr·v`  
-    • Nesterov momentum  same as above but gradient is evaluated at the
-      look-ahead point `p − β·lr·v` (slightly better theoretically).  
-    • Weight-decay / L2-regularization – just add `λ·p` to the gradient before
-      the update; implemented as an extra flag in most APIs.
 
-    All of these can be implemented by storing **one extra tensor** (`v`)
-    alongside each parameter.  They are literally “SGD plus a feature flag”.
+1. “SGD-family” – keep a single running **velocity** per parameter\
+   • Momentum      `v ← β·v + ∇p` `p ← p − lr·v`\
+   • Nesterov momentum same as above but gradient is evaluated at the look-ahead
+   point `p − β·lr·v` (slightly better theoretically).\
+   • Weight-decay / L2-regularization – just add `λ·p` to the gradient before
+   the update; implemented as an extra flag in most APIs.
 
-2.  Adaptive-learning-rate methods – keep **running statistics of past
-    gradients**  
-    • AdaGrad           accumulate squared gradients → per-parameter lr that
-      only decays.  
-    • RMSProp           exponential moving average of squared gradients.  
-    • Adam / AdamW      momentum on the gradient **and** RMSProp on its square
-      (the current default in most deep-learning work).
+   All of these can be implemented by storing **one extra tensor** (`v`)
+   alongside each parameter. They are literally “SGD plus a feature flag”.
 
-    These need **two extra tensors** per parameter (1ᵗ moment `m`, 2ⁿᵈ moment
-    `v`) and a couple of scalar hyper-parameters (β₁, β₂, ϵ).
+2. Adaptive-learning-rate methods – keep **running statistics of past
+   gradients**\
+   • AdaGrad accumulate squared gradients → per-parameter lr that only decays.\
+   • RMSProp exponential moving average of squared gradients.\
+   • Adam / AdamW momentum on the gradient **and** RMSProp on its square (the
+   current default in most deep-learning work).
 
-3.  Second-order or quasi-second-order methods (rare in deep-learning)  
-    • L-BFGS, natural-gradient, K-FAC, Shampoo … – markedly more complex,
-      seldom used for standard feed-forward training.
+   These need **two extra tensors** per parameter (1ᵗ moment `m`, 2ⁿᵈ moment
+   `v`) and a couple of scalar hyper-parameters (β₁, β₂, ϵ).
 
-─────────────────────────────────────────────────────────────────────────
-Practical consequences for your plugin
---------------------------------------
+3. Second-order or quasi-second-order methods (rare in deep-learning)\
+   • L-BFGS, natural-gradient, K-FAC, Shampoo … – markedly more complex, seldom
+   used for standard feed-forward training.
 
-• Implementing *vanilla* SGD gets the demo working.
+## ───────────────────────────────────────────────────────────────────────── Practical consequences for your plugin
 
-• Adding **momentum** (and optional Nesterov) is easy:
-  – keep a `velocity` tensor for every parameter  
-  – update rule above – still fits the “one command per training step” model.  
-  You can expose it as flags:
-  ```
-  torch sgd <model> --lr 0.1 --momentum 0.9 --nesterov
-  ```
+• Implementing _vanilla_ SGD gets the demo working.
 
-• Implementing Adam/RMSProp is also possible but requires maintaining
-  two state tensors per parameter; you would need a registry entry
-  (or an “optimizer object ID”) to remember that state between calls.
+• Adding **momentum** (and optional Nesterov) is easy: – keep a `velocity`
+tensor for every parameter\
+– update rule above – still fits the “one command per training step” model.\
+You can expose it as flags:
+
+```
+torch sgd <model> --lr 0.1 --momentum 0.9 --nesterov
+```
+
+• Implementing Adam/RMSProp is also possible but requires maintaining two state
+tensors per parameter; you would need a registry entry (or an “optimizer object
+ID”) to remember that state between calls.
 
 If the goal is to stay close to the original tutorial and keep Nushell UX
 simple, start with:
@@ -6902,7 +6928,8 @@ You can layer Adam later if you decide you need it.
 
 # === USER ===
 
-why are the parameters of the python sgd method called `ps`? why not call them weights and biases? isn't that what we are updating?
+why are the parameters of the python sgd method called `ps`? why not call them
+weights and biases? isn't that what we are updating?
 
 ```python
 def sgd_step(ps: List[torch.Tensor], lr: float = 0.1) -> None:
@@ -6913,10 +6940,10 @@ def sgd_step(ps: List[torch.Tensor], lr: float = 0.1) -> None:
 `ps` is simply short for “parameters”.
 
 • In deep-learning code we often speak of the set of **trainable parameters** of
-a model, not just *weights* and *biases*; that set may also include embedding
-tables, batch-norm scales, layer-norm offsets, etc.  
+a model, not just _weights_ and _biases_; that set may also include embedding
+tables, batch-norm scales, layer-norm offsets, etc.\
 • SGD itself is agnostic: it just iterates over “whatever tensors have
-`requires_grad=True`”.  Therefore many code bases use a generic variable name
+`requires_grad=True`”. Therefore many code bases use a generic variable name
 like `params`, `p_list`, or the brief `ps`.
 
 So
@@ -6930,10 +6957,11 @@ reads as “perform one SGD step on the list of parameter tensors `ps`”.
 You could call the argument `params`, `weights_and_biases`, etc.; the algorithm
 is the same. `ps` is just a compact, conventional nickname for “parameters”.
 
-
 # === USER ===
 
-in this python code here, it looks to me like we are just subtracting the gradient times the learning rate from the parameters. what about this is "stochastic"? i don't see anything "stochastic" about this.
+in this python code here, it looks to me like we are just subtracting the
+gradient times the learning rate from the parameters. what about this is
+"stochastic"? i don't see anything "stochastic" about this.
 
 ```python
 def sgd_step(ps: List[torch.Tensor], lr: float = 0.1) -> None:
@@ -6953,15 +6981,15 @@ def sgd_step(ps: List[torch.Tensor], lr: float = 0.1) -> None:
 The adjective “stochastic” does **not** refer to the arithmetic inside the
 update rule; it refers to **where the gradients came from**.
 
-• In classic (deterministic) **gradient descent** you compute the gradient of the
-loss with respect to **the entire training set**, then do  
+• In classic (deterministic) **gradient descent** you compute the gradient of
+the loss with respect to **the entire training set**, then do\
 `p ← p – lr · ∇ₚ L(whole dataset)`.
 
 • In **stochastic** (or “mini-batch”) gradient descent you compute the gradient
 using **only a random subset / mini-batch** of the data, typically a few dozen
-samples, then apply the _same_ update formula.  
-Because every batch is randomly chosen, the gradient is a *noisy (stochastic)
-estimate* of the full-dataset gradient, hence the name.
+samples, then apply the _same_ update formula.\
+Because every batch is randomly chosen, the gradient is a _noisy (stochastic)
+estimate_ of the full-dataset gradient, hence the name.
 
 So the “stochastic” part happens **before** the function you posted:
 
@@ -6971,8 +6999,8 @@ loss.backward()                            # autograd stores that batch-gradient
 sgd_step(params, lr)                       # apply update               ← here
 ```
 
-`sgd_step` itself merely executes the standard rule  
-`p = p – lr · p.grad`; it is agnostic about how `p.grad` was obtained.  
+`sgd_step` itself merely executes the standard rule\
+`p = p – lr · p.grad`; it is agnostic about how `p.grad` was obtained.\
 If you had accumulated gradients over the whole dataset the same `sgd_step`
 would turn into ordinary (full-batch) gradient descent.
 
@@ -6981,12 +7009,13 @@ the parameter-update code is identical.
 
 # === USER ===
 
-therefore wouldn't it actually be more accurate to simply call the method `gradient_descent_step`? the stochastic part is happening somewhere else.
+therefore wouldn't it actually be more accurate to simply call the method
+`gradient_descent_step`? the stochastic part is happening somewhere else.
 
 # === ASSISTANT ===
 
-Yes — the update you coded is just the generic **gradient-descent step**.  
-Nothing in it is inherently “stochastic”; the step becomes *stochastic* only
+Yes — the update you coded is just the generic **gradient-descent step**.\
+Nothing in it is inherently “stochastic”; the step becomes _stochastic_ only
 when the gradients that feed it were computed from a randomly–sampled
 mini-batch.
 
@@ -7013,14 +7042,17 @@ for batch_X, batch_y in data_loader:          # random batches → stochastic
     gradient_descent_step(params, lr)
 ```
 
-The deep-learning community still calls this function *“SGD step”* out of
-habit, because in practice gradients are almost always mini-batch estimates.
-But if you prefer the more precise term, renaming it to
-`gradient_descent_step` (or `gd_step`) is perfectly fine.
+The deep-learning community still calls this function _“SGD step”_ out of habit,
+because in practice gradients are almost always mini-batch estimates. But if you
+prefer the more precise term, renaming it to `gradient_descent_step` (or
+`gd_step`) is perfectly fine.
 
 # === USER ===
 
-now i'm going to give you the training portion of the python code. i have renamed the method to `gradient_descent_step`. now my question is: where is the stochastic part? is there a stochastic part in this code? or is it somewhere else?
+now i'm going to give you the training portion of the python code. i have
+renamed the method to `gradient_descent_step`. now my question is: where is the
+stochastic part? is there a stochastic part in this code? or is it somewhere
+else?
 
 ```python
 def gradient_descent_step(ps: List[torch.Tensor], lr: float = 0.1) -> None:
@@ -7071,20 +7103,21 @@ def train(
 
 # === ASSISTANT ===
 
-There is **no stochasticity in the loop you posted**.  
-Each iteration uses the *entire* dataset `X, y` to compute the loss and its
+There is **no stochasticity in the loop you posted**.\
+Each iteration uses the _entire_ dataset `X, y` to compute the loss and its
 gradients, so the update is **full-batch gradient descent**—deterministic and
 repeatable.
 
 Where SGD would be:
 
-1. Randomly select a mini-batch (or a single sample) every step.  
-2. Compute the loss / gradients only on that subset.  
+1. Randomly select a mini-batch (or a single sample) every step.
+2. Compute the loss / gradients only on that subset.
 3. Apply the same update rule `p ← p − lr·grad`.
 
-That randomness (step 1) is what makes the process **stochastic**.  
-Because your code feeds the complete dataset to `forward` each time, the gradient
-is always the true gradient of the whole objective, not a noisy estimate.
+That randomness (step 1) is what makes the process **stochastic**.\
+Because your code feeds the complete dataset to `forward` each time, the
+gradient is always the true gradient of the whole objective, not a noisy
+estimate.
 
 If you want genuine “stochastic” gradient descent you would:
 
@@ -7106,13 +7139,16 @@ Here every inner loop uses a different random subset → the stochastic part.
 
 # === USER ===
 
-the reason why this was called SGD was we were originally using the torch.optim.SGD class. does that class handle normal gradient descent? why were we using that class if we aren't using the stochastic part? does that class also provide stochastic functionality?
+the reason why this was called SGD was we were originally using the
+torch.optim.SGD class. does that class handle normal gradient descent? why were
+we using that class if we aren't using the stochastic part? does that class also
+provide stochastic functionality?
 
 # === ASSISTANT ===
 
-`torch.optim.SGD` is only an **update-rule implementation**.  
+`torch.optim.SGD` is only an **update-rule implementation**.\
 It does not know (or care) whether the gradients it receives come from a single
-sample, a mini-batch, or the whole dataset.  Its job is simply:
+sample, a mini-batch, or the whole dataset. Its job is simply:
 
 ```
 for every parameter p in param_list:
@@ -7120,16 +7156,16 @@ for every parameter p in param_list:
     p.grad ← 0
 ```
 
-Because this rule is what one normally uses ***after*** computing gradients
-from a randomly selected mini-batch, the class is called “SGD”.  
+Because this rule is what one normally uses _**after**_ computing gradients from
+a randomly selected mini-batch, the class is called “SGD”.\
 If you feed it full-batch gradients, it performs ordinary deterministic gradient
 descent; if you feed it mini-batch gradients, the same instance performs
-stochastic gradient descent.  The stochastic aspect therefore lives **in the
+stochastic gradient descent. The stochastic aspect therefore lives **in the
 training loop’s data sampling**, not inside the optimizer object.
 
-Why people still use `torch.optim.SGD`
-• Convenience: handles the in-place update, zeroing of gradients, optional
-  momentum, weight-decay, etc., in one call (`optimizer.step()`).  
+Why people still use `torch.optim.SGD` • Convenience: handles the in-place
+update, zeroing of gradients, optional momentum, weight-decay, etc., in one call
+(`optimizer.step()`).\
 • Consistent API with other optimizers (Adam, RMSProp, …).
 
 So in your earlier code the class was used simply because it gave a tidy way to
@@ -7140,15 +7176,18 @@ loss.backward()
 optimizer.step()          # update parameters
 ```
 
-even though—in the particular loop you posted—the gradients were computed on
-the whole dataset and thus the procedure was *full-batch* gradient descent.
+even though—in the particular loop you posted—the gradients were computed on the
+whole dataset and thus the procedure was _full-batch_ gradient descent.
 
 # === USER ===
 
 our goal is multi-faceted:
+
 - to make a good machine learning library in nushell
-- to match the python api wherever possible and practical so long as it makes sense in nushell
-- to make do with any possible limitations of the tch-rs library, which we depend on
+- to match the python api wherever possible and practical so long as it makes
+  sense in nushell
+- to make do with any possible limitations of the tch-rs library, which we
+  depend on
 
 in your opinion, is it best to call this method `sgd` or `gradient_descent`?
 
@@ -7156,15 +7195,15 @@ in your opinion, is it best to call this method `sgd` or `gradient_descent`?
 
 Use the PyTorch name: `sgd`.
 
-Why?  
-1 – API familiarity.  When Nushell users read tutorials or port code they will
-look for `torch optim sgd` and expect the same spelling.  
-2 – Extensibility.  Later you may add momentum, dampening, weight-decay, etc. – 
+Why?\
+1 – API familiarity. When Nushell users read tutorials or port code they will
+look for `torch optim sgd` and expect the same spelling.\
+2 – Extensibility. Later you may add momentum, dampening, weight-decay, etc. –
 all standard options of PyTorch’s `SGD` class – and the name will still be
-accurate.  
-3 – Industry convention.  In most deep-learning code “SGD” refers to the
-update rule `p ← p − lr·grad`, independent of whether the gradients come from
-one sample, a mini-batch, or the full dataset.  Users don’t search for
+accurate.\
+3 – Industry convention. In most deep-learning code “SGD” refers to the update
+rule `p ← p − lr·grad`, independent of whether the gradients come from one
+sample, a mini-batch, or the full dataset. Users don’t search for
 “gradient_descent”.
 
 So, even though the stochastic aspect is supplied by the training loop rather
@@ -7172,5 +7211,3 @@ than the function itself, keeping the canonical name `sgd` maximises portability
 and recognisability while still working within tch-rs and Nushell constraints.
 
 # === USER ===
-
-
