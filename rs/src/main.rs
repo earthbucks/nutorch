@@ -1433,7 +1433,6 @@ torch sgd_step [$w1, $w2] --lr 0.05
                     let before_ptr = p.data_ptr();
                     let r = p.f_sub_(&(g * lr)).unwrap();
                     assert_eq!(before_ptr, r.data_ptr()); // same memory
-                    p.zero_grad(); // clear grad buffer
                 }
             }
         });
