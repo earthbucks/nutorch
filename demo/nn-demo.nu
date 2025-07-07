@@ -105,5 +105,15 @@ def model_forward_pass [
   | torch add $model.b2 # Add bias for second layer
 }
 
+def train [
+  --model: record<w1: string, b1: string, w2: string, b2: string>
+  --X: string # Input tensor id
+  --y: string # Target tensor id
+  --epochs: int = 1000
+  --lr: float = 0.1
+  --record_every: int = 100
+] {
+}
+
 let res = (generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3)
 plot_raw_data $res

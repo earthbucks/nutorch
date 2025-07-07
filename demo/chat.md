@@ -7211,3 +7211,279 @@ than the function itself, keeping the canonical name `sgd` maximises portability
 and recognisability while still working within tch-rs and Nushell constraints.
 
 # === USER ===
+
+does pytorch have a method that is the equivalent of this function so that it
+doesn't need to be implemented here? i know about `torch.optim.SGD`, but that is
+not a direct replacement to this method AFAIK.
+
+```python
+def sgd_step(ps: List[torch.Tensor], lr: float = 0.1) -> None:
+    """
+    Vanilla gradient descent:  p ← p - lr * p.grad , then reset gradients.
+    Operates in-place; returns nothing.
+    """
+    with torch.no_grad():
+        for p in ps:
+            if p.grad is not None:
+                p -= lr * p.grad
+```
+
+# === ASSISTANT ===
+
+Short answer\
+No single-call “functional” helper in the public PyTorch API does exactly the
+three lines in your `sgd_step`; the normal way is still to instantiate
+`torch.optim.SGD` and call `step()`. Therefore, if you don’t want the Optimizer
+object, you keep your hand-written loop.
+
+Details
+
+│ what `sgd_step` does │ ─────────────────── │ p.data ← p.data – lr * p.grad │
+p.grad.zero_() │ (all under `torch.no_grad()`)
+
+1. Public API – Optimizer\
+   The official solution is
+
+   ```python
+   opt = torch.optim.SGD(ps, lr=lr, momentum=0.0)
+   …
+   loss.backward()
+   opt.step()          # identical update
+   opt.zero_grad()
+   ```
+
+   Internally `opt.step()` performs the very same subtraction you coded.
+
+2. Internal / private helpers\
+   There is an internal routine `torch.optim._functional.sgd(...)` (moved to
+   `torch.optim.functional.sgd` in newer releases), but it still needs you to
+   pass
+
+   - the parameter tensor,
+   - its gradient tensor,
+   - and a mutable “momentum buffer”
+
+   so you would end up writing almost the same wrapper code. It is also
+   considered a private API and may change without warning.
+
+3. Vectorised manual variant\
+   If you want a slightly shorter manual update you can do
+
+   ```python
+   with torch.no_grad():
+       for p in ps:
+           p.add_(p.grad, alpha=-lr)   # in-place subtraction
+           p.grad.zero_()
+   ```
+
+   or with foreach:
+
+   ```python
+   with torch.no_grad():
+       grads = [p.grad for p in ps]
+       torch._foreach_add_(ps, grads, alpha=-lr)
+       for p in ps: p.grad.zero_()
+   ```
+
+Conclusion\
+• There is no officially supported, single-call replacement for your little
+`sgd_step` other than using the `torch.optim.SGD` object.\
+• Keeping the explicit update (or wrapping it in a Nushell command) is perfectly
+fine and keeps dependencies minimal.
+
+# === USER ===
+
+if i want to add momentum to this function, is that possible without creating
+some sort of class or object, or is that going to require storing some
+momentum-related state somewhere?
+
+# === ASSISTANT ===
+
+To add (Nesterov-) momentum you must remember the running **velocity** (`vₜ`).
+That value has to survive from one call to the next, so some sort of persistent
+state is unavoidable. You have three practical options:
+
+──────────────────────────────────────────────────────────────────────── 1
+Attach the buffer directly to the tensor (Python-only trick)
+
+```python
+def sgd_momentum_step(params, lr=0.1, mu=0.9, nesterov=False):
+    with torch.no_grad():
+        for p in params:
+            if p.grad is None:
+                continue
+            # lazily create the buffer the first time we see this tensor
+            if not hasattr(p, "_vel"):
+                p._vel = torch.zeros_like(p)
+
+            p._vel.mul_(mu).add_(p.grad)               # v ← μ·v + g
+            step = p._vel if not nesterov else (p._vel * mu + p.grad)
+            p.sub_(step, alpha=lr)                     # p ← p - lr·step
+            p.grad.zero_()
+```
+
+The extra tensor is stored as an attribute (`_vel`) of the weight itself, so no
+external class is needed. **Works only in Python.**
+
+──────────────────────────────────────────────────────────────────────── 2 Keep
+a side dict (still functional)
+
+```python
+def sgd_momentum_step(params, state, lr=0.1, mu=0.9):
+    # `state` maps id(p) → velocity tensor.  Return the updated dict.
+    with torch.no_grad():
+        for p in params:
+            if p.grad is None:
+                continue
+            v = state.setdefault(id(p), torch.zeros_like(p))
+            v.mul_(mu).add_(p.grad)          # v ← μ·v + g
+            p.sub_(v, alpha=lr)              # p ← p - lr·v
+            p.grad.zero_()
+    return state
+```
+
+Caller owns the `state` dictionary and passes it back in at every step. No
+class, but you still have a container for the buffers.
+
+──────────────────────────────────────────────────────────────────────── 3 Use
+an object (what `torch.optim.SGD` already does)\
+A class is the cleanest way to bundle parameters **and** their per-parameter
+buffers, which is why the built-in optimiser exists.
+
+────────────────────────────────────────────────────────────────────────
+Relation to Nushell / `tch-rs`\
+Inside a Nushell plugin written in Rust you would follow the same logic as
+option 2: keep one extra tensor per parameter (stored in the registry next to
+the weight or in a parallel map). You still call it via a single `torch sgd`
+command; the command looks up both the weight and its velocity, updates them,
+and writes the new velocity back.
+
+Conclusion\
+Vanilla SGD (no momentum) is stateless and can stay as your current simple
+function.\
+The moment you add momentum you **must** store a velocity buffer, so either
+
+- attach it to the tensor (possible only in Python), or
+- carry an explicit state structure (dict / record / registry entry), or
+- use a small optimiser class.
+
+# === USER ===
+
+is it possible to create a small optimizer class in pure nushell? of course,
+there is no "class" in nushell, but what we could do is make a record that
+stores a tensor and the momentum state. then, we can create an "optimizer" that
+stores this extra stage. would that work? this would be like a nushell
+equivalent of the `torch.optim.SGD` class.
+
+# === ASSISTANT ===
+
+Yes.\
+Even though Nushell lacks classes you can achieve the same result by treating an
+“optimizer” as nothing more than a **record that carries both (a) references to
+the parameter tensors and (b) whatever state tensors the algorithm needs
+(velocity, etc.)**.\
+All logic that would normally live in the class’s `step()` method is expressed
+as a Nushell function that takes the record, updates its state fields, and
+returns the record.
+
+Below is a self-contained sketch of an SGD-with-momentum optimiser written
+entirely in Nushell terms.
+
+```nu
+# ──────────────────────────────────────────────────────────────
+#  ▄█  optimiser construction
+# ──────────────────────────────────────────────────────────────
+# model is a record {w1: <id> b1: <id> w2: <id> b2: <id>}
+def sgd_momentum_init [
+    --model: record      # record of parameter-tensor IDs
+    --lr:     float = 0.1
+    --mu:     float = 0.9
+] {
+    # build a parallel record of zero-initialised velocity tensors
+    let vel = ($model | transpose name id |
+        each { |row|
+            let z = (torch zeros_like $row.id)
+            {($row.name): $z}
+        } | reduce {|it, acc| $acc | merge $it })
+
+    {
+        lr:  $lr,
+        mu:  $mu,
+        par: $model,   # parameter IDs
+        vel: $vel      # velocity IDs
+    }
+}
+
+# ──────────────────────────────────────────────────────────────
+#  ▄█  single optimisation step
+# ──────────────────────────────────────────────────────────────
+def sgd_momentum_step [
+    --opt: record<lr: float, mu: float, par: record, vel: record>
+] {
+    let lr = $opt.lr
+    let mu = $opt.mu
+    let new_vel = $opt.vel
+    let new_par = $opt.par
+
+    let names = ($opt.par | columns)
+    for n in $names {
+        let p  = ($opt.par | get $n)      # weight-ID
+        let v  = ($opt.vel | get $n)      # velocity-ID
+        let g  = (torch grad $p)          # gradient ID
+
+        # v ← μ·v + g
+        let v = (torch add (torch mul $v $mu) $g)
+        # p ← p − lr·v
+        let p = (torch sub $p (torch mul $v $lr))
+
+        # save updated tensors back into records
+        new_vel = ($new_vel | upsert $n $v)
+        new_par = ($new_par | upsert $n $p)
+        torch zero_grad $p
+    }
+
+    # return updated optimiser (records are immutable, so we rebuild)
+    $opt | upsert vel $new_vel | upsert par $new_par
+}
+
+# ──────────────────────────────────────────────────────────────
+#  ▄█  usage pattern inside a training loop
+# ──────────────────────────────────────────────────────────────
+let model = (model_init)                    # returns {w1 … b2}
+let opt   = (sgd_momentum_init --model $model --lr 0.05 --mu 0.9)
+
+for epoch in (seq 0 999) {
+    let logits = (forward_pass $model $X)
+    let loss   = (cross_entropy $logits $y)
+    torch backward $loss
+
+    let opt = (sgd_momentum_step --opt $opt)   # returns updated optimiser
+    let model = ($opt.par)                     # updated parameter record
+}
+```
+
+## Key points
+
+1. `opt` is just a record; it “owns” both parameter IDs and their velocity IDs.
+   Nothing needs a Python-style class.
+
+2. `sgd_momentum_step` • Reads `lr` and `mu`.\
+   • For every parameter name `n`\
+   – computes the new velocity\
+   – updates the weight\
+   – writes both back into fresh records.\
+   • Returns a **new** optimiser record (functional style).
+
+3. All tensor math (`grad`, `zeros_like`, `add`, `mul`, etc.) is delegated to
+   your `torch` plugin; no special Rust closure is required.
+
+4. If you later need Adam or RMSProp you add more state tensors (e.g. `m`, `v`)
+   to the record and extend the step-function accordingly—the pattern scales.
+
+Thus a “class” in Python becomes _“record + functions that take & return that
+record”_ in Nushell, giving you the same behaviour without extra language
+features.
+
+# === USER ===
+
+ok, let's forget about that for now, because i don't need it for the current problem. but in the future, i will need to implment this in order to do more advanced neural networks.
