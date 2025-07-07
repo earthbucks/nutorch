@@ -25,13 +25,11 @@ impl Plugin for NutorchPlugin {
             Box::new(CommandDevices),
             // Tensor operations
             Box::new(CommandAdd),
-            Box::new(CommandSqueeze),
-            Box::new(CommandUnsqueeze),
-            Box::new(CommandGather),
             Box::new(CommandCat),
             Box::new(CommandDiv),
             Box::new(CommandExp),
             Box::new(CommandFull),
+            Box::new(CommandGather),
             Box::new(CommandLinspace),
             Box::new(CommandLogSoftmax),
             Box::new(CommandMax),
@@ -42,9 +40,12 @@ impl Plugin for NutorchPlugin {
             Box::new(CommandNeg),
             Box::new(CommandRandn),
             Box::new(CommandRepeat),
+            Box::new(CommandSgdStep),
             Box::new(CommandShape),
             Box::new(CommandSin),
+            Box::new(CommandSqueeze),
             Box::new(CommandSub),
+            Box::new(CommandUnsqueeze),
             Box::new(CommandTensor),
             Box::new(CommandValue),
         ]
@@ -1429,9 +1430,11 @@ torch sgd_step [$w1, $w2] --lr 0.05
             for mut p in tensors {
                 let g = p.grad();
                 if g.defined() {
-                    p.f_sub_(&(g * lr)).unwrap(); // p -= lr * g   (in-place)
+                    let before_ptr = p.data_ptr();
+                    let r = p.f_sub_(&(g * lr)).unwrap();
+                    assert_eq!(before_ptr, r.data_ptr()); // same memory
                     p.zero_grad(); // clear grad buffer
-                };
+                }
             }
         });
 
