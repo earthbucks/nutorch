@@ -26,3 +26,13 @@ if ($after != $before) {
   print_failure "Parameter unchanged; backward may have failed"
   error make {msg: "backward-grad-defined failed"}
 }
+
+let t = (torch full [2 2] 1 --requires_grad true)   # NOT scalar
+let result = (try { $t | torch backward } catch { "err" })
+
+if ($result == "err") {
+    print_success "Non-scalar backward correctly raised an error"
+} else {
+    print_failure "Backward on non-scalar tensor unexpectedly succeeded"
+    error make {msg:"backward-scalar-only failed"}
+}
