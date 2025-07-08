@@ -62,8 +62,8 @@ $env.config.plugin_gc = {
 - [x] squeeze
 - [x] unsqueeze
 - [x] detach
-- [ ] arange
-- [ ] stack
+- [x] arange
+- [x] stack
 - [ ] repeat
 - [ ] repeat_interleave
 - [ ] torch... everything else

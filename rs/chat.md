@@ -4412,3 +4412,324 @@ be added to the signature:
     None,
 )
 ```
+
+now, we need to implement the next function, `torch stack`.
+
+here is the description of the python api from my lsp:
+
+```
+(function) def stack(
+    tensors: tuple[Tensor, ...] | list[Tensor] | None,
+    dim: int = 0,
+    *,
+    out: Tensor | None = None
+) -> Tensor
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+stack(tensors, dim=0, *, out=None) -> Tensor
+Concatenates a sequence of tensors along a new dimension.
+All tensors need to be of the same size.
+Arguments:  
+    tensors (sequence of Tensors): sequence of tensors to concatenate  
+    dim (int, optional): dimension to insert. Has to be between 0 and the number  
+        of dimensions of concatenated tensors (inclusive). Default: 0
+Keyword args:  
+    out (Tensor, optional): the output tensor.
+Example:
+    >>> x = torch.randn(2, 3)
+    >>> x
+    tensor([[ 0.3367,  0.1288,  0.2345],
+            [ 0.2303, -1.1229, -0.1863]])
+    >>> torch.stack((x, x)) # same as torch.stack((x, x), dim=0)
+    tensor([[[ 0.3367,  0.1288,  0.2345],
+             [ 0.2303, -1.1229, -0.1863]],
+            [[ 0.3367,  0.1288,  0.2345],
+             [ 0.2303, -1.1229, -0.1863]]])
+    >>> torch.stack((x, x)).size()
+    torch.Size([2, 2, 3])
+    >>> torch.stack((x, x), dim=1)
+    tensor([[[ 0.3367,  0.1288,  0.2345],
+             [ 0.3367,  0.1288,  0.2345]],
+            [[ 0.2303, -1.1229, -0.1863],
+             [ 0.2303, -1.1229, -0.1863]]])
+    >>> torch.stack((x, x), dim=2)
+    tensor([[[ 0.3367,  0.3367],
+             [ 0.1288,  0.1288],
+             [ 0.2345,  0.2345]],
+            [[ 0.2303,  0.2303],
+             [-1.1229, -1.1229],
+             [-0.1863, -0.1863]]])
+    >>> torch.stack((x, x), dim=-1)
+    tensor([[[ 0.3367,  0.3367],
+             [ 0.1288,  0.1288],
+             [ 0.2345,  0.2345]],
+            [[ 0.2303,  0.2303],
+             [-1.1229, -1.1229],
+             [-0.1863, -0.1863]]])
+```
+
+to be consistent with our own api, we should take in a list of tensors either as
+pipeline data or as an argument. we should not allow the "*" style of multiple
+tensor arguments like python, which is not easy in nushell and not an api we
+support. require a list of tensors as either pipeline data or an argument.
+
+we should also allow the `dim` parameter.
+
+can you write `CommandStack` to implement this?
+
+# === ASSISTANT ===
+
+Below is the `CommandStack` implementation that follows the Nutorch conventions
+already established:
+
+• Accept **one list of tensor IDs** either through the pipeline or as the first
+positional argument (not both).  
+• Optional named flag `--dim` (integer, default = 0).  
+• Verifies that at least one tensor is supplied and that all input tensors have
+exactly the same shape.  
+• Creates the stacked tensor with `Tensor::stack(&inputs, dim)`.  
+• Stores the result in the registry and returns its UUID.
+
+```rust
+// torch stack  --------------------------------------------------------------
+// Stack a list of tensors along a new dimension (like torch.stack in PyTorch)
+//
+//   [$t1 $t2] | torch stack --dim 0
+//   torch stack [$t1 $t2] --dim 1
+//
+// All tensors must have identical shapes.
+// ---------------------------------------------------------------------------
+struct CommandStack;
+
+impl PluginCommand for CommandStack {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str { "torch stack" }
+
+    fn description(&self) -> &str {
+        "Concatenate a sequence of tensors along a new axis (torch.stack)."
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch stack")
+            .input_output_types(vec![
+                (Type::List(Box::new(Type::String)),
+                 Type::String),                   // list via pipeline
+                (Type::Nothing, Type::String)     // list via arg
+            ])
+            .optional(
+                "tensor_ids",
+                SyntaxShape::List(Box::new(SyntaxShape::String)),
+                "List of tensor IDs (if not provided via pipeline)",
+            )
+            .named(
+                "dim",
+                SyntaxShape::Int,
+                "Dimension index at which to insert the new axis (default 0)",
+                None,
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Stack two 2×3 tensors along dim 0",
+                example: r#"
+let x = ([[1 2 3] [4 5 6]] | torch tensor)
+let y = ([[7 8 9] [1 1 1]] | torch tensor)
+[$x $y] | torch stack --dim 0 | torch shape   # -> [2, 2, 3]
+"#.trim(),
+                result: None,
+            },
+            Example {
+                description: "Stack the same tensors along dim 1",
+                example: r#"
+let x = ([[1 2 3] [4 5 6]] | torch tensor)
+let y = ([[7 8 9] [1 1 1]] | torch tensor)
+torch stack [$x $y] --dim 1 | torch shape    # -> [2, 2, 3]
+"#.trim(),
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin : &NutorchPlugin,
+        _engine : &nu_plugin::EngineInterface,
+        call    : &nu_plugin::EvaluatedCall,
+        input   : PipelineData,
+    ) -> Result<PipelineData, LabeledError>
+    {
+        //------------------------------------------------------------------
+        // 1. Collect list of IDs (pipeline xor argument)
+        //------------------------------------------------------------------
+        let piped = match input {
+            PipelineData::Value(v, _) => Some(v),
+            PipelineData::Empty       => None,
+            _ => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Empty or Value pipeline inputs supported", call.head))
+            }
+        };
+        let arg0 = call.nth(0);
+
+        match (&piped, &arg0) {
+            (None, None) =>
+                return Err(LabeledError::new("Missing input")
+                    .with_label("Provide tensor list via pipeline or argument", call.head)),
+            (Some(_), Some(_)) =>
+                return Err(LabeledError::new("Conflicting input")
+                    .with_label("Provide tensor list via pipeline OR argument, not both", call.head)),
+            _ => {}
+        }
+
+        let list_val = piped.or(arg0).unwrap();
+
+        // accept single-level list of strings
+        let ids: Vec<String> = list_val.as_list().map_err(|_|{
+                LabeledError::new("Invalid input")
+                    .with_label("Expected a list of tensor IDs", call.head)
+            })?
+            .iter()
+            .map(|v| v.as_str().map(|s| s.to_string()))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if ids.is_empty() {
+            return Err(
+                LabeledError::new("Empty list")
+                    .with_label("No tensor IDs supplied", call.head)
+            );
+        }
+
+        //------------------------------------------------------------------
+        // 2. Parse dim flag (default 0)
+        //------------------------------------------------------------------
+        let mut dim: i64 = call.get_flag("dim")?.unwrap_or(0);
+
+        //------------------------------------------------------------------
+        // 3. Fetch tensors & validate shape equality
+        //------------------------------------------------------------------
+        let mut reg = TENSOR_REGISTRY.lock().unwrap();
+        let tensors: Vec<Tensor> = ids.iter()
+            .map(|id| {
+                reg.get(id).ok_or_else(|| {
+                    LabeledError::new("Tensor not found")
+                        .with_label(format!("Invalid tensor ID: {id}"), call.head)
+                })
+                .map(|t| t.shallow_clone())
+            })
+            .collect::<Result<_, _>>()?;
+
+        // ensure identical shapes
+        let first_shape = tensors[0].size();
+        for (i, t) in tensors.iter().enumerate().skip(1) {
+            if t.size() != first_shape {
+                return Err(
+                    LabeledError::new("Shape mismatch")
+                        .with_label(format!("Tensor at index {i} has shape {:?}, expected {:?}", t.size(), first_shape), call.head)
+                );
+            }
+        }
+
+        //------------------------------------------------------------------
+        // 4. Adjust dim (negative allowed) and stack
+        //------------------------------------------------------------------
+        let rank = first_shape.len() as i64;
+        if dim < 0 {
+            dim += rank + 1;
+        }
+        if dim < 0 || dim > rank {
+            return Err(
+                LabeledError::new("Invalid dim")
+                    .with_label(format!("dim must be in [0, {}], got {}", rank, dim), call.head)
+            );
+        }
+
+        let result = Tensor::stack(&tensors, dim);
+
+        //------------------------------------------------------------------
+        // 5. Store result & return new ID
+        //------------------------------------------------------------------
+        let new_id = Uuid::new_v4().to_string();
+        reg.insert(new_id.clone(), result);
+
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```
+
+Key points
+
+1. Only one source of the list (pipeline _or_ argument).  
+2. The `--dim` flag accepts negative indices and is validated to be within
+   `[0, rank]` (inclusive) after adjustment.  
+3. All tensors must have equal shapes; otherwise an error is raised before
+   calling `Tensor::stack`.  
+4. As usual, the new tensor is inserted into the registry and its UUID is
+   returned.
+
+# === USER ===
+
+can you write a test in nushell to prove this function is working?
+
+# === ASSISTANT ===
+
+Here is a self-contained Nushell test block that verifies `torch stack`
+for two different `dim` values and uses deep equality to confirm the exact
+result.  It follows the same SUCCESS / FAILURE reporting style as your earlier
+tests.
+
+```nu
+plugin use torch
+
+###############################################################################
+# helpers
+###############################################################################
+def ok  [m] { print ((ansi green) + "SUCCESS" + (ansi reset) +
+        " - test/stack - " + $m) }
+def err [m] { print ((ansi red)   + "FAILURE" + (ansi reset) +
+        " - test/stack - " + $m) }
+
+###############################################################################
+# prepare two identical-shape tensors
+###############################################################################
+let t1 = ([[1 2] [3 4]] | torch tensor)
+let t2 = ([[5 6] [7 8]] | torch tensor)
+
+###############################################################################
+# Test 1: stack along dim 0   → shape [2,2,2]
+###############################################################################
+let res0 = ([$t1 $t2] | torch stack --dim 0 | torch value)
+let exp0 = [[[1 2] [3 4]]
+            [[5 6] [7 8]]]
+
+if ($res0 == $exp0) {
+    ok "stack dim 0 produced correct tensor"
+} else {
+    err "stack dim 0 expected ($exp0) but got ($res0)"
+    error make {msg:"stack dim 0 failed"}
+}
+
+###############################################################################
+# Test 2: stack along dim 1   → shape [2,2,2]
+###############################################################################
+let res1 = (torch stack [$t1 $t2] --dim 1 | torch value)
+let exp1 = [[[1 2] [5 6]]
+            [[3 4] [7 8]]]
+
+if ($res1 == $exp1) {
+    ok "stack dim 1 produced correct tensor"
+} else {
+    err "stack dim 1 expected ($exp1) but got ($res1)"
+    error make {msg:"stack dim 1 failed"}
+}
+```
+
+Running this script should print two green SUCCESS lines if `torch stack`
+works correctly; otherwise it prints a red FAILURE line and raises an error
+to halt automated testing.
+
+# === USER ===
+
+
