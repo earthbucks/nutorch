@@ -174,6 +174,15 @@ def plot_loss [
   ] | beautiful lines | merge deep {layout: {title: {text: "Loss"}}} | to json | termplot
 }
 
+def plot_results [
+  --X: string # Input tensor id
+  --y: string # Target tensor id
+  --model: record<w1: string, b1: string, w2: string, b2: string> # Model parameters
+]: [nothing -> nothing] {
+  # let Xl = $X | torch detach | torch value
+  # let yl = $y | torch detach | torch value
+}
+
 let raw_data = generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3
 plot_raw_data $raw_data
 
