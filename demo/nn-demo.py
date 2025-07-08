@@ -35,13 +35,6 @@ def generate_data(
     return torch.cat(X_parts), torch.cat(y_parts)
 
 
-def plot_raw_data(X: torch.Tensor, y: torch.Tensor) -> None:
-    Xl, yl = X.tolist(), y.tolist()
-    plt.scatter([p[0] for p in Xl], [p[1] for p in Xl], c=yl, alpha=0.8, cmap="viridis")
-    plt.title("Raw data")
-    plt.show()
-
-
 # ------------------------------------------------------------------ #
 #  model, loss, SGD step                                              #
 # ------------------------------------------------------------------ #
@@ -122,12 +115,20 @@ def train(
     return losses, steps
 
 
+def plot_raw_data(X: torch.Tensor, y: torch.Tensor) -> None:
+    Xl, yl = X.tolist(), y.tolist()
+    plt.scatter([p[0] for p in Xl], [p[1] for p in Xl], c=yl, alpha=0.8, cmap="viridis")
+    plt.title("Raw data")
+    plt.show()
+
+
 def plot_loss(losses: List[float], steps: List[int]) -> None:
     plt.plot(steps, losses)
     plt.title("Training loss")
     plt.xlabel("epoch")
     plt.ylabel("loss")
     plt.show()
+
 
 # ------------------------------------------------------------------ #
 #  decision-boundary plotting                                         #

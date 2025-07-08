@@ -51,28 +51,6 @@ def generate_data [
   {X: $X y: $y}
 }
 
-def plot_raw_data [res: record<X: string, y: string>] {
-  # Call with named arguments (flags)
-  let X: string = $res.X
-  let y: string = $res.y
-  let X_value = $X | torch value
-  let y_value = $y | torch value
-  [
-    {
-      x: ($X_value | enumerate | each {|xy| if (($y_value | get $xy.index) == 0) { $xy.item.0 } })
-      y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 0 { $xy.item.1 } })
-    }
-    {
-      x: ($X_value | enumerate | each {|xy| if (($y_value | get $xy.index) == 1) { $xy.item.0 } })
-      y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 1 { $xy.item.1 } })
-    }
-    {
-      x: ($X_value | enumerate | each {|xy| if (($y_value | get $xy.index) == 2) { $xy.item.0 } })
-      y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 2 { $xy.item.1 } })
-    }
-  ] | beautiful scatter | to json | termplot
-}
-
 def cross_entropy_loss [
   --logits: string # tensor id of model outputs
   --targets: string # tensor id of target labels
@@ -156,8 +134,44 @@ def train [
   }
 }
 
+def plot_raw_data [res: record<X: string, y: string>] {
+  # Call with named arguments (flags)
+  let X: string = $res.X
+  let y: string = $res.y
+  let X_value = $X | torch value
+  let y_value = $y | torch value
+  [
+    {
+      x: ($X_value | enumerate | each {|xy| if (($y_value | get $xy.index) == 0) { $xy.item.0 } })
+      y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 0 { $xy.item.1 } })
+    }
+    {
+      x: ($X_value | enumerate | each {|xy| if (($y_value | get $xy.index) == 1) { $xy.item.0 } })
+      y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 1 { $xy.item.1 } })
+    }
+    {
+      x: ($X_value | enumerate | each {|xy| if (($y_value | get $xy.index) == 2) { $xy.item.0 } })
+      y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 2 { $xy.item.1 } })
+    }
+  ] | beautiful scatter | to json | termplot
+}
+
+def plot_loss [
+  --losses: list<number> # list of loss values
+  --steps: list<number> # list of steps (epochs) corresponding to losses
+] {
+  # Call with named arguments (flags)
+  [
+    {
+      x: $steps
+      y: $losses
+    }
+  ] | beautiful lines | to json | termplot
+}
+
 let raw_data = generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3
 plot_raw_data $raw_data
 
 let net = model_init --input_size 2 --hidden_size 20 --output_size 3
 let model_res = train --model $net --X $raw_data.X --y $raw_data.y --epochs 3000 --lr 0.1 --record_every 100
+plot_loss --losses $model_res.losses --steps $model_res.steps
