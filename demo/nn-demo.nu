@@ -185,6 +185,16 @@ def plot_results [
   let x_max = ($Xl | each {|x| x.0 }) | math max
   let y_min = ($Xl | each {|x| x.1 }) | math min
   let y_max = ($Xl | each {|x| x.1 }) | math max
+
+  let xs = torch arange $x_min $x_max 0.1
+  let ys = torch arange $y_min $y_max 0.1
+  let mesh = torch stack [
+    ($xs | torch repeat ($ys | torch value | length))
+    ($ys | torch repeat_interleave ($xs | torch value | length))
+  ] --dim 1
+
+  let logits = $mesh | model_forward_pass --model $model
+  let Z = torch argmax $logits --dim 1 | torch reshape [($xs | torch value | length) ($ys | torch value | length)]
 }
 
 let raw_data = generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3
