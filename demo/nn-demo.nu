@@ -145,7 +145,7 @@ def train [
     if ($epoch + 1) mod $record_every == 0 {
       $losses = $losses | append ($loss | torch value)
       $steps = $steps | append ($epoch + 1)
-      print $"epoch: ($epoch + 1)/($epochs), loss: ($loss | torch value)"
+      print $"epoch: ($epoch + 1)/($epochs), loss: (($loss | torch value | math round --precision 4))"
     }
   }
 
