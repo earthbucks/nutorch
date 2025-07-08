@@ -5259,3 +5259,349 @@ the command should take a single tensor as pipeline input or as an argument. and
 there should be two optional named flags, `--dim` and `--keepdim`.
 
 can you write this command and also produce a couple of tests in Nushell?
+
+# === ASSISTANT ===
+
+Below is the `CommandArgmax` implementation followed by two Nushell tests that
+exercise
+
+1. argmax on a flattened tensor (no `--dim`)
+2. argmax along a dimension with `--keepdim true`
+
+────────────────────────────────────────────────────────────────────────
+
+Rust: `torch argmax`
+
+```rust
+// torch argmax  -------------------------------------------------------------
+//   $x | torch argmax                    # flatten, return scalar index
+//   torch argmax $x --dim 1              # along dim 1
+//   $x | torch argmax --dim 1 --keepdim  # keepdim = true
+// ---------------------------------------------------------------------------
+
+struct CommandArgmax;
+
+impl PluginCommand for CommandArgmax {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str { "torch argmax" }
+
+    fn description(&self) -> &str {
+        "Return indices of the maximum values of a tensor, optionally along a \
+         specified dimension (wraps Tensor::argmax in tch-rs)."
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch argmax")
+            .input_output_types(vec![
+                (Type::String,  Type::String),   // tensor id via pipeline
+                (Type::Nothing, Type::String),   // tensor id via arg
+            ])
+            .optional(
+                "tensor_id",
+                SyntaxShape::String,
+                "Tensor ID (if not supplied by pipeline)",
+            )
+            .named(
+                "dim",
+                SyntaxShape::Int,
+                "Dimension to reduce (default: flatten)",
+                None,
+            )
+            .named(
+                "keepdim",
+                SyntaxShape::Boolean,
+                "Keep reduced dimension (default false)",
+                None,
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Argmax of a flattened tensor",
+                example: "([1 5 3] | torch tensor) | torch argmax | torch value",
+                result: None,
+            },
+            Example {
+                description: "Argmax along dim 1 with keepdim",
+                example: r#"
+let a = ([[1 5] [7 0]] | torch tensor)
+torch argmax $a --dim 1 --keepdim true | torch value
+"#,
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin : &NutorchPlugin,
+        _engine : &nu_plugin::EngineInterface,
+        call    : &nu_plugin::EvaluatedCall,
+        input   : PipelineData,
+    ) -> Result<PipelineData, LabeledError>
+    {
+        //---------------- obtain tensor ID ------------------------------
+        let piped = match input {
+            PipelineData::Value(v, _) => Some(v),
+            PipelineData::Empty       => None,
+            _ => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Empty or Value inputs supported", call.head))
+            }
+        };
+        let arg0  = call.nth(0);
+
+        match (&piped, &arg0) {
+            (None, None) =>
+                return Err(LabeledError::new("Missing input")
+                    .with_label("Must supply tensor ID via pipeline or argument", call.head)),
+            (Some(_), Some(_)) =>
+                return Err(LabeledError::new("Conflicting input")
+                    .with_label("Provide tensor ID through pipeline OR argument, not both", call.head)),
+            _ => {}
+        }
+
+        let id_val   = piped.or(arg0).unwrap();
+        let tensor_id = id_val.as_str()?.to_string();
+
+        //---------------- optional flags --------------------------------
+        let dim_opt: Option<i64>   = call.get_flag("dim")?;
+        let keepdim: bool          = call.get_flag("keepdim")?.unwrap_or(false);
+
+        //---------------- fetch tensor ----------------------------------
+        let mut reg = TENSOR_REGISTRY.lock().unwrap();
+        let t = reg.get(&tensor_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found")
+                .with_label("Invalid tensor ID", call.head)
+        })?.shallow_clone();
+
+        //---------------- argmax ----------------------------------------
+        // tch-rs exposes argmax(dim, keepdim) where dim: Option<i64>
+        let result = t.argmax(dim_opt, keepdim);
+
+        //---------------- store & return -------------------------------
+        let new_id = Uuid::new_v4().to_string();
+        reg.insert(new_id.clone(), result);
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```
+
+Add `CommandArgmax` to the plugin’s command list.
+
+────────────────────────────────────────────────────────────────────────
+
+Nushell tests
+
+```nu
+plugin use torch
+
+def ok  [m] { print ((ansi green)+"SUCCESS"+(ansi reset)+" - test/argmax - "+$m) }
+def err [m] { print ((ansi red)  +"FAILURE"+(ansi reset)+" - test/argmax - "+$m) }
+
+###############################################################################
+# Test 1 : flattened argmax
+###############################################################################
+let v = ([1 3 2] | torch tensor)      # max at index 1
+let idx1 = ($v | torch argmax | torch value | get 0)
+if ($idx1 == 1) { ok "flatten argmax" }
+else { err "expected 1 got ($idx1)"; error make {msg:"argmax flat"} }
+
+###############################################################################
+# Test 2 : argmax dim 1 keepdim true
+###############################################################################
+let m = ([[1 5] [7 0]] | torch tensor)
+let out_id = (torch argmax $m --dim 1 --keepdim true)
+let res2 = ($out_id | torch value)
+let exp2 = [[1] [0]]               # shape [2,1]
+if ($res2 == $exp2) { ok "dim+keepdim" }
+else { err "expected ($exp2) got ($res2)"; error make {msg:"argmax dim"} }
+```
+
+Running the script should print two green SUCCESS messages if `torch argmax`
+works as intended; any mismatch prints FAILURE and aborts the test run.
+
+# === USER ===
+
+great. the next function we need to implement is `torch reshape`.
+
+the lsp definition of this function is:
+
+```
+(method) def reshape(*shape: int | SymInt) -> Tensor
+──────────────────────────────────────────────────────────────────────────
+reshape(*shape) -> Tensor
+Returns a tensor with the same data and number of elements as `self`  
+but with the specified shape. This method returns a view if `shape` is  
+compatible with the current shape. See `torch.Tensor.view` on when it is
+possible to return a view.
+See `torch.reshape`
+Args:  
+    shape (tuple of ints or int...): the desired shape
+```
+
+now, python and nushell are not exactly the same. it's not really normal to take
+a "tuple argument list" like python. so instead, we should simply take a list of
+integers as the shape argument. and to keep things simple, because this method
+always operators on one tensor, it is simplest that this tensor is always input
+via pipeline. that way the arguments are simple and obvious. the first argument
+is always a list of integers, and the pipeline input is always a tensor.
+
+can you write this command in rust, and also produce a few tests in Nushell to
+verify it works?
+
+# === ASSISTANT ===
+
+Rust: `torch reshape`
+---------------------
+
+```rust
+// torch reshape  -----------------------------------------------------------
+// Reshape a tensor to a new shape.
+//   $tensor | torch reshape [dim0 dim1 ...]
+//
+// • The source tensor **must** be supplied through the pipeline.
+// • The first positional argument is a Nushell list of integers that becomes
+//   the new shape.  `-1` is allowed once to let PyTorch infer that dimension.
+// --------------------------------------------------------------------------
+struct CommandReshape;
+
+impl PluginCommand for CommandReshape {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str { "torch reshape" }
+
+    fn description(&self) -> &str {
+        "Return a tensor with the same data but a new shape (wraps Tensor::reshape)."
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch reshape")
+            .input_output_types(vec![(Type::String, Type::String)])   // tensor id in/out
+            .required(
+                "shape",
+                SyntaxShape::List(Box::new(SyntaxShape::Int)),
+                "Target shape, supplied as a list of ints (may contain one -1)",
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Reshape a length-6 vector to 2×3",
+                example: r#"
+let v = ([1 2 3 4 5 6] | torch tensor)
+$v | torch reshape [2 3] | torch shape         # → [2, 3]
+"#.trim(),
+                result: None,
+            },
+            Example {
+                description: "Use -1 to infer one dimension",
+                example: r#"
+let v = ([1 2 3 4 5 6] | torch tensor)
+$v | torch reshape [3 -1] | torch shape        # → [3, 2]
+"#.trim(),
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin : &NutorchPlugin,
+        _engine : &nu_plugin::EngineInterface,
+        call    : &nu_plugin::EvaluatedCall,
+        input   : PipelineData,
+    ) -> Result<PipelineData, LabeledError>
+    {
+        // ── source tensor must come through pipeline ───────────────────
+        let PipelineData::Value(tid_val, _) = input else {
+            return Err(LabeledError::new("Missing input")
+                .with_label("Tensor ID must be piped into torch reshape", call.head));
+        };
+        let src_id = tid_val.as_str()?.to_string();
+
+        // ── required shape list argument ───────────────────────────────
+        let shape_val = call.nth(0).ok_or_else(|| {
+            LabeledError::new("Missing shape")
+                .with_label("First argument must be the target shape list", call.head)
+        })?;
+
+        let shape_list = shape_val.as_list().map_err(|_| {
+            LabeledError::new("Invalid shape")
+                .with_label("Shape must be a list of integers", call.head)
+        })?;
+
+        let mut shape: Vec<i64> = Vec::with_capacity(shape_list.len());
+        for (i, dim_val) in shape_list.iter().enumerate() {
+            let dim = dim_val.as_int().map_err(|_| {
+                LabeledError::new("Invalid shape element")
+                    .with_label(format!("Shape element at index {i} is not an int"), call.head)
+            })?;
+            shape.push(dim as i64);
+        }
+
+        // ── fetch tensor ───────────────────────────────────────────────
+        let mut reg = TENSOR_REGISTRY.lock().unwrap();
+        let src = reg.get(&src_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found")
+                .with_label("Invalid source tensor ID", call.head)
+        })?.shallow_clone();
+
+        // ── reshape (tch will error if incompatible) ───────────────────
+        let result = src.reshape(&shape);
+
+        // ── store & return ─────────────────────────────────────────────
+        let new_id = Uuid::new_v4().to_string();
+        reg.insert(new_id.clone(), result);
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```
+
+Nushell tests
+-------------
+
+```nu
+plugin use torch
+
+def ok  [m] { print ((ansi green)+"SUCCESS"+(ansi reset)+" - test/reshape - "+$m) }
+def err [m] { print ((ansi red)  +"FAILURE"+(ansi reset)+" - test/reshape - "+$m) }
+
+# ---------------------------------------------------------------------------
+# Test 1 : 1×6 → 2×3
+# ---------------------------------------------------------------------------
+let v  = ([1 2 3 4 5 6] | torch tensor)
+let s1 = ($v | torch reshape [2 3] | torch shape)
+if ($s1 == [2 3]) { ok "vector to 2×3" }
+else { err "expected [2 3] got ($s1)"; error make {msg:"reshape 2x3"} }
+
+# ---------------------------------------------------------------------------
+# Test 2 : infer dimension with -1
+# ---------------------------------------------------------------------------
+let s2 = ($v | torch reshape [3 -1] | torch shape)
+if ($s2 == [3 2]) { ok "-1 inference" }
+else { err "expected [3 2] got ($s2)"; error make {msg:"reshape -1"} }
+
+# ---------------------------------------------------------------------------
+# Test 3 : reshape 2×3 matrix to flat 6
+# ---------------------------------------------------------------------------
+let m  = ([[1 2 3] [4 5 6]] | torch tensor)
+let s3 = ($m | torch reshape [6] | torch shape)
+if ($s3 == [6]) { ok "matrix to flat" }
+else { err "expected [6] got ($s3)"; error make {msg:"reshape flat"} }
+```
+
+These tests confirm that:
+
+1. Reshaping a vector of length 6 to shape [2 3] works.  
+2. Using -1 lets PyTorch infer the missing dimension.  
+3. A 2 × 3 matrix can be flattened to a vector of length 6.
+
+# === USER ===
+
+
