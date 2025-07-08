@@ -10,7 +10,7 @@ def generate_data [
   --centers: int = 3 # Number of cluster centers
   --cluster_std: float = 0.7 # Standard deviation of clusters
   --skew_factor: float = 0.3 # Skew factor for data distribution
-] {
+]: [nothing -> record<X: string, y: string>] {
   let n_samples_per_class: int = ($n_samples // $centers)
   mut X_list: list<string> = [] # nutorch tensors have string ids
   mut y_list: list<string> = [] # nutorch tensors have string ids
@@ -25,8 +25,20 @@ def generate_data [
   for i in (seq 0 ($centers - 1)) {
     mut points: string = (torch randn $n_samples_per_class 2) | torch mul (torch tensor $cluster_std) | torch add ($blob_centers | get $i)
     if $i == 1 or $i == 2 {
-      let skew_matrix: string = (torch tensor [[1.0 ($skew_factor * ($i - 1))] [($skew_factor * ($i - 1)) 1.0]])
-      $points = (torch mm $points $skew_matrix)
+      let center = ($blob_centers | get $i)
+      let skew = (
+        torch tensor [
+          [1.0 ($skew_factor * ($i - 1))]
+          [($skew_factor * ($i - 1)) 1.0]
+        ]
+      )
+
+      $points = (
+        $points
+        | torch sub $center # pts - center
+        | torch mm $skew # * skew
+        | torch add $center # + center
+      )
     }
     let labels: string = torch full [$n_samples_per_class] $i --dtype 'int64'
     $X_list = $X_list | append $points
@@ -62,10 +74,11 @@ def plot_raw_data [res: record<X: string, y: string>] {
 }
 
 def cross_entropy_loss [
-  --outputs: string # tensor id of model outputs
+  --logits: string # tensor id of model outputs
   --targets: string # tensor id of target labels
 ]: [nothing -> string] {
-  let logp = $outputs | torch log_softmax --dim 1
+  let logp = $logits | torch log_softmax --dim 1
+  # print $"logp: ($logp | torch mean | torch value)"
   let loss = $logp | torch gather 1 ($targets | torch unsqueeze 1) | torch squeeze 1 | torch mean | torch neg
   $loss
 }
@@ -98,18 +111,24 @@ def model_forward_pass [
   --model: record<w1: string, b1: string, w2: string, b2: string>
 ]: [string -> string] {
   # input tensor id -> output tensor id
-  torch mm ($model.w1 | torch t) # Matrix multiplication with input and first layer weights
-  | torch add $model.b1 # Add bias for first layer
-  | torch maximum ([0.0] | torch tensor) # ReLU activation
-  | torch mm ($model.w2 | torch t) # Matrix multiplication with second layer weights
-  | torch add $model.b2 # Add bias for second layer
-  # let m = $in
-  # let m = torch mm $m ($model.w1 | torch t) # Matrix multiplication with input and first layer weights
-  # let m = torch add $m $model.b1 # Add bias for first layer
-  # let m = torch maximum $m ([0.0] | torch tensor) # ReLU activation
-  # let m = torch mm $m ($model.w2 | torch t) # Matrix multiplication with second layer weights
-  # let m = torch add $m $model.b2 # Add bias for second layer
-  # $m
+  # torch mm ($model.w1 | torch t) # Matrix multiplication with input and first layer weights
+  # | torch add $model.b1 # Add bias for first layer
+  # | torch maximum ([0.0] | torch tensor) # ReLU activation
+  # | torch mm ($model.w2 | torch t) # Matrix multiplication with second layer weights
+  # | torch add $model.b2 # Add bias for second layer
+  let x = $in
+  # print $"x mean before first mm: ($x | torch mean | torch value)"
+  let w1t = ($model.w1 | torch t)
+  # print $"w1t mean before first mm: ($w1t | torch mean | torch value)"
+  let x = torch mm $x $w1t # Matrix multiplication with input and first layer weights
+  # TODO: We are different already from python version after the first mm
+  # print $"x mean after first mm: ($x | torch mean | torch value)"
+  let x = torch add $x $model.b1 # Add bias for first layer
+  let x = torch maximum $x ([0.0] | torch tensor) # ReLU activation
+  let w2t = ($model.w2 | torch t)
+  let x = torch mm $x $w2t # Matrix multiplication with second layer weights
+  let x = torch add $x $model.b2 # Add bias for second layer
+  $x
 }
 
 def train [
@@ -127,7 +146,7 @@ def train [
   for epoch in (seq 0 ($epochs - 1)) {
     # forward and loss
     let logits = $X | model_forward_pass --model $model
-    let loss = cross_entropy_loss --outputs $logits --targets $y
+    let loss = cross_entropy_loss --logits $logits --targets $y
 
     # zero existing grads, back-prop, SGD upadate
     for p in $ps {
@@ -150,8 +169,23 @@ def train [
   }
 }
 
-let raw_data = (generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3)
+let raw_data = generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3
+# TODO: Mean of X is already different here
+# print $"raw_data.X mean: ($raw_data.X | torch mean | torch value)"
+# print $"raw_data.y mean: ($raw_data.y | torch mean | torch value)"
 plot_raw_data $raw_data
+
+# let net = model_init --input_size 2 --hidden_size 20 --output_size 3
+# print $"net.w1 mean: ($net.w1 | torch mean | torch value)"
+# print $"net.b1 mean: ($net.b1 | torch mean | torch value)"
+# print $"net.w2 mean: ($net.w2 | torch mean | torch value)"
+# print $"net.b2 mean: ($net.b2 | torch mean | torch value)"
+# TODO: W&B means are exactly the same as the python version
+# let logits = ($raw_data.X | model_forward_pass --model $net)
+# TODO: Logits are different from python. something is wrong with the model_forward_pass
+# print $"Logits mean: ($logits | torch mean | torch value)"
+# let loss = cross_entropy_loss --logits $logits --targets $raw_data.y
+# print $"Initial loss: ($loss | torch value)"
 
 let net = model_init --input_size 2 --hidden_size 20 --output_size 3
 let model_res = train --model $net --X $raw_data.X --y $raw_data.y --epochs 3000 --lr 0.1 --record_every 100

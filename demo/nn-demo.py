@@ -62,14 +62,20 @@ def model_get_parameters(model: Model) -> List[torch.Tensor]:
 
 
 def model_forward_pass(model: Model, x: torch.Tensor) -> torch.Tensor:
-    x = torch.mm(x, model["w1"].t()) + model["b1"]
+    # print(f"x mean before first mm: {x.mean().item():.4f}")
+    w1t = model["w1"].t()
+    # print(f"w1t mean before first mm: {w1t.mean().item():.4f}")
+    x = torch.mm(x, w1t) + model["b1"]
+    # print(f"x mean after first mm: {x.mean().item():.4f}")
     x = torch.max(torch.tensor(0.0), x)  # ReLU
-    x = torch.mm(x, model["w2"].t()) + model["b2"]
+    w2t = model["w2"].t()
+    x = torch.mm(x, w2t) + model["b2"]
     return x
 
 
 def cross_entropy_loss(logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
     logp = torch.log_softmax(logits, dim=1)
+    # print(f"logp: {logp.mean()}, targets: {targets.shape}")
     chosen = torch.gather(logp, 1, targets.unsqueeze(1)).squeeze(1)
     return -chosen.mean()
 
@@ -144,15 +150,30 @@ def plot_results(X: torch.Tensor, y: torch.Tensor, model: Model) -> None:
 # ------------------------------------------------------------------ #
 if __name__ == "__main__":
     X, y = generate_data(n_samples=300, centers=3, cluster_std=0.7, skew_factor=0.3)
+    # print(f"X mean: {X.mean().item():.4f}")
+    # print(f"y mean: {y.float().mean().item():.4f}")
     plot_raw_data(X, y)
+
+    net = model_init(inp=2, hid=20, out=3)
+    # print(
+    #     f"w1 mean: {net['w1'].mean().item():.4f}, \n"
+    #     f"b1 mean: {net['b1'].mean().item():.4f}, \n"
+    #     f"w2 mean: {net['w2'].mean().item():.4f}, \n"
+    #     f"b2 mean: {net['b2'].mean().item():.4f}"
+    # )
+    # logits = model_forward_pass(net, X)
+    # TODO: Logits are different in nushell
+    # print(f"Logits mean: {logits.mean().item()}")
+    # loss = cross_entropy_loss(logits, y)
+    # print(f"Initial loss: {loss.item():.4f}")
 
     net = model_init(inp=2, hid=20, out=3)
     losses, steps = train(net, X, y, epochs=3000, lr=0.1, record_every=100)
 
-    plt.plot(steps, losses)
-    plt.title("Training loss")
-    plt.xlabel("epoch")
-    plt.ylabel("loss")
-    plt.show()
+    # plt.plot(steps, losses)
+    # plt.title("Training loss")
+    # plt.xlabel("epoch")
+    # plt.ylabel("loss")
+    # plt.show()
 
-    plot_results(X, y, net)
+    # plot_results(X, y, net)
