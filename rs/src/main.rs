@@ -46,6 +46,7 @@ impl Plugin for NutorchPlugin {
             Box::new(CommandNeg),
             Box::new(CommandRandn),
             Box::new(CommandRepeat),
+            Box::new(CommandRepeatInterleave),
             Box::new(CommandSgdStep),
             Box::new(CommandShape),
             Box::new(CommandSin),
@@ -2272,6 +2273,160 @@ impl PluginCommand for CommandRepeat {
     }
 }
 
+// torch repeat_interleave ---------------------------------------------------
+// Usage examples
+//
+//   $x | torch repeat_interleave 3                     # scalar repeat
+//   $x | torch repeat_interleave $rep_tensor           # tensor repeat counts
+//   $x | torch repeat_interleave 2 --dim 1
+//   $x | torch repeat_interleave $rep_tensor --output-size 12
+//
+// Source tensor MUST be provided by pipeline.
+// ---------------------------------------------------------------------------
+struct CommandRepeatInterleave;
+
+impl PluginCommand for CommandRepeatInterleave {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "torch repeat_interleave"
+    }
+
+    fn description(&self) -> &str {
+        "Repeat elements of a tensor either a fixed number of times or 
+        according to another tensor of repeat counts."
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch repeat_interleave")
+            // pipeline input must be a tensor-id string, result is tensor-id
+            .input_output_types(vec![(Type::String, Type::String)])
+            .required(
+                "repeats",
+                SyntaxShape::Any,
+                "Repeat factor (integer) or tensor ID",
+            )
+            .named(
+                "dim",
+                SyntaxShape::Int,
+                "Dimension along which to repeat (default: flatten)",
+                None,
+            )
+            .named(
+                "output_size",
+                SyntaxShape::Int,
+                "Optional output size hint",
+                None,
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Scalar repeat",
+                example: r#"
+let x = ([1 2 3] | torch tensor)
+$x | torch repeat_interleave 2 | torch value   # -> [1 1 2 2 3 3]
+"#
+                .trim(),
+                result: None,
+            },
+            Example {
+                description: "Per-element repeat counts (tensor)",
+                example: r#"
+let x   = ([10 20 30] | torch tensor)
+let rep = ([1 2 3]    | torch tensor --dtype int64)
+$x | torch repeat_interleave $rep | torch value
+"#
+                .trim(),
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        //------------------------------------------------------------------
+        // 1. source tensor must come via pipeline
+        //------------------------------------------------------------------
+        let PipelineData::Value(src_val, _) = input else {
+            return Err(LabeledError::new("Missing input")
+                .with_label("Source tensor ID must be piped in", call.head));
+        };
+        let src_id = src_val.as_str()?.to_string();
+
+        //------------------------------------------------------------------
+        // 2. 'repeats' positional argument
+        //------------------------------------------------------------------
+        let repeats_val = call
+            .nth(0)
+            .ok_or_else(|| {
+                LabeledError::new("Missing repeats")
+                    .with_label("Provide repeat count (int) or tensor ID", call.head)
+            })?
+            .clone();
+
+        //------------------------------------------------------------------
+        // 3. optional named flags
+        //------------------------------------------------------------------
+        let dim_opt: Option<i64> = call.get_flag("dim")?;
+        let osize_opt: Option<i64> = call.get_flag("output_size")?;
+
+        //------------------------------------------------------------------
+        // 4. fetch source tensor, registry lock
+        //------------------------------------------------------------------
+        let mut reg = TENSOR_REGISTRY.lock().unwrap();
+        let src = reg
+            .get(&src_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found")
+                    .with_label("Invalid source tensor ID", call.head)
+            })?
+            .shallow_clone();
+
+        //------------------------------------------------------------------
+        // 5. branch: repeats is int OR tensor-id
+        //------------------------------------------------------------------
+        let result = if let Ok(rep_int) = repeats_val.as_int() {
+            if rep_int <= 0 {
+                return Err(LabeledError::new("Invalid repeats")
+                    .with_label("Repeat count must be > 0", call.head));
+            }
+            src.repeat_interleave_self_int(rep_int, dim_opt, osize_opt)
+        } else {
+            let rep_id = repeats_val.as_str()?.to_string();
+            let rep_t = reg
+                .get(&rep_id)
+                .ok_or_else(|| {
+                    LabeledError::new("Tensor not found")
+                        .with_label("Invalid repeats tensor ID", call.head)
+                })?
+                .shallow_clone();
+
+            let rep_t = if rep_t.kind() == Kind::Int64 {
+                rep_t
+            } else {
+                rep_t.to_kind(Kind::Int64)
+            };
+
+            src.repeat_interleave_self_tensor(&rep_t, dim_opt, osize_opt)
+        };
+
+        //------------------------------------------------------------------
+        // 6. store result & return ID
+        //------------------------------------------------------------------
+        let new_id = Uuid::new_v4().to_string();
+        reg.insert(new_id.clone(), result);
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+
 struct CommandMm;
 
 impl PluginCommand for CommandMm {
@@ -3207,7 +3362,9 @@ struct CommandStack;
 impl PluginCommand for CommandStack {
     type Plugin = NutorchPlugin;
 
-    fn name(&self) -> &str { "torch stack" }
+    fn name(&self) -> &str {
+        "torch stack"
+    }
 
     fn description(&self) -> &str {
         "Concatenate a sequence of tensors along a new axis (torch.stack)."
@@ -3216,9 +3373,8 @@ impl PluginCommand for CommandStack {
     fn signature(&self) -> Signature {
         Signature::build("torch stack")
             .input_output_types(vec![
-                (Type::List(Box::new(Type::String)),
-                 Type::String),                   // list via pipeline
-                (Type::Nothing, Type::String)     // list via arg
+                (Type::List(Box::new(Type::String)), Type::String), // list via pipeline
+                (Type::Nothing, Type::String),                      // list via arg
             ])
             .optional(
                 "tensor_ids",
@@ -3242,7 +3398,8 @@ impl PluginCommand for CommandStack {
 let x = ([[1 2 3] [4 5 6]] | torch tensor)
 let y = ([[7 8 9] [1 1 1]] | torch tensor)
 [$x $y] | torch stack --dim 0 | torch shape   # -> [2, 2, 3]
-"#.trim(),
+"#
+                .trim(),
                 result: None,
             },
             Example {
@@ -3251,7 +3408,8 @@ let y = ([[7 8 9] [1 1 1]] | torch tensor)
 let x = ([[1 2 3] [4 5 6]] | torch tensor)
 let y = ([[7 8 9] [1 1 1]] | torch tensor)
 torch stack [$x $y] --dim 1 | torch shape    # -> [2, 2, 3]
-"#.trim(),
+"#
+                .trim(),
                 result: None,
             },
         ]
@@ -3259,18 +3417,17 @@ torch stack [$x $y] --dim 1 | torch shape    # -> [2, 2, 3]
 
     fn run(
         &self,
-        _plugin : &NutorchPlugin,
-        _engine : &nu_plugin::EngineInterface,
-        call    : &nu_plugin::EvaluatedCall,
-        input   : PipelineData,
-    ) -> Result<PipelineData, LabeledError>
-    {
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
         //------------------------------------------------------------------
         // 1. Collect list of IDs (pipeline xor argument)
         //------------------------------------------------------------------
         let piped = match input {
             PipelineData::Value(v, _) => Some(v),
-            PipelineData::Empty       => None,
+            PipelineData::Empty => None,
             _ => {
                 return Err(LabeledError::new("Unsupported input")
                     .with_label("Only Empty or Value pipeline inputs supported", call.head))
@@ -3279,19 +3436,25 @@ torch stack [$x $y] --dim 1 | torch shape    # -> [2, 2, 3]
         let arg0 = call.nth(0);
 
         match (&piped, &arg0) {
-            (None, None) =>
+            (None, None) => {
                 return Err(LabeledError::new("Missing input")
-                    .with_label("Provide tensor list via pipeline or argument", call.head)),
-            (Some(_), Some(_)) =>
-                return Err(LabeledError::new("Conflicting input")
-                    .with_label("Provide tensor list via pipeline OR argument, not both", call.head)),
+                    .with_label("Provide tensor list via pipeline or argument", call.head))
+            }
+            (Some(_), Some(_)) => {
+                return Err(LabeledError::new("Conflicting input").with_label(
+                    "Provide tensor list via pipeline OR argument, not both",
+                    call.head,
+                ))
+            }
             _ => {}
         }
 
         let list_val = piped.or(arg0).unwrap();
 
         // accept single-level list of strings
-        let ids: Vec<String> = list_val.as_list().map_err(|_|{
+        let ids: Vec<String> = list_val
+            .as_list()
+            .map_err(|_| {
                 LabeledError::new("Invalid input")
                     .with_label("Expected a list of tensor IDs", call.head)
             })?
@@ -3301,8 +3464,7 @@ torch stack [$x $y] --dim 1 | torch shape    # -> [2, 2, 3]
 
         if ids.is_empty() {
             return Err(
-                LabeledError::new("Empty list")
-                    .with_label("No tensor IDs supplied", call.head)
+                LabeledError::new("Empty list").with_label("No tensor IDs supplied", call.head)
             );
         }
 
@@ -3315,13 +3477,15 @@ torch stack [$x $y] --dim 1 | torch shape    # -> [2, 2, 3]
         // 3. Fetch tensors & validate shape equality
         //------------------------------------------------------------------
         let mut reg = TENSOR_REGISTRY.lock().unwrap();
-        let tensors: Vec<Tensor> = ids.iter()
+        let tensors: Vec<Tensor> = ids
+            .iter()
             .map(|id| {
-                reg.get(id).ok_or_else(|| {
-                    LabeledError::new("Tensor not found")
-                        .with_label(format!("Invalid tensor ID: {id}"), call.head)
-                })
-                .map(|t| t.shallow_clone())
+                reg.get(id)
+                    .ok_or_else(|| {
+                        LabeledError::new("Tensor not found")
+                            .with_label(format!("Invalid tensor ID: {id}"), call.head)
+                    })
+                    .map(|t| t.shallow_clone())
             })
             .collect::<Result<_, _>>()?;
 
@@ -3329,10 +3493,14 @@ torch stack [$x $y] --dim 1 | torch shape    # -> [2, 2, 3]
         let first_shape = tensors[0].size();
         for (i, t) in tensors.iter().enumerate().skip(1) {
             if t.size() != first_shape {
-                return Err(
-                    LabeledError::new("Shape mismatch")
-                        .with_label(format!("Tensor at index {i} has shape {:?}, expected {:?}", t.size(), first_shape), call.head)
-                );
+                return Err(LabeledError::new("Shape mismatch").with_label(
+                    format!(
+                        "Tensor at index {i} has shape {:?}, expected {:?}",
+                        t.size(),
+                        first_shape
+                    ),
+                    call.head,
+                ));
             }
         }
 
@@ -3344,10 +3512,10 @@ torch stack [$x $y] --dim 1 | torch shape    # -> [2, 2, 3]
             dim += rank + 1;
         }
         if dim < 0 || dim > rank {
-            return Err(
-                LabeledError::new("Invalid dim")
-                    .with_label(format!("dim must be in [0, {}], got {}", rank, dim), call.head)
-            );
+            return Err(LabeledError::new("Invalid dim").with_label(
+                format!("dim must be in [0, {}], got {}", rank, dim),
+                call.head,
+            ));
         }
 
         let result = Tensor::stack(&tensors, dim);
