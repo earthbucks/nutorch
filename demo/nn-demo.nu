@@ -1,5 +1,5 @@
 plugin use torch
-use ~/dev/termplot/nu/beautiful.nu *
+use ../nu/beautiful.nu *
 
 # Set random seed for reproducibility
 torch manual_seed 42
