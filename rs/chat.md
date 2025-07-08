@@ -4731,3 +4731,483 @@ automated testing.
 
 # === USER ===
 
+great, now, the next function we need to implement is `repeat_interleave`. there
+are two modes supported by tch-rs: (tensor, int) and (tensor, tensor).
+
+the functions are:
+
+- tensor.repeat_interleave_self_int
+- tensor.repeat_interleave_self_tensor
+
+to implement this function, the pipeline/argument configuration should look like
+this:
+
+either:
+
+- one tensor on pipeline and one on argument
+- two tensors as arguments
+- one tensor on pipeline and one integer on argument
+- one tensor as argument and one integer as argument
+
+those are the four mutually exclusive possibilities.
+
+knowing this, can you produce the `torch repeat_interleave` command? and also
+produce a few simple tests in nushell so i can make sure it's working?
+
+# === ASSISTANT ===
+
+Below is a full implementation for `torch repeat_interleave`, followed by three
+Nushell test snippets that cover the four accepted usage patterns.
+
+---
+
+## Rust – `CommandRepeatInterleave`
+
+```rust
+// torch repeat_interleave ---------------------------------------------------
+// Repeat elements of a tensor.
+//
+//   1)  $x | torch repeat_interleave 3             # tensor via pipeline, int
+//   2)  $x | torch repeat_interleave $rep_t        # tensor via pipeline, tensor
+//   3)  torch repeat_interleave $x 3               # both args
+//   4)  torch repeat_interleave $x $rep_t          # both args
+//
+// Optional flag
+//   --dim <int>      (defaults to None, i.e. flatten first)
+//
+// Uses tch-rs methods:
+//   Tensor::repeat_interleave_self_int
+//   Tensor::repeat_interleave_self_tensor
+// ---------------------------------------------------------------------------
+struct CommandRepeatInterleave;
+
+impl PluginCommand for CommandRepeatInterleave {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str { "torch repeat_interleave" }
+
+    fn description(&self) -> &str {
+        "Repeat elements of a tensor a fixed number of times or according to a "
+        "repeats-tensor (wraps Tensor::repeat_interleave in tch-rs)."
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch repeat_interleave")
+            .input_output_types(vec![
+                (Type::String,  Type::String),   // src via pipeline
+                (Type::Nothing, Type::String),   // src via arg
+            ])
+            .optional(
+                "src_id",
+                SyntaxShape::String,
+                "ID of source tensor (if not provided via pipeline)",
+            )
+            .required(
+                "repeats",
+                SyntaxShape::Any,
+                "Repeat factor: either integer or tensor ID",
+            )
+            .named(
+                "dim",
+                SyntaxShape::Int,
+                "Dimension along which to repeat (default: flatten)",
+                None,
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Repeat each element twice (flattened)",
+                example: r#"
+let x = ([1 2 3] | torch tensor)
+$x | torch repeat_interleave 2 | torch value     # -> [1 1 2 2 3 3]
+"#.trim(),
+                result: None,
+            },
+            Example {
+                description: "Repeat with per-element counts",
+                example: r#"
+let x   = ([10 20 30] | torch tensor)
+let rep = ([1 2 3]    | torch tensor --dtype int64)
+torch repeat_interleave $x $rep | torch value      # -> [10 20 20 30 30 30]
+"#.trim(),
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin : &NutorchPlugin,
+        _engine : &nu_plugin::EngineInterface,
+        call    : &nu_plugin::EvaluatedCall,
+        input   : PipelineData,
+    ) -> Result<PipelineData, LabeledError>
+    {
+        //---------------------------- collect source tensor ID ----------------
+        let piped = match input {
+            PipelineData::Value(v, _) => Some(v),
+            PipelineData::Empty       => None,
+            _ => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Empty or single Value pipeline input accepted", call.head))
+            }
+        };
+        let src_arg = call.nth(0);
+
+        match (&piped, &src_arg) {
+            (None, None) =>
+                return Err(LabeledError::new("Missing input")
+                    .with_label("Provide source tensor via pipeline or argument", call.head)),
+            (Some(_), Some(_)) =>
+                return Err(LabeledError::new("Conflicting input")
+                    .with_label("Source tensor via pipeline *or* argument, not both", call.head)),
+            _ => {}
+        }
+
+        // index of 'repeats' argument depends on whether src came from pipeline
+        let repeats_val: Value;
+        let src_id: String;
+
+        if piped.is_some() {
+            src_id = piped.unwrap().as_str()?.to_string();
+            repeats_val = call.nth(0).ok_or_else(|| {
+                LabeledError::new("Missing repeats")
+                    .with_label("Must supply repeat count or tensor", call.head)
+            })?.clone();
+        } else {
+            src_id = src_arg.unwrap().as_str()?.to_string();
+            repeats_val = call.nth(1).ok_or_else(|| {
+                LabeledError::new("Missing repeats")
+                    .with_label("Must supply repeat count or tensor", call.head)
+            })?.clone();
+        }
+
+        //---------------------------- dim flag ---------------------------------
+        let dim_opt: Option<i64> = call.get_flag("dim")?;
+
+        //---------------------------- fetch tensors ----------------------------
+        let mut reg = TENSOR_REGISTRY.lock().unwrap();
+
+        let src = reg.get(&src_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found")
+                .with_label("Invalid source tensor ID", call.head)
+        })?.shallow_clone();
+
+        //---------------------------- dispatch int vs tensor -------------------
+        let result = if let Ok(rep_int) = repeats_val.as_int() {
+            if rep_int <= 0 {
+                return Err(LabeledError::new("Invalid repeats")
+                    .with_label("Repeat count must be > 0", call.head));
+            }
+            src.repeat_interleave_self_int(rep_int as i64, dim_opt)
+        } else {
+            // treat as tensor ID
+            let rep_id = repeats_val.as_str()?.to_string();
+            let rep_t  = reg.get(&rep_id).ok_or_else(|| {
+                LabeledError::new("Tensor not found")
+                    .with_label("Invalid repeats tensor ID", call.head)
+            })?.shallow_clone();
+
+            // ensure int64 dtype
+            let rep_t = if rep_t.kind() != Kind::Int64 {
+                rep_t.to_kind(Kind::Int64)
+            } else { rep_t };
+
+            src.repeat_interleave_self_tensor(&rep_t, dim_opt)
+        };
+
+        //---------------------------- store & return ---------------------------
+        let new_id = Uuid::new_v4().to_string();
+        reg.insert(new_id.clone(), result);
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```
+
+---
+
+## Nushell tests
+
+```nu
+plugin use torch
+
+###############################################################################
+# helpers
+###############################################################################
+def ok  [m] { print ((ansi green) + "SUCCESS" + (ansi reset) +
+        " - test/repeat_interleave - " + $m) }
+def err [m] { print ((ansi red)   + "FAILURE" + (ansi reset) +
+        " - test/repeat_interleave - " + $m) }
+
+###############################################################################
+# Test 1: pipeline tensor + scalar repeats
+###############################################################################
+let a = ([1 2 3] | torch tensor)
+let res1 = ($a | torch repeat_interleave 2 | torch value)
+if ($res1 == [1 1 2 2 3 3]) { ok "pipeline + int repeats" }
+else { err "expected [1 1 2 2 3 3] got ($res1)"; error make {msg:"ri int failed"} }
+
+###############################################################################
+# Test 2: two args (tensor id, scalar repeats)
+###############################################################################
+let b = ([4 5] | torch tensor)
+let res2 = (torch repeat_interleave $b 3 | torch value)
+if ($res2 == [4 4 4 5 5 5]) { ok "arg + int repeats" }
+else { err "failed arg+int"; error make {msg:"ri arg+int"} }
+
+###############################################################################
+# Test 3: repeats provided as tensor
+###############################################################################
+let src = ([10 20 30] | torch tensor)
+let rep = ([1 2 3]    | torch tensor --dtype int64)
+let res3 = (torch repeat_interleave $src $rep | torch value)
+let exp3 = [10 20 20 30 30 30]
+if ($res3 == $exp3) { ok "tensor repeats" }
+else { err "expected ($exp3) got ($res3)"; error make {msg:"ri tensor repeats"} }
+```
+
+The three checks cover:
+
+1. Source via pipeline, repeats as scalar int argument
+2. Both operands as arguments, repeats scalar
+3. Both operands as arguments, repeats tensor
+
+(All succeed when `CommandRepeatInterleave` works correctly.)
+
+# === USER ===
+
+there are some errors with your code. both of the new repeat methods take an
+additional argument, `output_size`, for instance:
+
+```rust
+pub fn repeat_interleave_self_tensor(&self, repeats: &Tensor, dim: impl Into<Option<i64>>, output_size: impl Into<Option<i64>>) -> Tensor
+```
+
+can you modify your code to add in this required argument?
+
+also, i see one other problem. your command signature has an optional argument
+before a required argument. that does not work in nushell. you must have the
+required argument first.
+
+in light of the complexity of argument management in this case, i think we
+should simplify this command:
+
+- always require one tensor as pipeline input
+- always require one argument which may be a tensor or an integer
+
+can you make these change and produce the new code?
+
+# === ASSISTANT ===
+
+Below is a simplified and corrected implementation that
+
+• ALWAYS takes the _source tensor_ via the pipeline.  
+• Has exactly **one required positional argument** `repeats` (integer or tensor
+ID).  
+• Offers two optional named flags: `--dim` and `--output-size`.  
+• Passes `output_size` to the corresponding `tch-rs` call.  
+
+This satisfies Nushell’s rule that required positional arguments must come
+before optional ones.
+
+```rust
+// torch repeat_interleave ---------------------------------------------------
+// Usage examples
+//
+//   $x | torch repeat_interleave 3                     # scalar repeat
+//   $x | torch repeat_interleave $rep_tensor           # tensor repeat counts
+//   $x | torch repeat_interleave 2 --dim 1
+//   $x | torch repeat_interleave $rep_tensor --output-size 12
+//
+// Source tensor MUST be provided by pipeline.
+// ---------------------------------------------------------------------------
+
+struct CommandRepeatInterleave;
+
+impl PluginCommand for CommandRepeatInterleave {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str { "torch repeat_interleave" }
+
+    fn description(&self) -> &str {
+        "Repeat elements of a tensor either a fixed number of times or "
+        "according to another tensor of repeat counts."
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch repeat_interleave")
+            // pipeline input must be a tensor-id string, result is tensor-id
+            .input_output_types(vec![(Type::String, Type::String)])
+            .required(
+                "repeats",
+                SyntaxShape::Any,
+                "Repeat factor (integer) or tensor ID",
+            )
+            .named(
+                "dim",
+                SyntaxShape::Int,
+                "Dimension along which to repeat (default: flatten)",
+                None,
+            )
+            .named(
+                "output_size",
+                SyntaxShape::Int,
+                "Optional output size hint",
+                None,
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Scalar repeat",
+                example: r#"
+let x = ([1 2 3] | torch tensor)
+$x | torch repeat_interleave 2 | torch value   # -> [1 1 2 2 3 3]
+"#.trim(),
+                result: None,
+            },
+            Example {
+                description: "Per-element repeat counts (tensor)",
+                example: r#"
+let x   = ([10 20 30] | torch tensor)
+let rep = ([1 2 3]    | torch tensor --dtype int64)
+$x | torch repeat_interleave $rep | torch value
+"#.trim(),
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin : &NutorchPlugin,
+        _engine : &nu_plugin::EngineInterface,
+        call    : &nu_plugin::EvaluatedCall,
+        input   : PipelineData,
+    ) -> Result<PipelineData, LabeledError>
+    {
+        //------------------------------------------------------------------
+        // 1. source tensor must come via pipeline
+        //------------------------------------------------------------------
+        let PipelineData::Value(src_val, _) = input else {
+            return Err(LabeledError::new("Missing input")
+                .with_label("Source tensor ID must be piped in", call.head));
+        };
+        let src_id = src_val.as_str()?.to_string();
+
+        //------------------------------------------------------------------
+        // 2. 'repeats' positional argument
+        //------------------------------------------------------------------
+        let repeats_val = call.nth(0).ok_or_else(|| {
+            LabeledError::new("Missing repeats")
+                .with_label("Provide repeat count (int) or tensor ID", call.head)
+        })?.clone();
+
+        //------------------------------------------------------------------
+        // 3. optional named flags
+        //------------------------------------------------------------------
+        let dim_opt: Option<i64>        = call.get_flag("dim")?;
+        let osize_opt: Option<i64>      = call.get_flag("output_size")?;
+
+        //------------------------------------------------------------------
+        // 4. fetch source tensor, registry lock
+        //------------------------------------------------------------------
+        let mut reg = TENSOR_REGISTRY.lock().unwrap();
+        let src = reg.get(&src_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found")
+                .with_label("Invalid source tensor ID", call.head)
+        })?.shallow_clone();
+
+        //------------------------------------------------------------------
+        // 5. branch: repeats is int OR tensor-id
+        //------------------------------------------------------------------
+        let result = if let Ok(rep_int) = repeats_val.as_int() {
+            if rep_int <= 0 {
+                return Err(LabeledError::new("Invalid repeats")
+                    .with_label("Repeat count must be > 0", call.head));
+            }
+            src.repeat_interleave_self_int(
+                rep_int as i64,
+                dim_opt,
+                osize_opt
+            )
+        } else {
+            let rep_id = repeats_val.as_str()?.to_string();
+            let rep_t  = reg.get(&rep_id).ok_or_else(|| {
+                LabeledError::new("Tensor not found")
+                    .with_label("Invalid repeats tensor ID", call.head)
+            })?.shallow_clone();
+
+            let rep_t = if rep_t.kind() != Kind::Int64 {
+                rep_t.to_kind(Kind::Int64)
+            } else { rep_t };
+
+            src.repeat_interleave_self_tensor(
+                &rep_t,
+                dim_opt,
+                osize_opt
+            )
+        };
+
+        //------------------------------------------------------------------
+        // 6. store result & return ID
+        //------------------------------------------------------------------
+        let new_id = Uuid::new_v4().to_string();
+        reg.insert(new_id.clone(), result);
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```
+
+---
+
+## Nushell tests
+
+```nu
+plugin use torch
+def ok [m]  { print ((ansi green)+"SUCCESS"+(ansi reset)+" - test/ri - "+$m) }
+def err[m]  { print ((ansi red)  +"FAILURE"+(ansi reset)+" - test/ri - "+$m) }
+
+# ---------------------------------------------------------------------------
+# Test 1: scalar repeats   ($x via pipe, repeats=2)
+# ---------------------------------------------------------------------------
+let x = ([1 2 3] | torch tensor)
+let r1 = ($x | torch repeat_interleave 2 | torch value)
+if ($r1 == [1 1 2 2 3 3]) { ok "scalar repeat" }
+else { err "scalar repeat wrong ($r1)"; error make {msg:"ri scalar"} }
+
+# ---------------------------------------------------------------------------
+# Test 2: tensor repeats   ($x via pipe, repeats tensor as arg)
+# ---------------------------------------------------------------------------
+let rep = ([1 2 3] | torch tensor --dtype int64)
+let r2  = ($x | torch repeat_interleave $rep | torch value)
+let exp2 = [1 2 2 3 3 3]
+if ($r2 == $exp2) { ok "tensor repeat" }
+else { err "tensor repeat wrong ($r2)"; error make {msg:"ri tensor"} }
+
+# ---------------------------------------------------------------------------
+# Test 3: scalar repeats with dim flag (2-D tensor)
+# ---------------------------------------------------------------------------
+let m = ([[1 2] [3 4]] | torch tensor)
+let r3 = ($m | torch repeat_interleave 2 --dim 0 | torch shape)
+if ($r3 == [4 2]) { ok "dim flag repeat" }
+else { err "dim flag wrong shape ($r3)"; error make {msg:"ri dim"} }
+```
+
+These three tests cover:
+
+1. Source via pipeline + scalar repeat count.  
+2. Source via pipeline + repeat tensor argument.  
+3. Use of the `--dim` flag on a 2-D tensor (with scalar repeats).  
+
+They should each print “SUCCESS” when `CommandRepeatInterleave` functions
+correctly.
+
+# === USER ===
+
+
