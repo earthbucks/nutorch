@@ -134,20 +134,18 @@ def plot_loss(losses: List[float], steps: List[int]) -> None:
 #  decision-boundary plotting                                         #
 # ------------------------------------------------------------------ #
 def plot_results(X: torch.Tensor, y: torch.Tensor, model: Model) -> None:
-    Xl, yl = X.tolist(), y.tolist()
+    Xl, yl = X.detach().tolist(), y.detach().tolist()
     x_min, x_max = min(p[0] for p in Xl) - 1, max(p[0] for p in Xl) + 1
     y_min, y_max = min(p[1] for p in Xl) - 1, max(p[1] for p in Xl) + 1
 
     xs, ys = torch.arange(x_min, x_max, 0.1), torch.arange(y_min, y_max, 0.1)
-    xx, yy = torch.meshgrid(xs, ys, indexing="xy")
-    mesh = torch.stack([xx.flatten(), yy.flatten()], dim=1)
+    mesh = torch.stack([xs.repeat(len(ys)), ys.repeat_interleave(len(xs))], dim=1)
 
     with torch.no_grad():
         logits = model_forward_pass(model, mesh)
-        Z = torch.argmax(logits, dim=1).reshape(xx.shape)
+        Z = torch.argmax(logits, dim=1).reshape(len(ys), len(xs))
 
-    print (f"xx: {xx.shape}, yy: {yy.shape}, Z: {Z.shape}")
-    plt.contourf(xx, yy, Z, alpha=0.4, cmap="viridis")
+    plt.contourf(xs, ys, Z, alpha=0.4, cmap="viridis")
     plt.scatter([p[0] for p in Xl], [p[1] for p in Xl], c=yl, alpha=0.8, cmap="viridis")
     plt.title("Decision boundary")
     plt.show()
