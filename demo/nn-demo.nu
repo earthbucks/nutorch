@@ -153,7 +153,8 @@ def plot_raw_data [res: record<X: string, y: string>] {
       x: ($X_value | enumerate | each {|xy| if (($y_value | get $xy.index) == 2) { $xy.item.0 } })
       y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 2 { $xy.item.1 } })
     }
-  ] | beautiful scatter | to json | termplot
+  ] | beautiful scatter
+  | merge deep {layout: {title: {text: "Raw Data"}}} | to json | termplot
 }
 
 def plot_loss [
@@ -170,7 +171,7 @@ def plot_loss [
     #   x: $steps
     #   y: ($losses | each {|loss| $loss + 0.1 }) # Slightly offset for visibility
     # }
-  ] | beautiful lines | to json | termplot
+  ] | beautiful lines | merge deep {layout: {title: {text: "Loss"}}} | to json | termplot
 }
 
 let raw_data = generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3
