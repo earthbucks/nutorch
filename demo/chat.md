@@ -7968,4 +7968,131 @@ update rule, etc. all match; the only source of the discrepancy is the silent
 
 # === USER ===
 
+that's not it.
 
+i've deduced there is a problem in the generation of the initial data.
+
+at least one of the blobs is NOT the same as the other - it is positioned differently.
+
+i think nushell and python have two blobs that are the same, and one blog that is different. i think it's the third blob that appears at a different center.
+
+here is the nsuhell code:
+
+```nu
+
+def generate_data [
+  --n_samples: int = 300 # Number of samples to generate
+  --centers: int = 3 # Number of cluster centers
+  --cluster_std: float = 0.7 # Standard deviation of clusters
+  --skew_factor: float = 0.3 # Skew factor for data distribution
+]: [nothing -> record<X: string, y: string>] {
+  let n_samples_per_class: int = ($n_samples // $centers)
+  mut X_list: list<string> = [] # nutorch tensors have string ids
+  mut y_list: list<string> = [] # nutorch tensors have string ids
+
+  # let blob_centers = [([0.0 0.0] | torch tensor) ([3.0 0.0] | torch tensor) ([1.5 2.5] | torch tensor)]
+  let blob_centers: list<string> = [
+    (torch tensor [0.0 0.0])
+    (torch tensor [3.0 0.0])
+    (torch tensor [1.5 2.5])
+  ]
+
+  for i in (seq 0 ($centers - 1)) {
+    mut points: string = (torch randn $n_samples_per_class 2) | torch mul (torch tensor $cluster_std) | torch add ($blob_centers | get $i)
+    if $i == 1 or $i == 2 {
+      let skew_matrix: string = (torch tensor [[1.0 ($skew_factor * ($i - 1))] [($skew_factor * ($i - 1)) 1.0]])
+      $points = (torch mm $points $skew_matrix)
+    }
+    let labels: string = torch full [$n_samples_per_class] $i --dtype 'int64'
+    $X_list = $X_list | append $points
+    $y_list = $y_list | append $labels
+  }
+
+  let X: string = $X_list | torch cat --dim 0
+  let y: string = $y_list | torch cat --dim 0
+
+  {X: $X y: $y}
+}
+```
+
+and the python code:
+
+```python
+def generate_data(
+    n_samples: int = 300,
+    centers: int = 3,
+    cluster_std: float = 0.7,
+    skew_factor: float = 0.3,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    n_per_class = n_samples // centers
+    X_parts, y_parts = [], []
+    blob_centers = [
+        torch.tensor([0.0, 0.0]),
+        torch.tensor([3.0, 0.0]),
+        torch.tensor([1.5, 2.5]),
+    ]
+
+    for i in range(centers):
+        pts = torch.randn(n_per_class, 2) * cluster_std + blob_centers[i]
+        if i in (1, 2):
+            skew = torch.tensor(
+                [[1.0, skew_factor * (i - 1)], [skew_factor * (i - 1), 1.0]]
+            )
+            pts = torch.mm(pts - blob_centers[i], skew) + blob_centers[i]
+        X_parts.append(pts)
+        y_parts.append(torch.full((n_per_class,), i, dtype=torch.long))
+
+    return torch.cat(X_parts), torch.cat(y_parts)
+```
+
+do you see the problem?
+
+# === ASSISTANT ===
+
+Yes ‑ the discrepancy is in how the skew‐matrix is applied.
+
+Python
+
+```python
+pts = torch.mm(pts - blob_centers[i], skew) + blob_centers[i]
+```
+
+steps  
+1. shift cloud to the origin: `pts - center`  
+2. apply the 2×2 skew matrix  
+3. shift it back: `… + center`
+
+Nu-script
+
+```nu
+$points = (torch mm $points $skew_matrix)      # ← only this
+```
+
+You multiply by the skew matrix **without first subtracting the centre and
+adding it back**, so the transformation shears while also pulling the blob
+toward the origin.  For `i == 2` that change in mean position explains why the
+loss curves diverge.
+
+Fix (Nushell)
+
+```nu
+if $i == 1 or $i == 2 {
+    let center = ($blob_centers | get $i)
+    let skew   = (torch tensor [[1.0 ($skew_factor * ($i - 1))]
+                                [($skew_factor * ($i - 1)) 1.0]])
+
+    $points = (
+        $points
+        | torch sub $center          # pts - center
+        | torch mm $skew             # * skew
+        | torch add $center          # + center
+    )
+}
+```
+
+With that centre-shift before and after the matrix multiply the generated blobs
+match the Python version, and the loss curve should align.
+
+# === USER ===
+
+that fixed it! thank you!
