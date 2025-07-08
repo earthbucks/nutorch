@@ -1,5 +1,5 @@
 plugin use torch
-use ~/dev/termplot/nu/beautiful.nu
+use ~/dev/termplot/nu/beautiful.nu *
 
 # Set random seed for reproducibility
 torch manual_seed 42
@@ -166,6 +166,10 @@ def plot_loss [
       x: $steps
       y: $losses
     }
+    # {
+    #   x: $steps
+    #   y: ($losses | each {|loss| $loss + 0.1 }) # Slightly offset for visibility
+    # }
   ] | beautiful lines | to json | termplot
 }
 
