@@ -141,9 +141,9 @@ def plot_results(X: torch.Tensor, y: torch.Tensor, model: Model) -> None:
     xs, ys = torch.arange(x_min, x_max, 0.1), torch.arange(y_min, y_max, 0.1)
     mesh = torch.stack([xs.repeat(len(ys)), ys.repeat_interleave(len(xs))], dim=1)
 
-    with torch.no_grad():
-        logits = model_forward_pass(model, mesh)
-        Z = torch.argmax(logits, dim=1).reshape(len(ys), len(xs))
+    # note: do not use no_grad here for easier translating to nushell
+    logits = model_forward_pass(model, mesh)
+    Z = torch.argmax(logits, dim=1).reshape(len(ys), len(xs))
 
     plt.contourf(xs, ys, Z, alpha=0.4, cmap="viridis")
     plt.scatter([p[0] for p in Xl], [p[1] for p in Xl], c=yl, alpha=0.8, cmap="viridis")
