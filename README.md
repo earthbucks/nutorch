@@ -61,7 +61,7 @@ $env.config.plugin_gc = {
 - [x] gather
 - [x] squeeze
 - [x] unsqueeze
-- [ ] detach
+- [x] detach
 - [ ] arange
 - [ ] stack
 - [ ] repeat

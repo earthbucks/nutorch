@@ -25,6 +25,7 @@ impl Plugin for NutorchPlugin {
             Box::new(CommandDevices),
             // Tensor operations
             Box::new(CommandAdd),
+            Box::new(CommandArange),
             Box::new(CommandBackward),
             Box::new(CommandCat),
             Box::new(CommandDetach),
@@ -1284,6 +1285,163 @@ impl PluginCommand for CommandRandn {
     }
 }
 
+// torch arange  -------------------------------------------------------------
+// Create a 1-D tensor with evenly spaced values.
+//   torch arange end
+//   torch arange start end
+//   torch arange start end step
+//
+// Optional flags handled by helpers already available:
+//   --dtype <kind>   --device <cpu|cuda:N>   --requires_grad
+// ---------------------------------------------------------------------------
+struct CommandArange;
+
+impl PluginCommand for CommandArange {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str {
+        "torch arange"
+    }
+
+    fn description(&self) -> &str {
+        "Return a 1-D tensor with values in [start, end) and the given step \
+         (like torch.arange in PyTorch)."
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch arange")
+            .required(
+                "end_or_start",
+                SyntaxShape::Number,
+                "If only one number is given, it is `end`; if two or three are given, it is `start`",
+            )
+            .optional(
+                "end",
+                SyntaxShape::Number,
+                "End value (exclusive) if start supplied",
+            )
+            .optional(
+                "step",
+                SyntaxShape::Number,
+                "Step (default 1) if start and end supplied",
+            )
+            // we already declared global flags for dtype/device/grad earlier,
+            // so they are parsed by the helper functions; no need to repeat.
+            .input_output_types(vec![(Type::Nothing, Type::String)])
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "arange(5)  -> 0 1 2 3 4",
+                example: "torch arange 5 | torch value",
+                result: None,
+            },
+            Example {
+                description: "arange(2, 7)  -> 2 3 4 5 6",
+                example: "torch arange 2 7 | torch value",
+                result: None,
+            },
+            Example {
+                description: "arange(1, 5, 0.5)  -> 1 1.5 … 4.5 (float)",
+                example: "torch arange 1 5 0.5 --dtype float | torch value",
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        _input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
+        //------------------------------------------------------------------
+        // 1. parse positional numbers
+        //------------------------------------------------------------------
+        let argc = call.positional.iter().count();
+        if !(1..=3).contains(&argc) {
+            return Err(LabeledError::new("Invalid arange usage")
+                .with_label("Require 1, 2 or 3 numeric arguments", call.head));
+        }
+
+        // helper to convert a Value to f64
+        let to_f64 = |v: &Value| -> Result<f64, LabeledError> {
+            if let Ok(i) = v.as_int() {
+                Ok(i as f64)
+            } else if let Ok(f) = v.as_float() {
+                Ok(f)
+            } else {
+                Err(LabeledError::new("Expected number")
+                    .with_label("Argument must be int or float", v.span()))
+            }
+        };
+
+        let arg0 = call.nth(0).unwrap(); // safe: argc>=1
+        let a0 = to_f64(&arg0)?; // end OR start
+
+        let (start, end, step) = match argc {
+            1 => (0.0, a0, 1.0),
+            2 => {
+                let arg1 = call.nth(1).unwrap();
+                (a0, to_f64(&arg1)?, 1.0)
+            }
+            3 => {
+                let arg1 = call.nth(1).unwrap();
+                let arg2 = call.nth(2).unwrap();
+                (a0, to_f64(&arg1)?, to_f64(&arg2)?)
+            }
+            _ => unreachable!(),
+        };
+
+        if step == 0.0 {
+            return Err(LabeledError::new("Step cannot be zero").with_label("step", call.head));
+        }
+
+        //------------------------------------------------------------------
+        // 2. dtype, device, requires_grad flags
+        //------------------------------------------------------------------
+        let device = get_device_from_call(call)?;
+        let kind = get_kind_from_call(call)?;
+
+        //------------------------------------------------------------------
+        // 3. build tensor with tch-rs
+        //------------------------------------------------------------------
+        let options = (kind, device);
+        let mut t = if (start.fract() == 0.0) && (end.fract() == 0.0) && (step.fract() == 0.0) {
+            // integer path
+            let s = start as i64;
+            let e = end as i64;
+            let k = step as i64;
+            match argc {
+                1 => Tensor::arange(e, options),
+                2 => Tensor::arange_start(s, e, options),
+                _ => Tensor::arange_start_step(s, e, k, options),
+            }
+        } else {
+            // floating path
+            match argc {
+                1 => Tensor::arange(end, options),
+                2 => Tensor::arange_start(start, end, options),
+                _ => Tensor::arange_start_step(start, end, step, options),
+            }
+        };
+
+        // handle --requires_grad
+        t = add_grad_from_call(call, t)?;
+
+        //------------------------------------------------------------------
+        // 4. store tensor & return id
+        //------------------------------------------------------------------
+        let id = Uuid::new_v4().to_string();
+        TENSOR_REGISTRY.lock().unwrap().insert(id.clone(), t);
+
+        Ok(PipelineData::Value(Value::string(id, call.head), None))
+    }
+}
+
 // torch sgd_step  -----------------------------------------------------------
 // Performs *in-place* SGD update:  p -= lr * p.grad  (and zeroes the grad).
 // Accept a list of tensor-IDs either from the pipeline **or** as the first
@@ -1304,7 +1462,7 @@ impl PluginCommand for CommandSgdStep {
     }
 
     fn description(&self) -> &str {
-        "Vanilla stochastic-gradient-descent step: p -= lr * p.grad (in-place) \
+        "Vanilla stochastic-gradient-descene step: p -= lr * p.grad (in-place) \
          and p.grad is zeroed."
     }
 
@@ -3427,7 +3585,9 @@ struct CommandDetach;
 impl PluginCommand for CommandDetach {
     type Plugin = NutorchPlugin;
 
-    fn name(&self) -> &str { "torch detach" }
+    fn name(&self) -> &str {
+        "torch detach"
+    }
 
     fn description(&self) -> &str {
         "Create a view of a tensor that does **not** track gradients \
@@ -3437,8 +3597,8 @@ impl PluginCommand for CommandDetach {
     fn signature(&self) -> Signature {
         Signature::build("torch detach")
             .input_output_types(vec![
-                (Type::String,  Type::String),   // ID via pipeline → ID
-                (Type::Nothing, Type::String),   // ID via arg      → ID
+                (Type::String, Type::String),  // ID via pipeline → ID
+                (Type::Nothing, Type::String), // ID via arg      → ID
             ])
             .optional(
                 "tensor_id",
@@ -3455,7 +3615,8 @@ impl PluginCommand for CommandDetach {
                 example: r#"
 let x = (torch randn [2 2] --requires_grad true)
 $x | torch detach | torch requires_grad?
-"#.trim(),
+"#
+                .trim(),
                 result: None,
             },
             Example {
@@ -3463,7 +3624,8 @@ $x | torch detach | torch requires_grad?
                 example: r#"
 let x = (torch randn [2] --requires_grad true)
 torch detach $x | torch requires_grad?
-"#.trim(),
+"#
+                .trim(),
                 result: None,
             },
         ]
@@ -3471,18 +3633,17 @@ torch detach $x | torch requires_grad?
 
     fn run(
         &self,
-        _plugin : &NutorchPlugin,
-        _engine : &nu_plugin::EngineInterface,
-        call    : &nu_plugin::EvaluatedCall,
-        input   : PipelineData,
-    ) -> Result<PipelineData, LabeledError>
-    {
+        _plugin: &NutorchPlugin,
+        _engine: &nu_plugin::EngineInterface,
+        call: &nu_plugin::EvaluatedCall,
+        input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
         //------------------------------------------------------------------
         // 1. Collect tensor ID (pipeline xor arg)
         //------------------------------------------------------------------
         let piped = match input {
             PipelineData::Value(v, _) => Some(v),
-            PipelineData::Empty       => None,
+            PipelineData::Empty => None,
             _ => {
                 return Err(LabeledError::new("Unsupported input")
                     .with_label("Only Empty or Value inputs are supported", call.head))
@@ -3491,32 +3652,38 @@ torch detach $x | torch requires_grad?
         let arg0 = call.nth(0);
 
         match (&piped, &arg0) {
-            (None, None) =>
+            (None, None) => {
                 return Err(LabeledError::new("Missing input")
-                    .with_label("Provide tensor ID via pipeline or argument", call.head)),
-            (Some(_), Some(_)) =>
-                return Err(LabeledError::new("Conflicting input")
-                    .with_label("Provide tensor ID via pipeline OR argument, not both", call.head)),
+                    .with_label("Provide tensor ID via pipeline or argument", call.head))
+            }
+            (Some(_), Some(_)) => {
+                return Err(LabeledError::new("Conflicting input").with_label(
+                    "Provide tensor ID via pipeline OR argument, not both",
+                    call.head,
+                ))
+            }
             _ => {}
         }
 
-        let id_val   = piped.or(arg0).unwrap();
+        let id_val = piped.or(arg0).unwrap();
         let tensor_id = id_val.as_str()?.to_string();
 
         //------------------------------------------------------------------
         // 2. Fetch tensor from registry
         //------------------------------------------------------------------
         let mut reg = TENSOR_REGISTRY.lock().unwrap();
-        let t = reg.get(&tensor_id).ok_or_else(|| {
-            LabeledError::new("Tensor not found")
-                .with_label("Invalid tensor ID", call.head)
-        })?.shallow_clone();
+        let t = reg
+            .get(&tensor_id)
+            .ok_or_else(|| {
+                LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
+            })?
+            .shallow_clone();
 
         //------------------------------------------------------------------
         // 3. Detach and store result
         //------------------------------------------------------------------
-        let detached = t.detach();         // no longer tracks gradients
-        let new_id   = Uuid::new_v4().to_string();
+        let detached = t.detach(); // no longer tracks gradients
+        let new_id = Uuid::new_v4().to_string();
         reg.insert(new_id.clone(), detached);
 
         //------------------------------------------------------------------
