@@ -1325,6 +1325,24 @@ impl PluginCommand for CommandArange {
                 SyntaxShape::Number,
                 "Step (default 1) if start and end supplied",
             )
+            .named(
+                "device",
+                SyntaxShape::String,
+                "Device to create the tensor on ('cpu', 'cuda', 'mps', default: 'cpu')",
+                None,
+            )
+            .named(
+                "dtype",
+                SyntaxShape::String,
+                "Data type of the tensor ('float32', 'float64', 'int32', 'int64')",
+                None,
+            )
+            .named(
+                "requires_grad",
+                SyntaxShape::Boolean,
+                "Whether the tensor requires gradient tracking for autograd (default: false)",
+                None,
+            )
             // we already declared global flags for dtype/device/grad earlier,
             // so they are parsed by the helper functions; no need to repeat.
             .input_output_types(vec![(Type::Nothing, Type::String)])

@@ -4128,16 +4128,16 @@ with all this information in mind, can you write the `torch arange` command?
 Below is a self-contained implementation of the `torch arange` command that
 covers
 
-• 1-argument (`end`)  
-• 2-argument (`start`, `end`)  
+• 1-argument (`end`)\
+• 2-argument (`start`, `end`)\
 • 3-argument (`start`, `end`, `step`)
 
 and honours the optional `--dtype`, `--device`, `--requires_grad` flags via the
 utility helpers already present (`get_kind_from_call`, `get_device_from_call`,
 `add_grad_from_call`).
 
-It does **not** look at pipeline input – exactly one to three positional
-numbers are required.
+It does **not** look at pipeline input – exactly one to three positional numbers
+are required.
 
 ```rust
 // torch arange  -------------------------------------------------------------
@@ -4297,14 +4297,14 @@ impl PluginCommand for CommandArange {
 
 Explanation of important parts
 
-• `argc` determines whether we interpret the first number as `end` or `start`.  
-• `to_f64` converts any nushell numeric (int or float) to `f64`.  
+• `argc` determines whether we interpret the first number as `end` or `start`.\
+• `to_f64` converts any nushell numeric (int or float) to `f64`.\
 • If every supplied value is an integer (`fract()==0.0`) we call the integer
-  overload; otherwise the floating-point overload. (The overload functions
-  `arange1`, `arange2`, `arange3` exist in `tch-rs` and accept `f64` as well,
-  but choosing integer where possible matches PyTorch’s dtype-inference.)  
+overload; otherwise the floating-point overload. (The overload functions
+`arange1`, `arange2`, `arange3` exist in `tch-rs` and accept `f64` as well, but
+choosing integer where possible matches PyTorch’s dtype-inference.)\
 • Optional flags for dtype/device/grad are applied via the already existing
-  helpers.  
+helpers.\
 • As usual, the new tensor is inserted in the registry and its UUID is returned.
 
 The command does nothing with pipeline data, as requested.
@@ -4313,7 +4313,102 @@ The command does nothing with pipeline data, as requested.
 
 i had to make several changes to this to get it to build:
 
+setting argc:
+
+```rust
+let argc = call.positional.iter().count();
+```
+
+other changes:
+
 - `to_f64(val)` -> `to_f64(&val)`
 - `Tensor::arange1` -> `Tensor::arange`
 - `Tensor::arange2` -> `Tensor::arange_start`
 - `Tensor::arange3` -> `Tensor::arange_start_step`
+
+now that it builds, can you please write a few short nushell tests of this
+method? note that you can in fact do full "deep equals" with nutorch, making it
+possible to check a list for deep equality, making tests on small tensors very
+easy and precise.
+
+# === ASSISTANT ===
+
+Here are three concise Nushell test blocks that exercise all three call
+signatures of `torch arange`.\
+They follow the SUCCESS / FAILURE pattern you established and use deep list
+comparison for exact equality.
+
+```nu
+plugin use torch
+
+############################################################
+# helpers
+############################################################
+def ok  [m] { print ((ansi green) + "SUCCESS" + (ansi reset) + " - test/arange - " + $m) }
+def err [m] { print ((ansi red)   + "FAILURE" + (ansi reset) + " - test/arange - " + $m) }
+
+############################################################
+# Test 1 : arange 5  ->  [0 1 2 3 4]
+############################################################
+let r1 = (torch arange 5 | torch value)
+if ($r1 == [0 1 2 3 4]) {
+    ok "arange 5 produced correct tensor"
+} else {
+    err "expected [0 1 2 3 4] but got ($r1)"
+    error make {msg:"arange 5 failed"}
+}
+
+############################################################
+# Test 2 : arange 2 7  ->  [2 3 4 5 6]
+############################################################
+let r2 = (torch arange 2 7 | torch value)
+if ($r2 == [2 3 4 5 6]) {
+    ok "arange 2 7 produced correct tensor"
+} else {
+    err "expected [2 3 4 5 6] but got ($r2)"
+    error make {msg:"arange 2 7 failed"}
+}
+
+############################################################
+# Test 3 : arange 1 5 0.5 (float)  ->  [1 1.5 2 2.5 3 3.5 4 4.5]
+############################################################
+let r3 = (torch arange 1 5 0.5 --dtype float | torch value)
+let expected3 = [1 1.5 2 2.5 3 3.5 4 4.5]
+
+if ($r3 == $expected3) {
+    ok "arange 1 5 0.5 produced correct tensor"
+} else {
+    err "expected ($expected3) but got ($r3)"
+    error make {msg:"arange 1 5 0.5 failed"}
+}
+```
+
+Running this script should print three green “SUCCESS” lines; any mismatch will
+produce a red “FAILURE” and raise an error, making it suitable for automated
+testing.
+
+# === USER ===
+
+looks like you also missed something else. these named arguments also needed to
+be added to the signature:
+
+```rust
+.named(
+    "device",
+    SyntaxShape::String,
+    "Device to create the tensor on ('cpu', 'cuda', 'mps', default: 'cpu')",
+    None,
+)
+.named(
+    "dtype",
+    SyntaxShape::String,
+    "Data type of the tensor ('float32', 'float64', 'int32', 'int64')",
+    None,
+)
+.named(
+    "requires_grad",
+    SyntaxShape::Boolean,
+    "Whether the tensor requires gradient tracking for autograd (default: false)",
+    None,
+)
+```
