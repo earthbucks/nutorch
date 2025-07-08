@@ -103,6 +103,13 @@ def model_forward_pass [
   | torch maximum ([0.0] | torch tensor) # ReLU activation
   | torch mm ($model.w2 | torch t) # Matrix multiplication with second layer weights
   | torch add $model.b2 # Add bias for second layer
+  # let m = $in
+  # let m = torch mm $m ($model.w1 | torch t) # Matrix multiplication with input and first layer weights
+  # let m = torch add $m $model.b1 # Add bias for first layer
+  # let m = torch maximum $m ([0.0] | torch tensor) # ReLU activation
+  # let m = torch mm $m ($model.w2 | torch t) # Matrix multiplication with second layer weights
+  # let m = torch add $m $model.b2 # Add bias for second layer
+  # $m
 }
 
 def train [
@@ -132,7 +139,7 @@ def train [
     if ($epoch + 1) mod $record_every == 0 {
       $losses = $losses | append ($loss | torch value)
       $steps = $steps | append ($epoch + 1)
-      print $"epoch: ($epoch + 1)/$($epochs), loss: ($loss | torch value)"
+      print $"epoch: ($epoch + 1)/($epochs), loss: ($loss | torch value)"
     }
   }
 
@@ -147,4 +154,4 @@ let raw_data = (generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --sk
 plot_raw_data $raw_data
 
 let net = model_init --input_size 2 --hidden_size 20 --output_size 3
-let model_res = train --model $net --X $raw_data.X --y $raw_data.y --epochs 1000 --lr 0.1 --record_every 100
+let model_res = train --model $net --X $raw_data.X --y $raw_data.y --epochs 3000 --lr 0.1 --record_every 100

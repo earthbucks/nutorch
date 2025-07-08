@@ -143,7 +143,7 @@ def plot_results(X: torch.Tensor, y: torch.Tensor, model: Model) -> None:
 
 # ------------------------------------------------------------------ #
 if __name__ == "__main__":
-    X, y = generate_data()
+    X, y = generate_data(n_samples=300, centers=3, cluster_std=0.7, skew_factor=0.3)
     plot_raw_data(X, y)
 
     net = model_init(inp=2, hid=20, out=3)
