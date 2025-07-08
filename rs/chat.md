@@ -5004,11 +5004,11 @@ can you make these change and produce the new code?
 
 Below is a simplified and corrected implementation that
 
-• ALWAYS takes the _source tensor_ via the pipeline.  
+• ALWAYS takes the _source tensor_ via the pipeline.\
 • Has exactly **one required positional argument** `repeats` (integer or tensor
-ID).  
-• Offers two optional named flags: `--dim` and `--output-size`.  
-• Passes `output_size` to the corresponding `tch-rs` call.  
+ID).\
+• Offers two optional named flags: `--dim` and `--output-size`.\
+• Passes `output_size` to the corresponding `tch-rs` call.
 
 This satisfies Nushell’s rule that required positional arguments must come
 before optional ones.
@@ -5201,13 +5201,61 @@ else { err "dim flag wrong shape ($r3)"; error make {msg:"ri dim"} }
 
 These three tests cover:
 
-1. Source via pipeline + scalar repeat count.  
-2. Source via pipeline + repeat tensor argument.  
-3. Use of the `--dim` flag on a 2-D tensor (with scalar repeats).  
+1. Source via pipeline + scalar repeat count.
+2. Source via pipeline + repeat tensor argument.
+3. Use of the `--dim` flag on a 2-D tensor (with scalar repeats).
 
 They should each print “SUCCESS” when `CommandRepeatInterleave` functions
 correctly.
 
 # === USER ===
 
+the next function we have to implement is `torch argmax`. here is the
+description from my lsp:
 
+```
+(function) def argmax(
+    input: Tensor,
+    dim: int | None = None,
+    keepdim: bool = False,
+    *,
+    out: Tensor | None = None
+) -> Tensor
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+argmax(input) -> LongTensor
+Returns the indices of the maximum value of all elements in the `input` tensor.
+This is the second value returned by `torch.max`. See its
+documentation for the exact semantics of this method.
+Args:  
+    input (Tensor): the input tensor.
+Example:
+    >>> a = torch.randn(4, 4)
+    >>> a
+    tensor([[ 1.3398,  0.2663, -0.2686,  0.2450],
+            [-0.7401, -0.8805, -0.3402, -1.1936],
+            [ 0.4907, -1.3948, -1.0691, -0.3132],
+            [-1.6092,  0.5419, -0.2993,  0.3195]])
+    >>> torch.argmax(a)
+    tensor(0)
+Returns the indices of the maximum values of a tensor across a dimension.
+This is the second value returned by `torch.max`. See its
+documentation for the exact semantics of this method.
+Args:  
+    input (Tensor): the input tensor.  
+    dim (int): the dimension to reduce. If `None`, the argmax of the flattened input is returned.  
+    keepdim (bool): whether the output tensor has `dim` retained or not.
+Example:
+    >>> a = torch.randn(4, 4)
+    >>> a
+    tensor([[ 1.3398,  0.2663, -0.2686,  0.2450],
+            [-0.7401, -0.8805, -0.3402, -1.1936],
+            [ 0.4907, -1.3948, -1.0691, -0.3132],
+            [-1.6092,  0.5419, -0.2993,  0.3195]])
+    >>> torch.argmax(a, dim=1)
+    tensor([ 0,  2,  0,  1])
+```
+
+the command should take a single tensor as pipeline input or as an argument. and
+there should be two optional named flags, `--dim` and `--keepdim`.
+
+can you write this command and also produce a couple of tests in Nushell?
