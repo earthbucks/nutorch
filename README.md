@@ -47,24 +47,25 @@ $env.config.plugin_gc = {
 
 ## TODO
 
-- [x] torch.manual_seed
-- [x] tensor.linspace
-- [x] torch.randn
-- [x] torch.mm
-- [x] torch.full
-- [x] torch.tensor
-- [x] torch.mul
-- [x] torch.add
-- [x] torch.sub
-- [x] torch.div
-- [x] torch.neg
-- [x] torch.gather
-- [x] torch.squeeze
-- [x] torch.unsqueeze
-- [ ] fix broadcasting logic for add
-- [ ] fix broadcasting logic for sub
-- [ ] fix broadcasting logic for mul
-- [ ] fix broadcasting logic for div
+- [x] manual_seed
+- [x] linspace
+- [x] randn
+- [x] mm
+- [x] full
+- [x] tensor
+- [x] mul
+- [x] add
+- [x] sub
+- [x] div
+- [x] neg
+- [x] gather
+- [x] squeeze
+- [x] unsqueeze
+- [ ] detach
+- [ ] arange
+- [ ] stack
+- [ ] repeat
+- [ ] repeat_interleave
 - [ ] torch... everything else
 - [x] add autograd setting to torch.tensor
 - [x] add autograd setting to torch.randn
