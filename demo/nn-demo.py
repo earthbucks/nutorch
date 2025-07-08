@@ -122,6 +122,13 @@ def train(
     return losses, steps
 
 
+def plot_loss(losses: List[float], steps: List[int]) -> None:
+    plt.plot(steps, losses)
+    plt.title("Training loss")
+    plt.xlabel("epoch")
+    plt.ylabel("loss")
+    plt.show()
+
 # ------------------------------------------------------------------ #
 #  decision-boundary plotting                                         #
 # ------------------------------------------------------------------ #
@@ -151,6 +158,8 @@ if __name__ == "__main__":
 
     net = model_init(inp=2, hid=20, out=3)
     losses, steps = train(net, X, y, epochs=3000, lr=0.1, record_every=100)
+
+    plot_loss(losses, steps)
 
     # plt.plot(steps, losses)
     # plt.title("Training loss")
