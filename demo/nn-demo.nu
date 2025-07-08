@@ -111,24 +111,11 @@ def model_forward_pass [
   --model: record<w1: string, b1: string, w2: string, b2: string>
 ]: [string -> string] {
   # input tensor id -> output tensor id
-  # torch mm ($model.w1 | torch t) # Matrix multiplication with input and first layer weights
-  # | torch add $model.b1 # Add bias for first layer
-  # | torch maximum ([0.0] | torch tensor) # ReLU activation
-  # | torch mm ($model.w2 | torch t) # Matrix multiplication with second layer weights
-  # | torch add $model.b2 # Add bias for second layer
-  let x = $in
-  # print $"x mean before first mm: ($x | torch mean | torch value)"
-  let w1t = ($model.w1 | torch t)
-  # print $"w1t mean before first mm: ($w1t | torch mean | torch value)"
-  let x = torch mm $x $w1t # Matrix multiplication with input and first layer weights
-  # TODO: We are different already from python version after the first mm
-  # print $"x mean after first mm: ($x | torch mean | torch value)"
-  let x = torch add $x $model.b1 # Add bias for first layer
-  let x = torch maximum $x ([0.0] | torch tensor) # ReLU activation
-  let w2t = ($model.w2 | torch t)
-  let x = torch mm $x $w2t # Matrix multiplication with second layer weights
-  let x = torch add $x $model.b2 # Add bias for second layer
-  $x
+  torch mm ($model.w1 | torch t) # Matrix multiplication with input and first layer weights
+  | torch add $model.b1 # Add bias for first layer
+  | torch maximum ([0.0] | torch tensor) # ReLU activation
+  | torch mm ($model.w2 | torch t) # Matrix multiplication with second layer weights
+  | torch add $model.b2 # Add bias for second layer
 }
 
 def train [
@@ -170,22 +157,7 @@ def train [
 }
 
 let raw_data = generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3
-# TODO: Mean of X is already different here
-# print $"raw_data.X mean: ($raw_data.X | torch mean | torch value)"
-# print $"raw_data.y mean: ($raw_data.y | torch mean | torch value)"
 plot_raw_data $raw_data
-
-# let net = model_init --input_size 2 --hidden_size 20 --output_size 3
-# print $"net.w1 mean: ($net.w1 | torch mean | torch value)"
-# print $"net.b1 mean: ($net.b1 | torch mean | torch value)"
-# print $"net.w2 mean: ($net.w2 | torch mean | torch value)"
-# print $"net.b2 mean: ($net.b2 | torch mean | torch value)"
-# TODO: W&B means are exactly the same as the python version
-# let logits = ($raw_data.X | model_forward_pass --model $net)
-# TODO: Logits are different from python. something is wrong with the model_forward_pass
-# print $"Logits mean: ($logits | torch mean | torch value)"
-# let loss = cross_entropy_loss --logits $logits --targets $raw_data.y
-# print $"Initial loss: ($loss | torch value)"
 
 let net = model_init --input_size 2 --hidden_size 20 --output_size 3
 let model_res = train --model $net --X $raw_data.X --y $raw_data.y --epochs 3000 --lr 0.1 --record_every 100
