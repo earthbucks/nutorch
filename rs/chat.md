@@ -4482,11 +4482,11 @@ Below is the `CommandStack` implementation that follows the Nutorch conventions
 already established:
 
 • Accept **one list of tensor IDs** either through the pipeline or as the first
-positional argument (not both).  
-• Optional named flag `--dim` (integer, default = 0).  
+positional argument (not both).\
+• Optional named flag `--dim` (integer, default = 0).\
 • Verifies that at least one tensor is supplied and that all input tensors have
-exactly the same shape.  
-• Creates the stacked tensor with `Tensor::stack(&inputs, dim)`.  
+exactly the same shape.\
+• Creates the stacked tensor with `Tensor::stack(&inputs, dim)`.\
 • Stores the result in the registry and returns its UUID.
 
 ```rust
@@ -4661,11 +4661,11 @@ torch stack [$x $y] --dim 1 | torch shape    # -> [2, 2, 3]
 
 Key points
 
-1. Only one source of the list (pipeline _or_ argument).  
+1. Only one source of the list (pipeline _or_ argument).
 2. The `--dim` flag accepts negative indices and is validated to be within
-   `[0, rank]` (inclusive) after adjustment.  
+   `[0, rank]` (inclusive) after adjustment.
 3. All tensors must have equal shapes; otherwise an error is raised before
-   calling `Tensor::stack`.  
+   calling `Tensor::stack`.
 4. As usual, the new tensor is inserted into the registry and its UUID is
    returned.
 
@@ -4675,10 +4675,9 @@ can you write a test in nushell to prove this function is working?
 
 # === ASSISTANT ===
 
-Here is a self-contained Nushell test block that verifies `torch stack`
-for two different `dim` values and uses deep equality to confirm the exact
-result.  It follows the same SUCCESS / FAILURE reporting style as your earlier
-tests.
+Here is a self-contained Nushell test block that verifies `torch stack` for two
+different `dim` values and uses deep equality to confirm the exact result. It
+follows the same SUCCESS / FAILURE reporting style as your earlier tests.
 
 ```nu
 plugin use torch
@@ -4726,10 +4725,9 @@ if ($res1 == $exp1) {
 }
 ```
 
-Running this script should print two green SUCCESS lines if `torch stack`
-works correctly; otherwise it prints a red FAILURE line and raises an error
-to halt automated testing.
+Running this script should print two green SUCCESS lines if `torch stack` works
+correctly; otherwise it prints a red FAILURE line and raises an error to halt
+automated testing.
 
 # === USER ===
-
 
