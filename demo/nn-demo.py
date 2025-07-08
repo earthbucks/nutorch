@@ -135,13 +135,14 @@ def plot_loss(losses: List[float], steps: List[int]) -> None:
 # ------------------------------------------------------------------ #
 def plot_results(X: torch.Tensor, y: torch.Tensor, model: Model) -> None:
     Xl = X.detach().tolist()
-    yl =  y.detach().tolist()
+    yl = y.detach().tolist()
     x_min = min(p[0] for p in Xl) - 1
     x_max = max(p[0] for p in Xl) + 1
     y_min = min(p[1] for p in Xl) - 1
     y_max = max(p[1] for p in Xl) + 1
 
-    xs, ys = torch.arange(x_min, x_max, 0.1), torch.arange(y_min, y_max, 0.1)
+    xs = torch.arange(x_min, x_max, 0.1)
+    ys = torch.arange(y_min, y_max, 0.1)
     mesh = torch.stack([xs.repeat(len(ys)), ys.repeat_interleave(len(xs))], dim=1)
 
     # note: do not use no_grad here for easier translating to nushell

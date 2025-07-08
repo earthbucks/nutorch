@@ -179,8 +179,12 @@ def plot_results [
   --y: string # Target tensor id
   --model: record<w1: string, b1: string, w2: string, b2: string> # Model parameters
 ]: [nothing -> nothing] {
-  # let Xl = $X | torch detach | torch value
-  # let yl = $y | torch detach | torch value
+  let Xl = $X | torch detach | torch value
+  let yl = $y | torch detach | torch value
+  let x_min = ($Xl | each {|x| x.0 }) | math min
+  let x_max = ($Xl | each {|x| x.0 }) | math max
+  let y_min = ($Xl | each {|x| x.1 }) | math min
+  let y_max = ($Xl | each {|x| x.1 }) | math max
 }
 
 let raw_data = generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3
