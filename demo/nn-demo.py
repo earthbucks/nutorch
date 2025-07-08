@@ -146,6 +146,7 @@ def plot_results(X: torch.Tensor, y: torch.Tensor, model: Model) -> None:
         logits = model_forward_pass(model, mesh)
         Z = torch.argmax(logits, dim=1).reshape(xx.shape)
 
+    print (f"xx: {xx.shape}, yy: {yy.shape}, Z: {Z.shape}")
     plt.contourf(xx, yy, Z, alpha=0.4, cmap="viridis")
     plt.scatter([p[0] for p in Xl], [p[1] for p in Xl], c=yl, alpha=0.8, cmap="viridis")
     plt.title("Decision boundary")
@@ -162,10 +163,4 @@ if __name__ == "__main__":
 
     plot_loss(losses, steps)
 
-    # plt.plot(steps, losses)
-    # plt.title("Training loss")
-    # plt.xlabel("epoch")
-    # plt.ylabel("loss")
-    # plt.show()
-
-    # plot_results(X, y, net)
+    plot_results(X, y, net)
