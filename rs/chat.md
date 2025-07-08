@@ -3736,7 +3736,9 @@ registry entries provides users with manual control over memory.
 
 # === USER ===
 
-great, then we need to implement a `torch free` command that either takes a tensor ID from the pipeline or as the first argument (but not both). can you write this method?
+great, then we need to implement a `torch free` command that either takes a
+tensor ID from the pipeline or as the first argument (but not both). can you
+write this method?
 
 # === ASSISTANT ===
 
@@ -3882,9 +3884,156 @@ let b = (torch full [3 3] 2)
 torch free [$a $b]   # returns ["<a-id>", "<b-id>"]
 ```
 
-Removing the entry from the registry drops the last owned `Tensor` handle (unless
-the user still holds another copy), letting LibTorch immediately reclaim CPU or
-CUDA memory.
+Removing the entry from the registry drops the last owned `Tensor` handle
+(unless the user still holds another copy), letting LibTorch immediately reclaim
+CPU or CUDA memory.
+
+# === USER ===
+
+ok, i need to move on to implement some new commands in rust. the next command
+is `torch detach`. this method takes exactly one tensor id either as pipeline
+input or as the first argument (but not both). it should return a new tensor ID
+corresponding to the detached tensor. detaching a tensor means that it will no
+longer track gradients, but it will still have the same value. this is similar
+to the `detach()` method in PyTorch, which returns a new tensor that shares the
+same data but does not require gradients. can you write this method?
+
+# === ASSISTANT ===
+
+```rust
+// torch detach  -------------------------------------------------------------
+// Return a new tensor that shares storage with the original but is detached
+// from the autograd graph (requires_grad = false).  Usage:
+//
+//     $x  | torch detach
+//     torch detach $x
+//
+// The original tensor remains unchanged and can still track gradients; the
+// returned tensor does not.
+//
+// ---------------------------------------------------------------------------
+struct CommandDetach;
+
+impl PluginCommand for CommandDetach {
+    type Plugin = NutorchPlugin;
+
+    fn name(&self) -> &str { "torch detach" }
+
+    fn description(&self) -> &str {
+        "Create a view of a tensor that does **not** track gradients \
+         (like Tensor.detach() in PyTorch)."
+    }
+
+    fn signature(&self) -> Signature {
+        Signature::build("torch detach")
+            .input_output_types(vec![
+                (Type::String,  Type::String),   // ID via pipeline → ID
+                (Type::Nothing, Type::String),   // ID via arg      → ID
+            ])
+            .optional(
+                "tensor_id",
+                SyntaxShape::String,
+                "ID of the tensor to detach (if not provided via pipeline)",
+            )
+            .category(Category::Custom("torch".into()))
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Detach a tensor received through the pipeline",
+                example: r#"
+let x = (torch randn [2 2] --requires_grad true)
+$x | torch detach | torch requires_grad?
+"#.trim(),
+                result: None,
+            },
+            Example {
+                description: "Detach via positional argument",
+                example: r#"
+let x = (torch randn [2] --requires_grad true)
+torch detach $x | torch requires_grad?
+"#.trim(),
+                result: None,
+            },
+        ]
+    }
+
+    fn run(
+        &self,
+        _plugin : &NutorchPlugin,
+        _engine : &nu_plugin::EngineInterface,
+        call    : &nu_plugin::EvaluatedCall,
+        input   : PipelineData,
+    ) -> Result<PipelineData, LabeledError>
+    {
+        //------------------------------------------------------------------
+        // 1. Collect tensor ID (pipeline xor arg)
+        //------------------------------------------------------------------
+        let piped = match input {
+            PipelineData::Value(v, _) => Some(v),
+            PipelineData::Empty       => None,
+            _ => {
+                return Err(LabeledError::new("Unsupported input")
+                    .with_label("Only Empty or Value inputs are supported", call.head))
+            }
+        };
+        let arg0 = call.nth(0);
+
+        match (&piped, &arg0) {
+            (None, None) =>
+                return Err(LabeledError::new("Missing input")
+                    .with_label("Provide tensor ID via pipeline or argument", call.head)),
+            (Some(_), Some(_)) =>
+                return Err(LabeledError::new("Conflicting input")
+                    .with_label("Provide tensor ID via pipeline OR argument, not both", call.head)),
+            _ => {}
+        }
+
+        let id_val   = piped.or(arg0).unwrap();
+        let tensor_id = id_val.as_str()?.to_string();
+
+        //------------------------------------------------------------------
+        // 2. Fetch tensor from registry
+        //------------------------------------------------------------------
+        let mut reg = TENSOR_REGISTRY.lock().unwrap();
+        let t = reg.get(&tensor_id).ok_or_else(|| {
+            LabeledError::new("Tensor not found")
+                .with_label("Invalid tensor ID", call.head)
+        })?.shallow_clone();
+
+        //------------------------------------------------------------------
+        // 3. Detach and store result
+        //------------------------------------------------------------------
+        let detached = t.detach();         // no longer tracks gradients
+        let new_id   = Uuid::new_v4().to_string();
+        reg.insert(new_id.clone(), detached);
+
+        //------------------------------------------------------------------
+        // 4. Return ID of detached tensor
+        //------------------------------------------------------------------
+        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
+    }
+}
+```
+
+Quick Nushell check
+
+```nu
+plugin use torch
+
+let x   = (torch randn [1] --requires_grad true)
+let x2  = ($x | torch detach)
+
+# original still tracks grad
+($x  | torch requires_grad?)   # → true
+# detached version does not
+($x2 | torch requires_grad?)   # → false
+```
+
+The command follows the usual pipeline/argument pattern, verifies input
+conditions, calls `Tensor::detach()`, saves the new tensor in the registry, and
+returns its UUID.
 
 # === USER ===
 
