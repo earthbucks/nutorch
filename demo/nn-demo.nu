@@ -195,6 +195,18 @@ def plot_results [
 
   let logits = $mesh | model_forward_pass --model $model
   let Z = torch argmax $logits --dim 1 | torch reshape [($xs | torch value | length) ($ys | torch value | length)]
+  # [
+  #   {
+  #     x: ($xs | torch value)
+  #     y: ($ys | torch value)
+  #     z: ($Z | torch value)
+  #   }
+  #   {
+  #     x: ($Xl | each {|x| x.0 })
+  #     y: ($Xl | each {|x| x.1 })
+  #     z: ($yl | torch value)
+  #   }
+  # ] | beautiful contour
 }
 
 let raw_data = generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3
