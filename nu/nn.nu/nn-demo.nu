@@ -1,5 +1,5 @@
 plugin use torch
-use ../nu/beautiful.nu *
+use ../beautiful.nu *
 
 # Set random seed for reproducibility
 torch manual_seed 42
