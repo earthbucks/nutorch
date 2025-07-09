@@ -141,51 +141,20 @@ export def "beautiful plot" [
   if (($input_data | describe -d | get type) == "list") {
     for $data in $input_data {
       if ($data | describe -d | get type) == "record" {
-        $plotly = $plotly | beautiful contour add $data
+        $plotly = $plotly | beautiful add contour $data
       } else {
         error make {msg: "Expected a list of records, got $data"}
       }
     }
   } else if ($input_data | describe -d | get type) == "record" {
-    $plotly = $plotly | beautiful contour add $input_data
+    $plotly = $plotly | beautiful add contour $input_data
   } else if ($input_data != null) {
     error make {msg: "Expected a record or a list of records, got $input_data"}
   }
   $plotly
 }
 
-export def "beautiful scatter" [
-  --configTemplate: record = {
-    responsive: false
-    staticPlot: true
-  }
-  --layoutTemplate: record = $globalLayoutTemplate
-]: [
-  record -> record list<record> -> record
-] {
-  mut plotly = {
-    data: []
-    layout: $layoutTemplate
-    config: $configTemplate
-  }
-  let input_data = $in
-  if (($input_data | describe -d | get type) == "list") {
-    for $data in $input_data {
-      if ($data | describe -d | get type) == "record" {
-        $plotly = $plotly | beautiful scatter add $data
-      } else {
-        error make {msg: "Expected a list of records, got $data"}
-      }
-    }
-  } else if ($input_data | describe -d | get type) == "record" {
-    $plotly = $plotly | beautiful scatter add $input_data
-  } else if ($input_data != null) {
-    error make {msg: "Expected a record or a list of records, got $input_data"}
-  }
-  $plotly
-}
-
-export def "beautiful scatter add" [
+export def "beautiful add scatter" [
   data: record
   --dataTemplate = {
     type: "scatter"
@@ -215,38 +184,7 @@ export def "beautiful scatter add" [
   $plotly
 }
 
-export def "beautiful lines" [
-  --configTemplate: record = {
-    responsive: false
-    staticPlot: true
-  }
-  --layoutTemplate: record = $globalLayoutTemplate
-]: [
-  record -> record list<record> -> record
-] {
-  mut plotly = {
-    data: []
-    layout: $layoutTemplate
-    config: $configTemplate
-  }
-  let input_data = $in
-  if (($input_data | describe -d | get type) == "list") {
-    for $data in $input_data {
-      if ($data | describe -d | get type) == "record" {
-        $plotly = $plotly | beautiful lines add $data
-      } else {
-        error make {msg: "Expected a list of records, got $data"}
-      }
-    }
-  } else if ($input_data | describe -d | get type) == "record" {
-    $plotly = $plotly | beautiful lines add $input_data
-  } else if ($input_data != null) {
-    error make {msg: "Expected a record or a list of records, got $input_data"}
-  }
-  $plotly
-}
-
-export def "beautiful lines add" [
+export def "beautiful add lines" [
   data: record
   --dataPointsTemplate = {
     type: "scatter"
@@ -276,38 +214,7 @@ export def "beautiful lines add" [
   $plotly
 }
 
-export def "beautiful contour" [
-  --configTemplate: record = {
-    responsive: false
-    staticPlot: true
-  }
-  --layoutTemplate: record = $globalLayoutTemplate
-]: [
-  record -> record list<record> -> record
-] {
-  mut plotly = {
-    data: []
-    layout: $layoutTemplate
-    config: $configTemplate
-  }
-  let input_data = $in
-  if (($input_data | describe -d | get type) == "list") {
-    for $data in $input_data {
-      if ($data | describe -d | get type) == "record" {
-        $plotly = $plotly | beautiful contour add $data
-      } else {
-        error make {msg: "Expected a list of records, got $data"}
-      }
-    }
-  } else if ($input_data | describe -d | get type) == "record" {
-    $plotly = $plotly | beautiful contour add $input_data
-  } else if ($input_data != null) {
-    error make {msg: "Expected a record or a list of records, got $input_data"}
-  }
-  $plotly
-}
-
-export def "beautiful contour add" [
+export def "beautiful add contour" [
   data: record
   --dataPointsTemplate = {
     type: "contour"
