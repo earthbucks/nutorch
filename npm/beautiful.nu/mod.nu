@@ -279,7 +279,7 @@ export def "beautiful contour" [
 export def "beautiful contour add" [
   data: record
   --dataPointsTemplate = {
-    type: "countour"
+    type: "contour"
   }
 ]: [record -> record] {
   mut plotly = $in
