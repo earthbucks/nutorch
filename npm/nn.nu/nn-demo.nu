@@ -2,7 +2,6 @@ plugin use torch
 use ../beautiful.nu *
 alias termplot = node_modules/.bin/termplot
 
-
 # Set random seed for reproducibility
 torch manual_seed 42
 # torch manual_seed ( 42 * 2 )
@@ -79,12 +78,7 @@ def model_init [
 def model_get_parameters [
   --model: record<w1: string, b1: string, w2: string, b2: string>
 ]: [nothing -> list<string>] {
-  [
-    $model.w1
-    $model.b1
-    $model.w2
-    $model.b2
-  ]
+  [$model.w1 $model.b1 $model.w2 $model.b2]
 }
 
 def model_forward_pass [
@@ -230,4 +224,3 @@ let model_res = train --model $net --X $raw_data.X --y $raw_data.y --epochs 3000
 plot_loss --losses $model_res.losses --steps $model_res.steps
 
 plot_results --X $raw_data.X --y $raw_data.y --model $model_res.model
-
