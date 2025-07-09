@@ -137,13 +137,13 @@ def plot_raw_data [res: record<X: string, y: string>] {
   let X_value = $X | torch value
   let y_value = $y | torch value
   beautiful plot
-  | beautiful scatter add {
+  | beautiful add scatter {
     x: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 0 { $xy.item.0 } })
     y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 0 { $xy.item.1 } })
-  } | beautiful scatter add {
+  } | beautiful add scatter {
     x: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 1 { $xy.item.0 } })
     y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 1 { $xy.item.1 } })
-  } | beautiful scatter add {
+  } | beautiful add scatter {
     x: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 2 { $xy.item.0 } })
     y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 2 { $xy.item.1 } })
   } | merge deep {layout: {title: {text: "Raw Data"}}} | to json | termplot
@@ -153,7 +153,7 @@ def plot_loss [
   --losses: list<number> # list of loss values
   --steps: list<number> # list of steps (epochs) corresponding to losses
 ] {
-  beautiful plot | beautiful lines add {
+  beautiful plot | beautiful add lines {
     x: $steps
     y: $losses
   } | merge deep {layout: {title: {text: "Loss"}}} | to json | termplot
@@ -183,22 +183,22 @@ def plot_results [
   let logits = $mesh | model_forward_pass --model $model
   let Z = torch argmax $logits --dim 1 | torch reshape [($xs | torch value | length) ($ys | torch value | length)]
   beautiful plot
-  | beautiful contour add {
+  | beautiful add contour {
     x: ($xs | torch value)
     y: ($ys | torch value)
     z: ($Z | torch value)
     colorscale: (beautiful colorscale 3)
     opacity: 0.4
   }
-  | beautiful scatter add {
+  | beautiful add scatter {
     x: ($Xl | enumerate | each {|xy| if (($yl | get $xy.index) == 0) { $xy.item.0 } })
     y: ($Xl | enumerate | each {|xy| if (($yl | get $xy.index) == 0) { $xy.item.1 } })
   }
-  | beautiful scatter add {
+  | beautiful add scatter {
     x: ($Xl | enumerate | each {|xy| if (($yl | get $xy.index) == 1) { $xy.item.0 } })
     y: ($Xl | enumerate | each {|xy| if (($yl | get $xy.index) == 1) { $xy.item.1 } })
   }
-  | beautiful scatter add {
+  | beautiful add scatter {
     x: ($Xl | enumerate | each {|xy| if (($yl | get $xy.index) == 2) { $xy.item.0 } })
     y: ($Xl | enumerate | each {|xy| if (($yl | get $xy.index) == 2) { $xy.item.1 } })
   }
