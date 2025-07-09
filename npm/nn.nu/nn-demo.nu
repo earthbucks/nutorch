@@ -143,15 +143,15 @@ def plot_raw_data [res: record<X: string, y: string>] {
   let y_value = $y | torch value
   [
     {
-      x: ($X_value | enumerate | each {|xy| if (($y_value | get $xy.index) == 0) { $xy.item.0 } })
+      x: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 0 { $xy.item.0 } })
       y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 0 { $xy.item.1 } })
     }
     {
-      x: ($X_value | enumerate | each {|xy| if (($y_value | get $xy.index) == 1) { $xy.item.0 } })
+      x: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 1 { $xy.item.0 } })
       y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 1 { $xy.item.1 } })
     }
     {
-      x: ($X_value | enumerate | each {|xy| if (($y_value | get $xy.index) == 2) { $xy.item.0 } })
+      x: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 2 { $xy.item.0 } })
       y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 2 { $xy.item.1 } })
     }
   ] | beautiful scatter
@@ -199,21 +199,25 @@ def plot_results [
   let logits = $mesh | model_forward_pass --model $model
   let Z = torch argmax $logits --dim 1 | torch reshape [($xs | torch value | length) ($ys | torch value | length)]
   beautiful plot
-  # | beautiful contour add {
-  #   x: ($xs | torch value)
-  #   y: ($ys | torch value)
-  #   z: ($Z | torch value)
-  #   colorscale: (beautiful colorscale 3)
-  #   opacity: 0.4
-  # }
   | beautiful scatter add {
-    x: ($Xl | each {|x| $x | get 0 })
-    y: ($Xl | each {|x| $x | get 1 })
-    # z: ($yscaledl)
-    marker: {
-      colorscale: (beautiful colorscale 3)
-    }
-  } 
+    x: ($Xl | enumerate | each {|xy| if (($yl | get $xy.index) == 0) { $xy.item.0 } })
+    y: ($Xl | enumerate | each {|xy| if (($yl | get $xy.index) == 0) { $xy.item.1 } })
+  }
+  | beautiful scatter add {
+    x: ($Xl | enumerate | each {|xy| if (($yl | get $xy.index) == 1) { $xy.item.0 } })
+    y: ($Xl | enumerate | each {|xy| if (($yl | get $xy.index) == 1) { $xy.item.1 } })
+  }
+  | beautiful scatter add {
+    x: ($Xl | enumerate | each {|xy| if (($yl | get $xy.index) == 2) { $xy.item.0 } })
+    y: ($Xl | enumerate | each {|xy| if (($yl | get $xy.index) == 2) { $xy.item.1 } })
+  }
+  | beautiful contour add {
+    x: ($xs | torch value)
+    y: ($ys | torch value)
+    z: ($Z | torch value)
+    colorscale: (beautiful colorscale 3)
+    opacity: 0.4
+  }
   | merge deep {layout: {title: {text: "Model Predictions"}}} | to json | termplot
 }
 

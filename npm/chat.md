@@ -657,3 +657,140 @@ updates.
 Let me know if you have further questions or need help with anything else!
 
 # === USER ===
+
+is there any way using nushell type hints to turn the input value `data` into a record OR a list?
+
+```nu
+export def "beautiful scatter add" [
+  data: record
+  --dataTemplate = {
+    type: "scatter"
+    mode: "markers"
+    marker: {
+      size: 10
+      color: "#a6e3a1" # Default color
+    }
+  }
+]: [record -> record] {
+  mut plotly = $in
+  if $plotly.data == null {
+    $plotly = $in | merge deep {data: []}
+  }
+  let dataLen = $plotly.data | length
+  let stepSize = 5 # Step size for cycling through colors to increase contrast
+  let brightColor = $brightColors | get (($dataLen * $stepSize) mod ($brightColors | length)) | get "hex"
+  mut data = $dataTemplate | merge deep {
+    marker: {
+      color: $brightColor
+    }
+  } | merge deep $data
+  if ((not ('colorscale' in $data.marker)) and ($data.marker.color | describe -d | get type) == "list") {
+    $data.marker.colorscale = beautiful colorscale 14
+  }
+  $plotly.data = $plotly.data | append $data
+  $plotly
+}
+```
+
+# === ASSISTANT ===
+
+Short answer: Nushell’s signature system does not (yet) let you declare a
+parameter that is **either** a record **or** a list.  A positional parameter can
+carry exactly one declared type (record, list, number, string, any, …).  
+If you need to accept both kinds you have to declare the parameter as
+`any` (or leave it un-typed) and discriminate at run time.
+
+--------------------------------------------------------------------
+Why a union type will not work
+--------------------------------------------------------------------
+The syntax
+
+    data: record | list       # ← this is not valid
+
+or
+
+    data: [record list]       # ← also not valid
+
+is not recognised by Nushell’s command–signature parser.  
+The valid primitive/generic type names are the ones you obtain from
+`<value> | describe -d | get type` (`int`, `list`, `record`, `any`,
+`table<…>` …), and only one of them can be written after the colon.
+
+--------------------------------------------------------------------
+What you can do instead
+--------------------------------------------------------------------
+1.  Accept the parameter as `any`.
+
+```nu
+export def "beautiful scatter add" [
+  data?: any                  # note the ? → optional
+  --dataTemplate = {
+    type: "scatter"
+    mode: "markers"
+    marker: {
+      size: 10
+      color: "#a6e3a1"
+    }
+  }
+]: [record -> record] {
+```
+
+2.  Normalise it inside the body:
+
+```nu
+  # make sure $data is now **a list of records**
+  let data = (
+      match ($data | default null | describe -d | get type) {
+          "record" => [$data]                                  # wrap single
+          "list"   => $data                                    # already list
+          _ => error make {msg: "`data` must be a record or a list of records"}
+      }
+  )
+```
+
+3.  Continue exactly as you did before, knowing that `$data` is a list.
+
+--------------------------------------------------------------------
+Minimal working illustration
+--------------------------------------------------------------------
+
+```nu
+export def "demo" [
+  input?: any
+]: [nothing -> list<record>] {
+  let input = (
+      match ($input | default null | describe -d | get type) {
+          "record" => [$input]
+          "list"   => $input
+          _        => error make {msg: "expect record or list of records"}
+      }
+  )
+  $input                # returns a list<record>
+}
+
+# One record
+{a: 1, b: 2} | demo
+# ➜ ╭───┬───┬───╮
+#   │ # │ a │ b │
+#   ├───┼───┼───┤
+#   │ 0 │ 1 │ 2 │
+#   ╰───┴───┴───╯
+
+# List of records
+[{x: 10}, {x: 11}] | demo
+# ➜ (same list back)
+```
+
+--------------------------------------------------------------------
+Summary
+--------------------------------------------------------------------
+• Nushell signatures do not support “union” parameter types  
+  (`record OR list`).  
+• Use `any` (or leave the type out) and check the real type with
+  `describe -d`.  
+• Convert the value to the shape you need (e.g. always “list of records”) and
+  proceed.
+
+# === USER ===
+
+
