@@ -188,7 +188,8 @@ def plot_results [
   let y_max = ($Xl | each {|x| $x | get 1 }) | math max
 
   let xs = torch arange $x_min $x_max 0.1
-  let ys = torch arange $y_min $y_max 0.1
+  # let ys = torch arange $y_min $y_max 0.1
+  let ys = $xs
   let mesh = torch stack [
     ($xs | torch repeat ($ys | torch value | length))
     ($ys | torch repeat_interleave ($xs | torch value | length))
@@ -203,11 +204,16 @@ def plot_results [
       z: ($Z | torch value)
     }
     # {
+    #   # x: ($xs | torch value)
+    #   # y: ($ys | torch value)
+    #   z: ($Z | torch div ($Z | torch max) | torch value)
+    # }
+    # {
     #   x: ($Xl | each {|x| x.0 })
     #   y: ($Xl | each {|x| x.1 })
     #   z: ($yl)
     # }
-  ] | beautiful contour | merge deep {layout: {title: {text: "Model Predictions"}}} | to json | termplot
+  ] | beautiful contour | merge deep {layout: {title: {text: "Model Predictions"}}} | to json | save -f test-output.json
 }
 
 let raw_data = generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3
@@ -215,6 +221,6 @@ plot_raw_data $raw_data
 
 let net = model_init --input_size 2 --hidden_size 20 --output_size 3
 let model_res = train --model $net --X $raw_data.X --y $raw_data.y --epochs 3000 --lr 0.1 --record_every 100
-plot_loss --losses $model_res.losses --steps $model_res.steps
+# plot_loss --losses $model_res.losses --steps $model_res.steps
 
 plot_results --X $raw_data.X --y $raw_data.y --model $model_res.model

@@ -1,0 +1,152 @@
+{
+  "data": [
+    {
+      "x": [
+        -10, -5, 0, 5, 10
+      ],
+      "y": [
+        -10, -5, 0, 5, 10
+      ],
+      "z": [
+        [10, 10.625, 12.5, 15.625, 20],
+        [5.625, 6.25, 8.125, 11.25, 15.625],
+        [2.5, 3.125, 5.0, 8.125, 12.5],
+        [0.625, 1.25, 3.125, 6.25, 10.625],
+        [0, 0.625, 2.5, 5.625, 10]
+      ],
+      "type": "contour",
+      "colorscale": [
+        [
+          0,
+          "#a6e3a1"
+        ],
+        [
+          0.07692307692307693,
+          "#b4befe"
+        ],
+        [
+          0.15384615384615385,
+          "#f38ba8"
+        ],
+        [
+          0.23076923076923078,
+          "#94e2d5"
+        ],
+        [
+          0.3076923076923077,
+          "#f5e0dc"
+        ],
+        [
+          0.38461538461538464,
+          "#eba0ac"
+        ],
+        [
+          0.46153846153846156,
+          "#89dceb"
+        ],
+        [
+          0.5384615384615385,
+          "#f2cdcd"
+        ],
+        [
+          0.6153846153846154,
+          "#fab387"
+        ],
+        [
+          0.6923076923076923,
+          "#74c7ec"
+        ],
+        [
+          0.7692307692307693,
+          "#f5c2e7"
+        ],
+        [
+          0.8461538461538463,
+          "#f9e2af"
+        ],
+        [
+          0.9230769230769231,
+          "#89b4fa"
+        ],
+        [
+          1,
+          "#cba6f7"
+        ]
+      ]
+    }
+  ],
+  "layout": {
+    "title": {
+      "text": "Model Predictions",
+      "x": 0.5,
+      "xanchor": "center",
+      "font": {
+        "family": "monospace",
+        "size": 30,
+        "color": "#cdd6f4"
+      }
+    },
+    "xaxis": {
+      "title": {
+        "text": "X Axis",
+        "font": {
+          "family": "monospace",
+          "size": 20,
+          "color": "#cdd6f4"
+        }
+      },
+      "gridcolor": "#45475a",
+      "linecolor": "#45475a",
+      "ticks": "outside",
+      "tickfont": {
+        "family": "monospace",
+        "size": 18,
+        "color": "#cdd6f4"
+      }
+    },
+    "yaxis": {
+      "title": {
+        "text": "Y Axis",
+        "font": {
+          "family": "monospace",
+          "size": 20,
+          "color": "#cdd6f4"
+        }
+      },
+      "gridcolor": "#45475a",
+      "linecolor": "#45475a",
+      "ticks": "outside",
+      "tickfont": {
+        "family": "monospace",
+        "size": 18,
+        "color": "#cdd6f4"
+      }
+    },
+    "width": 1080,
+    "height": 810,
+    "plot_bgcolor": "#1e1e2e",
+    "paper_bgcolor": "#1e1e2e",
+    "font": {
+      "family": "monospace",
+      "color": "#cdd6f4"
+    },
+    "showlegend": true,
+    "legend": {
+      "font": {
+        "family": "monospace",
+        "size": 20,
+        "color": "#cdd6f4"
+      },
+      "bgcolor": "#313244",
+      "bordercolor": "#45475a",
+      "borderwidth": 1,
+      "x": 1,
+      "xanchor": "right",
+      "y": 1
+    }
+  },
+  "config": {
+    "responsive": false,
+    "staticPlot": true
+  }
+}
