@@ -1,5 +1,6 @@
 plugin use torch
 use node_modules/beautiful.nu *
+alias termplot = node_modules/.bin/termplot
 
 # Set random seed for reproducibility
 torch manual_seed 42
