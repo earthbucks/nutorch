@@ -182,6 +182,7 @@ def plot_results [
 ]: [nothing -> nothing] {
   let Xl = $X | torch detach | torch value
   let yl = $y | torch detach | torch value
+  # let yscaledl = $y | torch div ($y | torch max) | torch detach | torch value
   let x_min = ($Xl | each {|x| $x | get 0 }) | math min
   let x_max = ($Xl | each {|x| $x | get 0 }) | math max
   let y_min = ($Xl | each {|x| $x | get 1 }) | math min
@@ -197,17 +198,23 @@ def plot_results [
 
   let logits = $mesh | model_forward_pass --model $model
   let Z = torch argmax $logits --dim 1 | torch reshape [($xs | torch value | length) ($ys | torch value | length)]
-  beautiful plot | beautiful contour add {
-    x: ($xs | torch value)
-    y: ($ys | torch value)
-    z: ($Z | torch value)
-    colorscale: (beautiful colorscale 3)
-    opacity: 0.4
-  } | beautiful scatter add {
+  beautiful plot
+  # | beautiful contour add {
+  #   x: ($xs | torch value)
+  #   y: ($ys | torch value)
+  #   z: ($Z | torch value)
+  #   colorscale: (beautiful colorscale 3)
+  #   opacity: 0.4
+  # }
+  | beautiful scatter add {
     x: ($Xl | each {|x| $x | get 0 })
     y: ($Xl | each {|x| $x | get 1 })
-    z: ($yl)
-  } | merge deep {layout: {title: {text: "Model Predictions"}}} | to json | termplot
+    # z: ($yscaledl)
+    marker: {
+      colorscale: (beautiful colorscale 3)
+    }
+  } 
+  | merge deep {layout: {title: {text: "Model Predictions"}}} | to json | termplot
 }
 
 let raw_data = generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3
