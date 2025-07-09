@@ -1,5 +1,5 @@
 plugin use torch
-use node_modules/beautiful.nu *
+use ../beautiful.nu *
 alias termplot = node_modules/.bin/termplot
 
 # Set random seed for reproducibility
@@ -114,7 +114,7 @@ def train [
     let logits = $X | model_forward_pass --model $model
     let loss = cross_entropy_loss --logits $logits --targets $y
 
-    # zero existing grads, back-prop, SGD upadate
+    # zero existing grads, back-prop, SGD update
     for p in $ps {
       $p | torch zero_grad
     }
@@ -196,18 +196,18 @@ def plot_results [
 
   let logits = $mesh | model_forward_pass --model $model
   let Z = torch argmax $logits --dim 1 | torch reshape [($xs | torch value | length) ($ys | torch value | length)]
-  # [
-  #   {
-  #     x: ($xs | torch value)
-  #     y: ($ys | torch value)
-  #     z: ($Z | torch value)
-  #   }
-  #   {
-  #     x: ($Xl | each {|x| x.0 })
-  #     y: ($Xl | each {|x| x.1 })
-  #     z: ($yl | torch value)
-  #   }
-  # ] | beautiful contour
+  [
+    {
+      x: ($xs | torch value)
+      y: ($ys | torch value)
+      z: ($Z | torch value)
+    }
+    {
+      x: ($Xl | each {|x| x.0 })
+      y: ($Xl | each {|x| x.1 })
+      z: ($yl | torch value)
+    }
+  ] | beautiful contour | merge deep {layout: {title: {text: "Model Predictions"}}} | to json | termplot
 }
 
 let raw_data = generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3
