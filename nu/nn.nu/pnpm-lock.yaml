@@ -1,0 +1,22 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      beautiful.nu:
+        specifier: ^0.0.1
+        version: 0.0.1
+
+packages:
+
+  beautiful.nu@0.0.1:
+    resolution: {integrity: sha512-frrd+RckEdxSZeijhWc639O4uYIG4PwQUucHXrdUf93NwTeX+PNQK/htrzhizxgoE76jb+DXJLag6mG+7FjAxw==}
+
+snapshots:
+
+  beautiful.nu@0.0.1: {}
