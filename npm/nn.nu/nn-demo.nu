@@ -205,13 +205,8 @@ def plot_results [
       opacity: 0.4
     }
     # {
-    #   # x: ($xs | torch value)
-    #   # y: ($ys | torch value)
-    #   z: ($Z | torch div ($Z | torch max) | torch value)
-    # }
-    # {
-    #   x: ($Xl | each {|x| x.0 })
-    #   y: ($Xl | each {|x| x.1 })
+    #   x: ($Xl | each {|x| $x | get 0 })
+    #   y: ($Xl | each {|x| $x | get 1 })
     #   z: ($yl)
     # }
   ] | beautiful contour | merge deep {layout: {title: {text: "Model Predictions"}}} | to json | termplot
