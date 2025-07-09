@@ -136,21 +136,17 @@ def plot_raw_data [res: record<X: string, y: string>] {
   let y: string = $res.y
   let X_value = $X | torch value
   let y_value = $y | torch value
-  [
-    {
-      x: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 0 { $xy.item.0 } })
-      y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 0 { $xy.item.1 } })
-    }
-    {
-      x: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 1 { $xy.item.0 } })
-      y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 1 { $xy.item.1 } })
-    }
-    {
-      x: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 2 { $xy.item.0 } })
-      y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 2 { $xy.item.1 } })
-    }
-  ] | beautiful scatter
-  | merge deep {layout: {title: {text: "Raw Data"}}} | to json | termplot
+  beautiful plot
+  | beautiful scatter add {
+    x: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 0 { $xy.item.0 } })
+    y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 0 { $xy.item.1 } })
+  } | beautiful scatter add {
+    x: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 1 { $xy.item.0 } })
+    y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 1 { $xy.item.1 } })
+  } | beautiful scatter add {
+    x: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 2 { $xy.item.0 } })
+    y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 2 { $xy.item.1 } })
+  } | merge deep {layout: {title: {text: "Raw Data"}}} | to json | termplot
 }
 
 def plot_loss [
