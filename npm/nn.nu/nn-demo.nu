@@ -213,7 +213,7 @@ def plot_results [
     #   y: ($Xl | each {|x| x.1 })
     #   z: ($yl)
     # }
-  ] | beautiful contour | merge deep {layout: {title: {text: "Model Predictions"}}} | to json | save -f test-output.json
+  ] | beautiful contour | merge deep {layout: {title: {text: "Model Predictions"}}} | to json | termplot
 }
 
 let raw_data = generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3
