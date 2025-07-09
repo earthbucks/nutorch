@@ -2,6 +2,7 @@ plugin use torch
 use ../beautiful.nu *
 alias termplot = node_modules/.bin/termplot
 
+
 # Set random seed for reproducibility
 torch manual_seed 42
 # torch manual_seed ( 42 * 2 )
@@ -199,6 +200,13 @@ def plot_results [
   let logits = $mesh | model_forward_pass --model $model
   let Z = torch argmax $logits --dim 1 | torch reshape [($xs | torch value | length) ($ys | torch value | length)]
   beautiful plot
+  | beautiful contour add {
+    x: ($xs | torch value)
+    y: ($ys | torch value)
+    z: ($Z | torch value)
+    colorscale: (beautiful colorscale 3)
+    opacity: 0.4
+  }
   | beautiful scatter add {
     x: ($Xl | enumerate | each {|xy| if (($yl | get $xy.index) == 0) { $xy.item.0 } })
     y: ($Xl | enumerate | each {|xy| if (($yl | get $xy.index) == 0) { $xy.item.1 } })
@@ -211,13 +219,6 @@ def plot_results [
     x: ($Xl | enumerate | each {|xy| if (($yl | get $xy.index) == 2) { $xy.item.0 } })
     y: ($Xl | enumerate | each {|xy| if (($yl | get $xy.index) == 2) { $xy.item.1 } })
   }
-  | beautiful contour add {
-    x: ($xs | torch value)
-    y: ($ys | torch value)
-    z: ($Z | torch value)
-    colorscale: (beautiful colorscale 3)
-    opacity: 0.4
-  }
   | merge deep {layout: {title: {text: "Model Predictions"}}} | to json | termplot
 }
 
@@ -229,3 +230,4 @@ let model_res = train --model $net --X $raw_data.X --y $raw_data.y --epochs 3000
 plot_loss --losses $model_res.losses --steps $model_res.steps
 
 plot_results --X $raw_data.X --y $raw_data.y --model $model_res.model
+

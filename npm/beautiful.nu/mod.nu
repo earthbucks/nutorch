@@ -200,7 +200,7 @@ export def "beautiful scatter add" [
   if $plotly.data == null {
     $plotly = $in | merge deep {data: []}
   }
-  let dataLen = $plotly.data | length
+  let dataLen = $plotly.data | where type == "scatter" | length
   let stepSize = 5 # Step size for cycling through colors to increase contrast
   let brightColor = $brightColors | get (($dataLen * $stepSize) mod ($brightColors | length)) | get "hex"
   mut data = $dataTemplate | merge deep {
@@ -261,7 +261,7 @@ export def "beautiful lines add" [
   if $plotly.data == null {
     $plotly = $in | merge deep {data: []}
   }
-  let dataLen = $plotly.data | length
+  let dataLen = $plotly.data | where type == "lines" | length
   let stepSize = 5 # Step size for cycling through colors to increase contrast
   let brightColor = $brightColors | get (($dataLen * $stepSize) mod ($brightColors | length)) | get "hex"
   mut data = $dataPointsTemplate | merge deep {
@@ -317,7 +317,7 @@ export def "beautiful contour add" [
   if $plotly.data == null {
     $plotly = $in | merge deep {data: []}
   }
-  let dataLen = $plotly.data | length
+  let dataLen = $plotly.data | where type == "contour" | length
   let stepSize = 5 # Step size for cycling through colors to increase contrast
   let brightColor = $brightColors | get (($dataLen * $stepSize) mod ($brightColors | length)) | get "hex"
   mut data = $dataPointsTemplate | merge deep {
