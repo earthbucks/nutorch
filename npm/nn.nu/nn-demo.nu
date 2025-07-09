@@ -202,6 +202,7 @@ def plot_results [
       x: ($xs | torch value)
       y: ($ys | torch value)
       z: ($Z | torch value)
+      opacity: 0.4
     }
     # {
     #   # x: ($xs | torch value)
@@ -221,6 +222,6 @@ plot_raw_data $raw_data
 
 let net = model_init --input_size 2 --hidden_size 20 --output_size 3
 let model_res = train --model $net --X $raw_data.X --y $raw_data.y --epochs 3000 --lr 0.1 --record_every 100
-# plot_loss --losses $model_res.losses --steps $model_res.steps
+plot_loss --losses $model_res.losses --steps $model_res.steps
 
 plot_results --X $raw_data.X --y $raw_data.y --model $model_res.model
