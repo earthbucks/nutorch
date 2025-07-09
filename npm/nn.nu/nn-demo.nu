@@ -197,19 +197,16 @@ def plot_results [
 
   let logits = $mesh | model_forward_pass --model $model
   let Z = torch argmax $logits --dim 1 | torch reshape [($xs | torch value | length) ($ys | torch value | length)]
-  [
-    {
-      x: ($xs | torch value)
-      y: ($ys | torch value)
-      z: ($Z | torch value)
-      opacity: 0.4
-    }
-    # {
-    #   x: ($Xl | each {|x| $x | get 0 })
-    #   y: ($Xl | each {|x| $x | get 1 })
-    #   z: ($yl)
-    # }
-  ] | beautiful contour | merge deep {layout: {title: {text: "Model Predictions"}}} | to json | termplot
+  beautiful plot | beautiful contour add {
+    x: ($xs | torch value)
+    y: ($ys | torch value)
+    z: ($Z | torch value)
+    opacity: 0.4
+  } | beautiful scatter add {
+    x: ($Xl | each {|x| $x | get 0 })
+    y: ($Xl | each {|x| $x | get 1 })
+    z: ($yl)
+  } | merge deep {layout: {title: {text: "Model Predictions"}}} | to json | termplot
 }
 
 let raw_data = generate_data --n_samples 300 --centers 3 --cluster_std 0.7 --skew_factor 0.3

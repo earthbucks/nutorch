@@ -123,6 +123,37 @@ export def "beautiful colorscale" [
   return $colorscale
 }
 
+export def "beautiful plot" [
+  --configTemplate: record = {
+    responsive: false
+    staticPlot: true
+  }
+  --layoutTemplate: record = $globalLayoutTemplate
+]: [
+  nothing -> record record -> record list<record> -> record
+] {
+  mut plotly = {
+    data: []
+    layout: $layoutTemplate
+    config: $configTemplate
+  }
+  let input_data = $in
+  if (($input_data | describe -d | get type) == "list") {
+    for $data in $input_data {
+      if ($data | describe -d | get type) == "record" {
+        $plotly = $plotly | beautiful contour add $data
+      } else {
+        error make {msg: "Expected a list of records, got $data"}
+      }
+    }
+  } else if ($input_data | describe -d | get type) == "record" {
+    $plotly = $plotly | beautiful contour add $input_data
+  } else if ($input_data != null) {
+    error make {msg: "Expected a record or a list of records, got $input_data"}
+  }
+  $plotly
+}
+
 export def "beautiful scatter" [
   --configTemplate: record = {
     responsive: false
