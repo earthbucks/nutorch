@@ -201,6 +201,7 @@ def plot_results [
     x: ($xs | torch value)
     y: ($ys | torch value)
     z: ($Z | torch value)
+    colorscale: (beautiful colorscale 3)
     opacity: 0.4
   } | beautiful scatter add {
     x: ($Xl | each {|x| $x | get 0 })
