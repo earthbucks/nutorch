@@ -242,3 +242,21 @@ export def "beautiful scatter" []: [list<record> -> record] {
   }
   $plotly
 }
+
+export def "beautiful contour" []: [list<record> -> record] {
+  let input_data = $in
+  mut plotly = beautiful plot
+  for data in $input_data {
+    $plotly = $plotly | beautiful add contour $data
+  }
+  $plotly
+}
+
+export def "beautiful lines" []: [list<record> -> record] {
+  let input_data = $in
+  mut plotly = beautiful plot
+  for data in $input_data {
+    $plotly = $plotly | beautiful add lines $data
+  }
+  $plotly
+}
