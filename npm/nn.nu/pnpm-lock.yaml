@@ -12,8 +12,8 @@ importers:
         specifier: ^0.0.2
         version: 0.0.2
       termplot.nu:
-        specifier: ^0.1.20
-        version: 0.1.20(@react-router/dev@7.6.3(@types/node@24.0.13)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(vite@7.0.4(@types/node@24.0.13)))(@types/node@24.0.13)
+        specifier: ^0.1.21
+        version: 0.1.21(@react-router/dev@7.6.3(@types/node@24.0.13)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(vite@7.0.4(@types/node@24.0.13)))(@types/node@24.0.13)
 
 packages:
 
@@ -1391,8 +1391,8 @@ packages:
   tar-stream@3.1.7:
     resolution: {integrity: sha512-qJj60CXt7IU1Ffyc3NJMjh6EkuCFej46zUqJ4J7pqYlThyd9bO0XBTmcOIhSzZJVWfsLks0+nle/j538YAW9RQ==}
 
-  termplot.nu@0.1.20:
-    resolution: {integrity: sha512-DrAH0xLZjVpIVLV1sjPVGasEgihMs6lWhtj2M1E5JNJmxPwtcWFecfegoBlyoBExSPwMGt/Sz10U/p/5c7+22g==}
+  termplot.nu@0.1.21:
+    resolution: {integrity: sha512-AGI3ZAlC6kKoBkanS2U6hOEPFbuiSxP5CKoXs1NMrYgF5itevUWzgLxXu2CcuPv6/ASx0dxhFFNRdHHsX11J7g==}
     engines: {node: '>=24.0.0'}
     hasBin: true
 
@@ -2965,7 +2965,7 @@ snapshots:
       fast-fifo: 1.3.2
       streamx: 2.22.1
 
-  termplot.nu@0.1.20(@react-router/dev@7.6.3(@types/node@24.0.13)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(vite@7.0.4(@types/node@24.0.13)))(@types/node@24.0.13):
+  termplot.nu@0.1.21(@react-router/dev@7.6.3(@types/node@24.0.13)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(vite@7.0.4(@types/node@24.0.13)))(@types/node@24.0.13):
     dependencies:
       '@react-router/express': 7.6.3(express@5.1.0)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))
       '@react-router/fs-routes': 7.6.3(@react-router/dev@7.6.3(@types/node@24.0.13)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(vite@7.0.4(@types/node@24.0.13)))

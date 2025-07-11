@@ -1,6 +1,7 @@
-# nn-demo - re-build 3
+# nn-demo - re-build 4
 plugin use torch
 plugin use termplot
+# use ~/dev/termplot *
 # use node_modules/termplot.nu *
 source node_modules/termplot.nu/termplot.nu
 use node_modules/beautiful.nu *
