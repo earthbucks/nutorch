@@ -1,8 +1,8 @@
 plugin use torch
 plugin use termplot
 source node_modules/termplot.nu/termplot.nu
-# use node_modules/beautiful.nu *
-use ../beautiful.nu *
+use node_modules/beautiful.nu *
+# use ../beautiful.nu *
 
 # Set random seed for reproducibility
 torch manual_seed 42

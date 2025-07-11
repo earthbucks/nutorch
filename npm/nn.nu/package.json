@@ -11,7 +11,7 @@
   "license": "MIT",
   "packageManager": "pnpm@10.12.4",
   "dependencies": {
-    "beautiful.nu": "^0.0.2",
+    "beautiful.nu": "^0.0.4",
     "termplot.nu": "^0.1.21"
   }
 }

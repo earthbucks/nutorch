@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       beautiful.nu:
-        specifier: ^0.0.2
-        version: 0.0.2
+        specifier: ^0.0.4
+        version: 0.0.4
       termplot.nu:
         specifier: ^0.1.21
         version: 0.1.21(@react-router/dev@7.6.3(@types/node@24.0.13)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(vite@7.0.4(@types/node@24.0.13)))(@types/node@24.0.13)
@@ -601,8 +601,8 @@ packages:
     resolution: {integrity: sha512-4Bcg1P8xhUuqcii/S0Z9wiHIrQVPMermM1any+MX5GeGD7faD3/msQUDGLol9wOcz4/jbg/WJnGqoJF6LiBdtg==}
     engines: {node: '>=10.0.0'}
 
-  beautiful.nu@0.0.2:
-    resolution: {integrity: sha512-n7H8r8bbOr3DIBHwz5yqwU6bo7Yfwwj+jsbCC9f2ar+D4OvWg7pxD8B83qdyDbzgqQoHZXrRC8yuxm12Yx1nAw==}
+  beautiful.nu@0.0.4:
+    resolution: {integrity: sha512-E6xNsnx6oAZz90VmSHyFBZ7FYjV/bprTNmhXnZiIPSWpVJ40kpOixufucNBoyAxLYKg+Lm6xWKznoqGPxDX40g==}
 
   body-parser@2.2.0:
     resolution: {integrity: sha512-02qvAaxv8tp7fBa/mw1ga98OGm+eCbqzJOKoRt70sLmfEEi+jyBYVTDGfCL/k06/4EMk/z01gCe7HoCH/f2LTg==}
@@ -2110,7 +2110,7 @@ snapshots:
 
   basic-ftp@5.0.5: {}
 
-  beautiful.nu@0.0.2: {}
+  beautiful.nu@0.0.4: {}
 
   body-parser@2.2.0:
     dependencies:
