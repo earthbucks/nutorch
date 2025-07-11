@@ -179,12 +179,19 @@ You can see what commands are available by running:
 torch --help
 ```
 
+The commands are designed to be similar to the PyTorch API, so that wherever
+possible you can insert the same commands with the same names in the same order
+as PyTorch. Furthermore, the commands are also designed to be as Nushelly as
+possible, meaning you can pipe in input tensors for most commands where
+appropriate, make powerful one-liners possible.
+
 ## TODO
 
-Nutorch is an alpha-quality project. Currently, the existing set of commands are
-adequate to train neural networks. However, the vast majority of the PyTorch API
-is not yet implemented. The following is a list of commands that are currently
-implemented, and those that are planned for future implementation.
+Nutorch is an alpha-quality project. Currently, the existing set of commands
+are technically adequate to train neural networks. However, the vast majority
+of the PyTorch API is not yet implemented. The following is a list of commands
+that are currently implemented, and those that are planned for future
+implementation.
 
 - [x] manual_seed
 - [x] linspace
