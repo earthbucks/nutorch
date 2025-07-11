@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@termplot/termplot':
-        specifier: ^0.1.6
-        version: 0.1.6(@react-router/dev@7.6.3(@types/node@24.0.12)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(vite@7.0.3(@types/node@24.0.12)))(@types/node@24.0.12)
+        specifier: ^0.1.9
+        version: 0.1.9(@react-router/dev@7.6.3(@types/node@24.0.13)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(vite@7.0.4(@types/node@24.0.13)))(@types/node@24.0.13)
       beautiful.nu:
         specifier: ^0.0.1
         version: 0.0.1
@@ -502,8 +502,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@termplot/termplot@0.1.6':
-    resolution: {integrity: sha512-fMbGXU+/+zwHlTFIHnP0GhfAVSxgzEqODG6Mh15zSwxLzJJpseGLCLOGHm9Sc821+JbOJkd+vaKqoV09+ViUjw==}
+  '@termplot/termplot@0.1.9':
+    resolution: {integrity: sha512-tEWBEB6/rAzI2oh9wPUGpxfggj4qjBOcTjfkjUpK3xJ9OZDGPYHlLV4bbKaWWts7+WE3LVaTNK2JvWM/vHKkAw==}
     engines: {node: '>=24.0.0'}
     hasBin: true
 
@@ -513,8 +513,8 @@ packages:
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
 
-  '@types/node@24.0.12':
-    resolution: {integrity: sha512-LtOrbvDf5ndC9Xi+4QZjVL0woFymF/xSTKZKPgrrl7H7XoeDvnD+E2IclKVDyaK9UM756W/3BXqSU+JEHopA9g==}
+  '@types/node@24.0.13':
+    resolution: {integrity: sha512-Qm9OYVOFHFYg3wJoTSrz80hoec5Lia/dPp84do3X7dZvLikQvM1YpmvTBEdIr/e+U8HTkFjLHLnl78K/qjf+jQ==}
 
   '@types/plotly.js-dist-min@2.3.4':
     resolution: {integrity: sha512-ISwLFV6Zs/v3DkaRFLyk2rvYAfVdnYP2VVVy7h+fBDWw52sn7sMUzytkWiN4M75uxr1uz1uiBioePTDpAfoFIg==}
@@ -572,8 +572,8 @@ packages:
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
 
-  bare-events@2.5.4:
-    resolution: {integrity: sha512-+gFfDkR8pj4/TrWCGUGWmJIkBwuxPS5F+a5yWjOHQt2hHvNZd5YLzadjmDUtFmMM4y429bnKLa8bYBMHcYdnQA==}
+  bare-events@2.6.0:
+    resolution: {integrity: sha512-EKZ5BTXYExaNqi3I3f9RtEsaI/xBSGjE0XZCZilPzFAV/goswFHuPd9jEZlPIZ/iNZJwDSao9qRiScySz7MbQg==}
 
   bare-fs@4.1.6:
     resolution: {integrity: sha512-25RsLF33BqooOEFNdMcEhMpJy8EoR88zSMrnOQOaM3USnOK2VmaJ1uaQEwPA6AQjrv1lXChScosN6CzbwbO9OQ==}
@@ -749,8 +749,8 @@ packages:
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
 
-  electron-to-chromium@1.5.180:
-    resolution: {integrity: sha512-ED+GEyEh3kYMwt2faNmgMB0b8O5qtATGgR4RmRsIp4T6p7B8vdMbIedYndnvZfsaXvSzegtpfqRMDNCjjiSduA==}
+  electron-to-chromium@1.5.182:
+    resolution: {integrity: sha512-Lv65Btwv9W4J9pyODI6EWpdnhfvrve/us5h1WspW8B2Fb0366REPtY3hX7ounk1CkV/TBjWCEvCBBbYbmV0qCA==}
 
   emoji-regex@8.0.0:
     resolution: {integrity: sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==}
@@ -1199,12 +1199,12 @@ packages:
   pump@3.0.3:
     resolution: {integrity: sha512-todwxLMY7/heScKmntwQG8CXVkWUOdYxIvY2s0VWAAMh/nd8SoYiRaKjlr7+iCs984f2P8zvrfWcDDYVb73NfA==}
 
-  puppeteer-core@24.12.0:
-    resolution: {integrity: sha512-VrPXPho5Q90Ao86FwJVb+JeAF2Tf41wOTGg8k2SyQJePiJ6hJ5iujYpmP+bmhlb6o+J26bQYRDPOYXP7ALWcxQ==}
+  puppeteer-core@24.12.1:
+    resolution: {integrity: sha512-8odp6d3ERKBa3BAVaYWXn95UxQv3sxvP1reD+xZamaX6ed8nCykhwlOiHSaHR9t/MtmIB+rJmNencI6Zy4Gxvg==}
     engines: {node: '>=18'}
 
-  puppeteer@24.12.0:
-    resolution: {integrity: sha512-MJtM71qex8h03bDBZTyPfSC7tfvDLILnWWl4rNdo3+HODiFZX+3yj/qLVwVu/gXoxQ7U8dNDKyFz4e8VBHdcmw==}
+  puppeteer@24.12.1:
+    resolution: {integrity: sha512-+vvwl+Xo4z5uXLLHG+XW8uXnUXQ62oY6KU6bEFZJvHWLutbmv5dw9A/jcMQ0fqpQdLydHmK0Uy7/9Ilj8ufwSQ==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -1458,8 +1458,8 @@ packages:
     engines: {node: ^18.0.0 || ^20.0.0 || >=22.0.0}
     hasBin: true
 
-  vite@7.0.3:
-    resolution: {integrity: sha512-y2L5oJZF7bj4c0jgGYgBNSdIu+5HF+m68rn2cQXFbGoShdhV1phX9rbnxy9YXj82aS8MMsCLAAFkRxZeWdldrQ==}
+  vite@7.0.4:
+    resolution: {integrity: sha512-SkaSguuS7nnmV7mfJ8l81JGBFV7Gvzp8IzgE8A8t23+AxuNX61Q5H1Tpz5efduSN7NHC8nQXD3sKQKZAu5mNEA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -1898,7 +1898,7 @@ snapshots:
       - bare-buffer
       - supports-color
 
-  '@react-router/dev@7.6.3(@types/node@24.0.12)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(vite@7.0.3(@types/node@24.0.12))':
+  '@react-router/dev@7.6.3(@types/node@24.0.13)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(vite@7.0.4(@types/node@24.0.13))':
     dependencies:
       '@babel/core': 7.28.0
       '@babel/generator': 7.28.0
@@ -1927,8 +1927,8 @@ snapshots:
       set-cookie-parser: 2.7.1
       tinyglobby: 0.2.14
       valibot: 0.41.0
-      vite: 7.0.3(@types/node@24.0.12)
-      vite-node: 3.2.4(@types/node@24.0.12)
+      vite: 7.0.4(@types/node@24.0.13)
+      vite-node: 3.2.4(@types/node@24.0.13)
     transitivePeerDependencies:
       - '@types/node'
       - babel-plugin-macros
@@ -1951,9 +1951,9 @@ snapshots:
       express: 5.1.0
       react-router: 7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
 
-  '@react-router/fs-routes@7.6.3(@react-router/dev@7.6.3(@types/node@24.0.12)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(vite@7.0.3(@types/node@24.0.12)))':
+  '@react-router/fs-routes@7.6.3(@react-router/dev@7.6.3(@types/node@24.0.13)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(vite@7.0.4(@types/node@24.0.13)))':
     dependencies:
-      '@react-router/dev': 7.6.3(@types/node@24.0.12)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(vite@7.0.3(@types/node@24.0.12))
+      '@react-router/dev': 7.6.3(@types/node@24.0.13)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(vite@7.0.4(@types/node@24.0.13))
       minimatch: 9.0.5
 
   '@react-router/node@7.6.3(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))':
@@ -2021,10 +2021,10 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.44.2':
     optional: true
 
-  '@termplot/termplot@0.1.6(@react-router/dev@7.6.3(@types/node@24.0.12)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(vite@7.0.3(@types/node@24.0.12)))(@types/node@24.0.12)':
+  '@termplot/termplot@0.1.9(@react-router/dev@7.6.3(@types/node@24.0.13)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(vite@7.0.4(@types/node@24.0.13)))(@types/node@24.0.13)':
     dependencies:
       '@react-router/express': 7.6.3(express@5.1.0)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))
-      '@react-router/fs-routes': 7.6.3(@react-router/dev@7.6.3(@types/node@24.0.12)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(vite@7.0.3(@types/node@24.0.12)))
+      '@react-router/fs-routes': 7.6.3(@react-router/dev@7.6.3(@types/node@24.0.13)(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(vite@7.0.4(@types/node@24.0.13)))
       '@react-router/node': 7.6.3(react-router@7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))
       '@types/plotly.js-dist-min': 2.3.4
       ansi-escapes: 7.0.0
@@ -2032,12 +2032,12 @@ snapshots:
       express: 5.1.0
       isbot: 5.1.28
       plotly.js-dist-min: 3.0.1
-      puppeteer: 24.12.0
+      puppeteer: 24.12.1
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
       react-router: 7.6.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       uuid: 11.1.0
-      vite: 7.0.3(@types/node@24.0.12)
+      vite: 7.0.4(@types/node@24.0.13)
       zod: 3.25.76
     transitivePeerDependencies:
       - '@react-router/dev'
@@ -2062,7 +2062,7 @@ snapshots:
 
   '@types/estree@1.0.8': {}
 
-  '@types/node@24.0.12':
+  '@types/node@24.0.13':
     dependencies:
       undici-types: 7.8.0
     optional: true
@@ -2075,7 +2075,7 @@ snapshots:
 
   '@types/yauzl@2.10.3':
     dependencies:
-      '@types/node': 24.0.12
+      '@types/node': 24.0.13
     optional: true
 
   accepts@2.0.0:
@@ -2120,14 +2120,14 @@ snapshots:
 
   balanced-match@1.0.2: {}
 
-  bare-events@2.5.4:
+  bare-events@2.6.0:
     optional: true
 
   bare-fs@4.1.6:
     dependencies:
-      bare-events: 2.5.4
+      bare-events: 2.6.0
       bare-path: 3.0.0
-      bare-stream: 2.6.5(bare-events@2.5.4)
+      bare-stream: 2.6.5(bare-events@2.6.0)
     optional: true
 
   bare-os@3.6.1:
@@ -2138,11 +2138,11 @@ snapshots:
       bare-os: 3.6.1
     optional: true
 
-  bare-stream@2.6.5(bare-events@2.5.4):
+  bare-stream@2.6.5(bare-events@2.6.0):
     dependencies:
       streamx: 2.22.1
     optionalDependencies:
-      bare-events: 2.5.4
+      bare-events: 2.6.0
     optional: true
 
   basic-ftp@5.0.5: {}
@@ -2170,7 +2170,7 @@ snapshots:
   browserslist@4.25.1:
     dependencies:
       caniuse-lite: 1.0.30001727
-      electron-to-chromium: 1.5.180
+      electron-to-chromium: 1.5.182
       node-releases: 2.0.19
       update-browserslist-db: 1.1.3(browserslist@4.25.1)
 
@@ -2273,7 +2273,7 @@ snapshots:
 
   ee-first@1.1.1: {}
 
-  electron-to-chromium@1.5.180: {}
+  electron-to-chromium@1.5.182: {}
 
   emoji-regex@8.0.0: {}
 
@@ -2741,7 +2741,7 @@ snapshots:
       end-of-stream: 1.4.5
       once: 1.4.0
 
-  puppeteer-core@24.12.0:
+  puppeteer-core@24.12.1:
     dependencies:
       '@puppeteer/browsers': 2.10.5
       chromium-bidi: 5.1.0(devtools-protocol@0.0.1464554)
@@ -2755,13 +2755,13 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  puppeteer@24.12.0:
+  puppeteer@24.12.1:
     dependencies:
       '@puppeteer/browsers': 2.10.5
       chromium-bidi: 5.1.0(devtools-protocol@0.0.1464554)
       cosmiconfig: 9.0.0
       devtools-protocol: 0.0.1464554
-      puppeteer-core: 24.12.0
+      puppeteer-core: 24.12.1
       typed-query-selector: 2.12.0
     transitivePeerDependencies:
       - bare-buffer
@@ -2964,7 +2964,7 @@ snapshots:
       fast-fifo: 1.3.2
       text-decoder: 1.2.3
     optionalDependencies:
-      bare-events: 2.5.4
+      bare-events: 2.6.0
 
   string-width@4.2.3:
     dependencies:
@@ -3047,13 +3047,13 @@ snapshots:
 
   vary@1.1.2: {}
 
-  vite-node@3.2.4(@types/node@24.0.12):
+  vite-node@3.2.4(@types/node@24.0.13):
     dependencies:
       cac: 6.7.14
       debug: 4.4.1
       es-module-lexer: 1.7.0
       pathe: 2.0.3
-      vite: 7.0.3(@types/node@24.0.12)
+      vite: 7.0.4(@types/node@24.0.13)
     transitivePeerDependencies:
       - '@types/node'
       - jiti
@@ -3068,7 +3068,7 @@ snapshots:
       - tsx
       - yaml
 
-  vite@7.0.3(@types/node@24.0.12):
+  vite@7.0.4(@types/node@24.0.13):
     dependencies:
       esbuild: 0.25.6
       fdir: 6.4.6(picomatch@4.0.2)
@@ -3077,7 +3077,7 @@ snapshots:
       rollup: 4.44.2
       tinyglobby: 0.2.14
     optionalDependencies:
-      '@types/node': 24.0.12
+      '@types/node': 24.0.13
       fsevents: 2.3.3
 
   which@2.0.2:
