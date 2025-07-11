@@ -43,16 +43,6 @@ def generate_data [
   {X: $X y: $y}
 }
 
-def cross_entropy_loss [
-  --logits: string # tensor id of model outputs
-  --targets: string # tensor id of target labels
-]: [nothing -> string] {
-  let logp = $logits | torch log_softmax --dim 1
-  # print $"logp: ($logp | torch mean | torch value)"
-  let loss = $logp | torch gather 1 ($targets | torch unsqueeze 1) | torch squeeze 1 | torch mean | torch neg
-  $loss
-}
-
 def model_init [
   --input_size: int = 2 # Number of input features
   --hidden_size: int = 20 # Number of hidden units
@@ -81,6 +71,16 @@ def model_forward_pass [
   | torch maximum ([0.0] | torch tensor) # ReLU activation
   | torch mm ($model.w2 | torch t) # Matrix multiplication with second layer weights
   | torch add $model.b2 # Add bias for second layer
+}
+
+def cross_entropy_loss [
+  --logits: string # tensor id of model outputs
+  --targets: string # tensor id of target labels
+]: [nothing -> string] {
+  let logp = $logits | torch log_softmax --dim 1
+  # print $"logp: ($logp | torch mean | torch value)"
+  let loss = $logp | torch gather 1 ($targets | torch unsqueeze 1) | torch squeeze 1 | torch mean | torch neg
+  $loss
 }
 
 def train [
