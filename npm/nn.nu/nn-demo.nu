@@ -1,7 +1,8 @@
 plugin use torch
 plugin use termplot
 source node_modules/termplot.nu/termplot.nu
-use node_modules/beautiful.nu *
+# use node_modules/beautiful.nu *
+use ../beautiful.nu *
 
 # Set random seed for reproducibility
 torch manual_seed 42
@@ -127,17 +128,20 @@ def plot_raw_data [res: record<X: string, y: string>] {
   let y: string = $res.y
   let X_value = $X | torch value
   let y_value = $y | torch value
-  beautiful plot
-  | beautiful add scatter {
-    x: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 0 { $xy.item.0 } })
-    y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 0 { $xy.item.1 } })
-  } | beautiful add scatter {
-    x: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 1 { $xy.item.0 } })
-    y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 1 { $xy.item.1 } })
-  } | beautiful add scatter {
-    x: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 2 { $xy.item.0 } })
-    y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 2 { $xy.item.1 } })
-  } | merge deep {layout: {title: {text: "Raw Data"}}} | termplot
+  [
+    {
+      x: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 0 { $xy.item.0 } })
+      y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 0 { $xy.item.1 } })
+    }
+    {
+      x: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 1 { $xy.item.0 } })
+      y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 1 { $xy.item.1 } })
+    }
+    {
+      x: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 2 { $xy.item.0 } })
+      y: ($X_value | enumerate | each {|xy| if ($y_value | get $xy.index) == 2 { $xy.item.1 } })
+    }
+  ] | beautiful scatter | merge deep {layout: {title: {text: "Raw Data"}}} | termplot
 }
 
 def plot_loss [

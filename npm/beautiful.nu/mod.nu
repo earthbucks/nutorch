@@ -233,3 +233,12 @@ export def "beautiful add contour" [
   $plotly.data = $plotly.data | append $data
   $plotly
 }
+
+export def "beautiful scatter" []: [list<record> -> record] {
+  let input_data = $in
+  mut plotly = beautiful plot
+  for data in $input_data {
+    $plotly = $plotly | beautiful add scatter $data
+  }
+  $plotly
+}
