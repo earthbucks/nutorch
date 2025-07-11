@@ -1,7 +1,8 @@
 {
   "name": "beautiful.nu",
-  "version": "0.0.2",
-  "description": "",
+  "version": "0.0.3",
+  "author": "Ryan X. Charles <ryan@ryanxcharles.com> (https://ryanxcharles.com)",
+  "description": "Catpuccin-themed plots for Termplot and Plotly.js",
   "main": "mod.nu",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
