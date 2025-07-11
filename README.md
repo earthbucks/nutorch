@@ -41,12 +41,13 @@ timeit {torch full [20000, 20000] 1 --device cuda | torch mm (torch full [20000,
   installed on your system.
 
 **Nurtorch is only tested with macOS at this time.** While it should work on any
-platform in principle, it will most likely not work out of the box, and may
-require customization.
+platform in principle, it will most likely not work out of the box with Windows
+or Linux, and may require customization. **I will happily accept pull requests
+if you can make it work on Windows or Linux!**
 
 ### Install via Nushell and Cargo
 
-We assume you are using macOS have have installed all the prerequisites.
+I assume you are using macOS have have installed all the prerequisites.
 
 You can install Nutorch globally or locally. Either way, you will need to know
 the absolute path to the `nu_plugin_torch` binary to be able to run it. You will
@@ -60,6 +61,9 @@ You will need to set three environment variables to use Nutorch:
 - `LD_LIBRARY_PATH`: The path to the `lib` directory inside your libtorch
   installation.
 - `DYLD_LIBRARY_PATH`: The same as `LD_LIBRARY_PATH`, but for macOS.
+
+If you installed Python and PyTorch via Homebrew, the path to your libtorch
+installation is likely:
 
 ```nu
 $env.LIBTORCH = "/opt/homebrew/lib/python3.11/site-packages/torch"
@@ -178,9 +182,9 @@ torch --help
 ## TODO
 
 Nutorch is an alpha-quality project. Currently, the existing set of commands are
-adequate to train neural networks. However, the vast majority of the PyTorch
-API is not yet implemented. The following is a list of commands that are
-currently implemented, and those that are planned for future implementation.
+adequate to train neural networks. However, the vast majority of the PyTorch API
+is not yet implemented. The following is a list of commands that are currently
+implemented, and those that are planned for future implementation.
 
 - [x] manual_seed
 - [x] linspace
