@@ -1,4 +1,4 @@
-# nn-demo
+# nn-demo - re-build 1
 plugin use torch
 plugin use termplot
 source node_modules/@termplot/termplot/termplot.nu
