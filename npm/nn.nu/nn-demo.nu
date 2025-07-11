@@ -28,19 +28,9 @@ def generate_data [
     mut points: string = (torch randn $n_samples_per_class 2) | torch mul (torch tensor $cluster_std) | torch add ($blob_centers | get $i)
     if $i == 1 or $i == 2 {
       let center = ($blob_centers | get $i)
-      let skew = (
-        torch tensor [
-          [1.0 ($skew_factor * ($i - 1))]
-          [($skew_factor * ($i - 1)) 1.0]
-        ]
-      )
+      let skew = torch tensor [[1.0 ($skew_factor * ($i - 1))] [($skew_factor * ($i - 1)) 1.0]]
 
-      $points = (
-        $points
-        | torch sub $center # pts - center
-        | torch mm $skew # * skew
-        | torch add $center # + center
-      )
+      $points = $points | torch sub $center | torch mm $skew | torch add $center
     }
     let labels: string = torch full [$n_samples_per_class] $i --dtype 'int64'
     $X_list = $X_list | append $points
