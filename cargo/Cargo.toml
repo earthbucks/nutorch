@@ -1,6 +1,6 @@
 [package]
 name = "nutorch"
-version = "0.0.1"
+version = "0.1.0"
 authors = ["Ryan X. Charles <ryan@ryanxcharles.com>"]
 edition = "2021"
 license = "MIT"
