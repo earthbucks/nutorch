@@ -2,11 +2,8 @@ plugin use torch
 plugin use termplot
 source node_modules/termplot.nu/termplot.nu
 use node_modules/beautiful.nu *
-# use ../beautiful.nu *
 
-# Set random seed for reproducibility
 torch manual_seed 42
-# torch manual_seed ( 42 * 2 )
 
 def generate_data [
   --n_samples: int = 300 # Number of samples to generate
@@ -18,7 +15,6 @@ def generate_data [
   mut X_list: list<string> = [] # nutorch tensors have string ids
   mut y_list: list<string> = [] # nutorch tensors have string ids
 
-  # let blob_centers = [([0.0 0.0] | torch tensor) ([3.0 0.0] | torch tensor) ([1.5 2.5] | torch tensor)]
   let blob_centers: list<string> = [
     (torch tensor [0.0 0.0])
     (torch tensor [3.0 0.0])
@@ -66,7 +62,6 @@ def model_get_parameters [
 def model_forward_pass [
   --model: record<w1: string, b1: string, w2: string, b2: string>
 ]: [string -> string] {
-  # input tensor id -> output tensor id
   torch mm ($model.w1 | torch t) # Matrix multiplication with input and first layer weights
   | torch add $model.b1 # Add bias for first layer
   | torch maximum ([0.0] | torch tensor) # ReLU activation
@@ -97,11 +92,9 @@ def train [
   let ps = model_get_parameters --model $model
 
   for epoch in (seq 0 ($epochs - 1)) {
-    # forward and loss
     let logits = $X | model_forward_pass --model $model
     let loss = cross_entropy_loss --logits $logits --targets $y
 
-    # zero existing grads, back-prop, SGD update
     for p in $ps {
       $p | torch zero_grad
     }

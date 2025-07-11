@@ -5,9 +5,6 @@ import matplotlib.pyplot as plt
 torch.manual_seed(42)  # reproducibility
 
 
-# ------------------------------------------------------------------ #
-#  data generation & plotting                                         #
-# ------------------------------------------------------------------ #
 def generate_data(
     n_samples: int = 300,
     centers: int = 3,
@@ -35,9 +32,6 @@ def generate_data(
     return torch.cat(X_parts), torch.cat(y_parts)
 
 
-# ------------------------------------------------------------------ #
-#  model, loss, SGD step                                              #
-# ------------------------------------------------------------------ #
 Model = Dict[str, torch.Tensor]
 
 
@@ -81,9 +75,6 @@ def sgd_step(ps: List[torch.Tensor], lr: float = 0.1) -> None:
                 p -= lr * p.grad
 
 
-# ------------------------------------------------------------------ #
-#  training loop                                                      #
-# ------------------------------------------------------------------ #
 def train(
     model: Model,
     X: torch.Tensor,
@@ -130,9 +121,6 @@ def plot_loss(losses: List[float], steps: List[int]) -> None:
     plt.show()
 
 
-# ------------------------------------------------------------------ #
-#  decision-boundary plotting                                         #
-# ------------------------------------------------------------------ #
 def plot_results(X: torch.Tensor, y: torch.Tensor, model: Model) -> None:
     Xl = X.detach().tolist()
     yl = y.detach().tolist()
@@ -155,7 +143,6 @@ def plot_results(X: torch.Tensor, y: torch.Tensor, model: Model) -> None:
     plt.show()
 
 
-# ------------------------------------------------------------------ #
 if __name__ == "__main__":
     X, y = generate_data(n_samples=300, centers=3, cluster_std=0.7, skew_factor=0.3)
     plot_raw_data(X, y)
