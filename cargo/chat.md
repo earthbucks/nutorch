@@ -5455,8 +5455,7 @@ verify it works?
 
 # === ASSISTANT ===
 
-Rust: `torch reshape`
----------------------
+## Rust: `torch reshape`
 
 ```rust
 // torch reshape  -----------------------------------------------------------
@@ -5563,8 +5562,7 @@ $v | torch reshape [3 -1] | torch shape        # → [3, 2]
 }
 ```
 
-Nushell tests
--------------
+## Nushell tests
 
 ```nu
 plugin use torch
@@ -5598,10 +5596,63 @@ else { err "expected [6] got ($s3)"; error make {msg:"reshape flat"} }
 
 These tests confirm that:
 
-1. Reshaping a vector of length 6 to shape [2 3] works.  
-2. Using -1 lets PyTorch infer the missing dimension.  
+1. Reshaping a vector of length 6 to shape [2 3] works.
+2. Using -1 lets PyTorch infer the missing dimension.
 3. A 2 × 3 matrix can be flattened to a vector of length 6.
 
 # === USER ===
 
+how do i install a package globally with cargo? i published my package on cargo
+and i would like to know how to install it. the package is called `nutorch` and
+the binary is called `nu_plugin_torch`.
 
+# === ASSISTANT ===
+
+Use `cargo install` – it downloads the crate from crates.io, builds the
+release-optimized binaries, and puts them in `$HOME/.cargo/bin` (or another
+directory you specify).
+
+```bash
+# install the latest published version
+cargo install nutorch            # installs the binary nu_plugin_torch
+
+# if you want Cargo.lock reproducibility
+cargo install nutorch --locked
+
+# install / overwrite an older install
+cargo install nutorch --force    # rebuilds & replaces the existing binary
+
+# install a specific version
+cargo install nutorch --version 0.1.3
+```
+
+After the build finishes you’ll find:
+
+```
+~/.cargo/bin/nu_plugin_torch
+```
+
+Make sure that directory is on your `PATH` (add the line below to `~/.bashrc`,
+`~/.zshrc`, etc. if it isn’t already):
+
+```bash
+export PATH="$HOME/.cargo/bin:$PATH"
+```
+
+Optional flags
+
+• `--root <dir>` – choose an alternative install prefix\
+• `--features <feat>` / `--no-default-features` – select Cargo features\
+• `--git <url>` – install directly from a branch or commit instead of crates.io
+
+Updating later
+
+```bash
+cargo install nutorch --force    # fetches latest release, recompiles, replaces
+```
+
+Once `nu_plugin_torch` is in your `PATH`, Nushell will detect it automatically
+(e.g. `plugin list` should show “torch”) and you can start using commands such
+as `torch full`, `torch t`, etc.
+
+# === USER ===
