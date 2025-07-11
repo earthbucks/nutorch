@@ -1,6 +1,6 @@
 {
   "name": "beautiful.nu",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "author": "Ryan X. Charles <ryan@ryanxcharles.com> (https://ryanxcharles.com)",
   "description": "Catpuccin-themed plots for Termplot and Plotly.js",
   "repository": {
