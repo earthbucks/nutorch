@@ -12,6 +12,6 @@
   "packageManager": "pnpm@10.12.4",
   "dependencies": {
     "beautiful.nu": "^0.0.2",
-    "termplot.nu": "^0.1.14"
+    "termplot.nu": "^0.1.16"
   }
 }
