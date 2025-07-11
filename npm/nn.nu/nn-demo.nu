@@ -1,7 +1,7 @@
 # nn-demo - re-build 1
 plugin use torch
 plugin use termplot
-source node_modules/@termplot/termplot/termplot.nu
+use node_modules/termplot.nu *
 use node_modules/beautiful.nu *
 
 # Set random seed for reproducibility
