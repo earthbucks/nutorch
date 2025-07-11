@@ -2,7 +2,7 @@
 name = "nutorch"
 description = "Nutorch is a wrapper for tch-rs, itself a wrapper for libtorch, the C++ backend for PyTorch. It provides a plugin for Nushell to use PyTorch tensors on the command line."
 version = "0.1.1"
-authors = ["Ryan X. Charles <ryan@ryanxcharles.com>"]
+authors = ["Ryan X. Charles <ryan@ryanxcharles.com> (https://ryanxcharles.com)"]
 edition = "2021"
 license = "MIT"
 
