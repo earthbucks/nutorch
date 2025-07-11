@@ -1,7 +1,7 @@
 # Beautiful
 
 Beautiful (`beautiful.nu`) is a Nushell module that provieds convenience methods
-for generating [catpuccin](https://catppuccin.com/)-themed plots for
+for generating [catppuccin](https://catppuccin.com/)-themed plots for
 [Termplot](https://termplot.com) and
 [Plotly.js](https://plotly.com/javascript/).
 
@@ -44,6 +44,12 @@ Support:
 - [x] contour plots
 - [x] line plots
 - [ ] all other types of plots
+
+## About
+
+This project was created for use by [Nutorch](https://nutorch.com) and
+[Termplot](https://termplot.com) users, but it can be used by anyone who wants
+to create beautiful configuration files for Plotly.js.
 
 ## License
 
