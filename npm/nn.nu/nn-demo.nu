@@ -148,10 +148,7 @@ def plot_loss [
   --losses: list<number> # list of loss values
   --steps: list<number> # list of steps (epochs) corresponding to losses
 ] {
-  beautiful plot | beautiful add lines {
-    x: $steps
-    y: $losses
-  } | merge deep {layout: {title: {text: "Loss"}}} | termplot
+  [{x: $steps y: $losses}] | beautiful lines | merge deep {layout: {title: {text: "Loss"}}} | termplot
 }
 
 def plot_results [
