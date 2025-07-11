@@ -63,7 +63,7 @@ impl Plugin for NutorchPlugin {
     }
 
     fn version(&self) -> std::string::String {
-        "0.0.1".to_string()
+        "0.1.2".to_string()
     }
 }
 
