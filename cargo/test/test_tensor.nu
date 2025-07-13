@@ -36,13 +36,3 @@ def "Expect an error if pipeline and argument both provided" [] {
     # expected
   }
 }
-
-# if not $result4 {
-#   error make {msg: "Test 4 failed"}
-# }
-
-# if ($result1 and $result2 and $result3 and $result4) {
-#   print_success "All tests passed successfully!"
-# } else {
-#   print_failure "Some tests failed. Please check the output above for details."
-# }
