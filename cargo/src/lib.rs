@@ -14,6 +14,7 @@ mod command_backward;
 mod command_cat;
 mod command_detach;
 mod command_div;
+mod command_exp;
 pub use command_add::CommandAdd;
 pub use command_arange::CommandArange;
 pub use command_argmax::CommandArgmax;
@@ -21,6 +22,7 @@ pub use command_backward::CommandBackward;
 pub use command_cat::CommandCat;
 pub use command_detach::CommandDetach;
 pub use command_div::CommandDiv;
+pub use command_exp::CommandExp;
 
 // Global registry to store tensors by ID (thread-safe)
 lazy_static! {
@@ -46,8 +48,8 @@ impl Plugin for NutorchPlugin {
             Box::new(CommandCat),
             Box::new(CommandDetach),
             Box::new(CommandDiv),
-            // Not yet moved
             Box::new(CommandExp),
+            // Not yet moved
             Box::new(CommandFree),
             Box::new(CommandFull),
             Box::new(CommandGather),
@@ -2347,52 +2349,6 @@ impl PluginCommand for CommandSin {
             .shallow_clone();
         // Apply sine operation
         let result_tensor = tensor.sin();
-        // Store result in registry with new ID
-        let new_id = Uuid::new_v4().to_string();
-        registry.insert(new_id.clone(), result_tensor);
-        // Return new ID wrapped in PipelineData
-        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
-    }
-}
-
-// Exp command to apply exp to a tensor
-struct CommandExp;
-
-impl PluginCommand for CommandExp {
-    type Plugin = NutorchPlugin;
-
-    fn name(&self) -> &str {
-        "torch exp"
-    }
-
-    fn description(&self) -> &str {
-        "Apply exp function element-wise to a tensor"
-    }
-
-    fn signature(&self) -> Signature {
-        Signature::build("torch exp").category(Category::Custom("torch".into()))
-    }
-
-    fn run(
-        &self,
-        _plugin: &NutorchPlugin,
-        _engine: &nu_plugin::EngineInterface,
-        call: &nu_plugin::EvaluatedCall,
-        input: PipelineData,
-    ) -> Result<PipelineData, LabeledError> {
-        // Get tensor ID from input
-        let input_value = input.into_value(call.head)?;
-        let tensor_id = input_value.as_str()?;
-        // Look up tensor in registry
-        let mut registry = TENSOR_REGISTRY.lock().unwrap();
-        let tensor = registry
-            .get(tensor_id)
-            .ok_or_else(|| {
-                LabeledError::new("Tensor not found").with_label("Invalid tensor ID", call.head)
-            })?
-            .shallow_clone();
-        // Apply expe operation
-        let result_tensor = tensor.exp();
         // Store result in registry with new ID
         let new_id = Uuid::new_v4().to_string();
         registry.insert(new_id.clone(), result_tensor);
