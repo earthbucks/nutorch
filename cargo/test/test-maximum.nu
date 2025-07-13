@@ -2,36 +2,28 @@
 use std assert
 use std/testing *
 
-def print_success [message: string] {
-  print ((ansi green) + "SUCCESS" + (ansi reset) + " - test/maximum - " + $message)
-}
-
-def print_failure [message: string] {
-  print ((ansi red) + "FAILURE" + (ansi reset) + " - test/maximum - " + $message)
-}
-
 @test
-def "test-pipeline-tensor-argument-tensor" [] {
+def "Test pipeline input for maximum" [] {
   let input_data = $in
   let result1 = (torch full [2 3] 1) | torch maximum (torch full [2 3] 2) | torch value | get 0 | get 0
 }
 
 @test
-def "test-two-arguments" [] {
+def "Test two arguments and no pipeline for maximum" [] {
   let input_data = $in
   (torch maximum (torch full [2 3] 1) (torch full [2 3] 2) | torch value | get 0 | get 0)
 }
 
-# @test
-# def "test-incompatible-shapes-expect-error" [] {
-#   try {
-#     let result3 = (torch full [2] 1) | torch maximum (torch full [2 3] 2) | torch value
-#     print_failure "Maximum with incompatible shapes test failed: Expected an error, but got result: $result3"
-#     error make {msg: "Expected error for incompatible shapes, but got result: $result3"}
-#   } catch {
-#     print_success "Maximum with incompatible shapes test passed: Caught expected error"
-#   }
-# }
+@test
+def "test-incompatible-shapes-expect-error" [] {
+  let input_data = $in
+  try {
+    let result = (torch full [2] 1) | torch maximum (torch full [2 3] 2) | torch value
+    error make {msg: "Expected error for incompatible shapes, but got result: $result3"}
+  } catch {
+    # good, failure expected
+  }
+}
 
 # def run-tests [] {
 #   print "Running tests..."
