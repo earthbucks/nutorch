@@ -24,38 +24,3 @@ def "test-incompatible-shapes-expect-error" [] {
     # good, failure expected
   }
 }
-
-# def run-tests [] {
-#   print "Running tests..."
-
-#   # Find all test functions (those with "test" attribute)
-#   let test_commands = (
-#     scope commands
-#       | where { |cmd| $cmd.attributes | any { |attr| $attr.name == "test" } }
-#       | get name
-#   )
-
-#   mut results = []
-
-#   for test in $test_commands {
-#     print $"Running test: ($test)"
-
-#     let result = do ($test)
-#     # let re = (try {
-#     #   do ($test)   # run the test function
-#     #   "pass"
-#     # } catch {|e|
-#     #   "fail"
-#     # })
-
-#     $results = ($results | append {
-#       name: $test
-#       status: $status
-#     })
-#   }
-
-#   print "Tests completed"
-#   $results   # return table
-# }
-
-# run-tests | print
