@@ -1,7 +1,6 @@
 {
-  "name": "@nutorch/nutest",
-  "version": "0.0.2",
-  "private": false,
+  "name": "test.nu",
+  "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
