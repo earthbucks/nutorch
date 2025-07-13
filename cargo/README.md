@@ -10,8 +10,11 @@ Please find more information about Nutorch at the
 
 ## Testing
 
-Tests are run in nushell. First, install the test package in the test directory
-with `pnpm install`.
+Tests are run in nushell.
+
+First, find the test directory from the main project directory: `cd cargo/test`.
+
+Then install the test package in the test directory with `pnpm install`.
 
 Then run `use node_modules/test.nu`.
 
@@ -19,6 +22,6 @@ Then run `test run-tests`.
 
 The nushell tests should then execute, and all should pass.
 
-## Conclusion
+## Information
 
 Copyright (C) 2025 Ryan X. Charles
