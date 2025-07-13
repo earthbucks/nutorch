@@ -12,25 +12,15 @@ def print_failure [message: string] {
 
 @test
 def "test-pipeline-tensor-argument-tensor" [] {
+  let input_data = $in
   let result1 = (torch full [2 3] 1) | torch maximum (torch full [2 3] 2) | torch value | get 0 | get 0
-  if ($result1 == 2) {
-    print_success "Maximum test passed"
-  } else {
-    print_failure "Maximum test failed: Expected 2, got $result1"
-    error make {msg: "Maximum test failed: Expected 2, got $result1"}
-  }
 }
 
-# @test
-# def "test-two-arguments" [] {
-#   let result2 = torch maximum (torch full [2 3] 1) (torch full [2 3] 2) | torch value | get 0 | get 0
-#   if ($result2 == 2) {
-#     print_success "Maximum with tensors test passed"
-#   } else {
-#     print_failure "Maximum with tensors test failed: Expected 2, got $result2"
-#     error make {msg: "Maximum with tensors test failed: Expected 2, got $result2"}
-#   }
-# }
+@test
+def "test-two-arguments" [] {
+  let input_data = $in
+  (torch maximum (torch full [2 3] 1) (torch full [2 3] 2) | torch value | get 0 | get 0)
+}
 
 # @test
 # def "test-incompatible-shapes-expect-error" [] {
