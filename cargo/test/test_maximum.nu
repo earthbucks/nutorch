@@ -18,7 +18,7 @@ def "Test incompatible shapes - expect error" [] {
   let input_data = $in
   try {
     let result = (torch full [2] 1) | torch maximum (torch full [2 3] 2) | torch value
-    error make {msg: "Expected error for incompatible shapes, but got result: $result3"}
+    error make {msg: "Expected error for incompatible shapes"}
   } catch {
     # good, failure expected
   }
