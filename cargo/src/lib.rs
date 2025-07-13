@@ -43,6 +43,7 @@ mod command_unsqueeze;
 mod command_value;
 mod command_zero_grad;
 mod command_devices;
+mod command_manual_seed;
 
 pub use command_add::CommandAdd;
 pub use command_arange::CommandArange;
@@ -80,6 +81,7 @@ pub use command_unsqueeze::CommandUnsqueeze;
 pub use command_value::CommandValue;
 pub use command_zero_grad::CommandZeroGrad;
 pub use command_devices::CommandDevices;
+pub use command_manual_seed::CommandManualSeed;
 
 // Global registry to store tensors by ID (thread-safe)
 lazy_static! {
@@ -191,53 +193,6 @@ impl PluginCommand for CommandTorch {
 
 
 
-struct CommandManualSeed;
-
-impl PluginCommand for CommandManualSeed {
-    type Plugin = NutorchPlugin;
-
-    fn name(&self) -> &str {
-        "torch manual_seed"
-    }
-
-    fn description(&self) -> &str {
-        "Set the random seed for PyTorch operations to ensure reproducibility"
-    }
-
-    fn signature(&self) -> Signature {
-        Signature::build("torch manual_seed")
-            .required(
-                "seed",
-                SyntaxShape::Int,
-                "The seed value for the random number generator",
-            )
-            .input_output_types(vec![(Type::Nothing, Type::Nothing)])
-            .category(Category::Custom("torch".into()))
-    }
-
-    fn examples(&self) -> Vec<Example> {
-        vec![Example {
-            description: "Set the random seed to 42 for reproducibility",
-            example: "torch manual_seed 42",
-            result: None,
-        }]
-    }
-
-    fn run(
-        &self,
-        _plugin: &NutorchPlugin,
-        _engine: &nu_plugin::EngineInterface,
-        call: &nu_plugin::EvaluatedCall,
-        _input: PipelineData,
-    ) -> Result<PipelineData, LabeledError> {
-        // Get the seed value from the first argument
-        let seed: i64 = call.nth(0).unwrap().as_int()?;
-        // Set the random seed using tch-rs
-        tch::manual_seed(seed);
-        // Return nothing (Type::Nothing) as the operation modifies global state
-        Ok(PipelineData::Empty)
-    }
-}
 
 
 pub enum Number {
