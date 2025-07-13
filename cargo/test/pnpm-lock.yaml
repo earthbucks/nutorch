@@ -9,14 +9,14 @@ importers:
   .:
     dependencies:
       test.nu:
-        specifier: ^1.0.0
-        version: 1.0.0
+        specifier: ^1.0.1
+        version: 1.0.1
 
 packages:
 
-  test.nu@1.0.0:
-    resolution: {integrity: sha512-87f6sRQy6mRU6WrC3phoNw80TYZ5NMutQkfzT+mq7G9RqOOBPPln+Y4VYAXuTCLDjuvWFOYDjxdWgAOReEAFHw==}
+  test.nu@1.0.1:
+    resolution: {integrity: sha512-I1UC9lz73KdVJ0ZUrtPZfKxbiD1ClNBjeEDWbOoA9ShtUZIm6h6SMODtAR72akcdbUX4z3TbHOWv+/fz4uUryA==}
 
 snapshots:
 
-  test.nu@1.0.0: {}
+  test.nu@1.0.1: {}

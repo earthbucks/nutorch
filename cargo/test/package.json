@@ -11,6 +11,6 @@
   "license": "ISC",
   "packageManager": "pnpm@10.12.4",
   "dependencies": {
-    "test.nu": "^1.0.0"
+    "test.nu": "^1.0.1"
   }
 }
