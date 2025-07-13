@@ -26,15 +26,16 @@ def "Error case of no input provided" [] {
   }
 }
 
-# # Test 4: Error case - both pipeline and argument provided
-# let result4: bool = try {
-#   let res = ([1 2 3] | torch tensor [1.0 2.0 3.0])
-#   print_failure "Expected an error for conflicting input, but no error occurred"
-#   false
-# } catch {
-#   print_success "Expected error occurred for conflicting input"
-#   true
-# }
+@test
+def "Expect an error if pipeline and argument both provided" [] {
+  let input_data = $in
+  try {
+    let res = ([1 2 3] | torch tensor [1.0 2.0 3.0])
+    error make {msg: "Expected error if pipeline and argument both provided"}
+  } catch {
+    # expected
+  }
+}
 
 # if not $result4 {
 #   error make {msg: "Test 4 failed"}
