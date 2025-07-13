@@ -93,19 +93,13 @@ pub struct NutorchPlugin;
 impl Plugin for NutorchPlugin {
     fn commands(&self) -> Vec<Box<dyn PluginCommand<Plugin = Self>>> {
         vec![
-            // Top-level Torch command
-            Box::new(CommandTorch),
-            // Configuration and other global commands
-            Box::new(CommandManualSeed),
-            Box::new(CommandDevices),
-            // Tensor operations
-            // Moved
             Box::new(CommandAdd),
             Box::new(CommandArange),
             Box::new(CommandArgmax),
             Box::new(CommandBackward),
             Box::new(CommandCat),
             Box::new(CommandDetach),
+            Box::new(CommandDevices),
             Box::new(CommandDiv),
             Box::new(CommandExp),
             Box::new(CommandFree),
@@ -114,6 +108,7 @@ impl Plugin for NutorchPlugin {
             Box::new(CommandGrad),
             Box::new(CommandLinspace),
             Box::new(CommandLogSoftmax),
+            Box::new(CommandManualSeed),
             Box::new(CommandMax),
             Box::new(CommandMaximum),
             Box::new(CommandMean),
@@ -132,6 +127,7 @@ impl Plugin for NutorchPlugin {
             Box::new(CommandSub),
             Box::new(CommandT),
             Box::new(CommandTensor),
+            Box::new(CommandTorch),
             Box::new(CommandUnsqueeze),
             Box::new(CommandValue),
             Box::new(CommandZeroGrad),
