@@ -3,9 +3,11 @@ use nu_protocol::{
     Category, Example, LabeledError, PipelineData, Signature, SyntaxShape, Type, Value,
 };
 use uuid::Uuid;
-pub struct CommandAdd;
+
 use crate::NutorchPlugin;
 use crate::TENSOR_REGISTRY;
+
+pub struct CommandAdd;
 
 impl PluginCommand for CommandAdd {
     type Plugin = NutorchPlugin;
