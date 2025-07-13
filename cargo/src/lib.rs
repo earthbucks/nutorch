@@ -1,8 +1,6 @@
 use lazy_static::lazy_static;
 use nu_plugin::{Plugin, PluginCommand};
-use nu_protocol::{
-    Category, Example, LabeledError, PipelineData, Signature, Span, Value,
-};
+use nu_protocol::{LabeledError, Span, Value};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tch::{Device, Kind, Tensor};
@@ -13,6 +11,7 @@ mod command_argmax;
 mod command_backward;
 mod command_cat;
 mod command_detach;
+mod command_devices;
 mod command_div;
 mod command_exp;
 mod command_free;
@@ -21,6 +20,7 @@ mod command_gather;
 mod command_grad;
 mod command_linspace;
 mod command_log_softmax;
+mod command_manual_seed;
 mod command_max;
 mod command_maximum;
 mod command_mean;
@@ -39,11 +39,10 @@ mod command_stack;
 mod command_sub;
 mod command_t;
 mod command_tensor;
+mod command_torch;
 mod command_unsqueeze;
 mod command_value;
 mod command_zero_grad;
-mod command_devices;
-mod command_manual_seed;
 
 pub use command_add::CommandAdd;
 pub use command_arange::CommandArange;
@@ -51,6 +50,7 @@ pub use command_argmax::CommandArgmax;
 pub use command_backward::CommandBackward;
 pub use command_cat::CommandCat;
 pub use command_detach::CommandDetach;
+pub use command_devices::CommandDevices;
 pub use command_div::CommandDiv;
 pub use command_exp::CommandExp;
 pub use command_free::CommandFree;
@@ -59,6 +59,7 @@ pub use command_gather::CommandGather;
 pub use command_grad::CommandGrad;
 pub use command_linspace::CommandLinspace;
 pub use command_log_softmax::CommandLogSoftmax;
+pub use command_manual_seed::CommandManualSeed;
 pub use command_max::CommandMax;
 pub use command_maximum::CommandMaximum;
 pub use command_mean::CommandMean;
@@ -77,11 +78,10 @@ pub use command_stack::CommandStack;
 pub use command_sub::CommandSub;
 pub use command_t::CommandT;
 pub use command_tensor::CommandTensor;
+pub use command_torch::CommandTorch;
 pub use command_unsqueeze::CommandUnsqueeze;
 pub use command_value::CommandValue;
 pub use command_zero_grad::CommandZeroGrad;
-pub use command_devices::CommandDevices;
-pub use command_manual_seed::CommandManualSeed;
 
 // Global registry to store tensors by ID (thread-safe)
 lazy_static! {
@@ -143,72 +143,10 @@ impl Plugin for NutorchPlugin {
     }
 }
 
-// New top-level Torch command
-struct CommandTorch;
-
-impl PluginCommand for CommandTorch {
-    type Plugin = NutorchPlugin;
-
-    fn name(&self) -> &str {
-        "torch"
-    }
-
-    fn signature(&self) -> Signature {
-        Signature::build("torch").category(Category::Custom("torch".into()))
-    }
-
-    fn description(&self) -> &str {
-        "The entry point for the Nutorch plugin, providing access to tensor operations and utilities"
-    }
-
-    fn examples(&self) -> Vec<Example> {
-        vec![Example {
-            description: "Run the torch command to test the plugin".into(),
-            example: "torch".into(),
-            result: Some(Value::string(
-                "Welcome to Nutorch. Type `torch --help` for more information.",
-                nu_protocol::Span::unknown(),
-            )),
-        }]
-    }
-
-    fn run(
-        &self,
-        _plugin: &NutorchPlugin,
-        _engine: &nu_plugin::EngineInterface,
-        call: &nu_plugin::EvaluatedCall,
-        _input: PipelineData,
-    ) -> Result<PipelineData, LabeledError> {
-        Ok(PipelineData::Value(
-            Value::string(
-                "Welcome to Nutorch. Type `torch --help` for more information.",
-                call.head,
-            ),
-            None,
-        ))
-    }
-}
-
-
-
-
-
-
-
 pub enum Number {
     Int(i64),
     Float(f64),
 }
-
-
-
-
-
-
-
-
-
-
 
 pub fn add_grad_from_call(
     call: &nu_plugin::EvaluatedCall,
