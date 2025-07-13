@@ -1,11 +1,10 @@
-# test-maximum.nu - Test script for torch maximum command (element-wise maximum)
 use std assert
 use std/testing *
 
 @test
 def "Test pipeline input for maximum" [] {
   let input_data = $in
-  let result1 = (torch full [2 3] 1) | torch maximum (torch full [2 3] 2) | torch value | get 0 | get 0
+  (torch full [2 3] 1) | torch maximum (torch full [2 3] 2) | torch value | get 0 | get 0
 }
 
 @test
