@@ -13,12 +13,14 @@ mod command_argmax;
 mod command_backward;
 mod command_cat;
 mod command_detach;
+mod command_div;
 pub use command_add::CommandAdd;
 pub use command_arange::CommandArange;
 pub use command_argmax::CommandArgmax;
 pub use command_backward::CommandBackward;
 pub use command_cat::CommandCat;
 pub use command_detach::CommandDetach;
+pub use command_div::CommandDiv;
 
 // Global registry to store tensors by ID (thread-safe)
 lazy_static! {
@@ -43,8 +45,8 @@ impl Plugin for NutorchPlugin {
             Box::new(CommandBackward),
             Box::new(CommandCat),
             Box::new(CommandDetach),
-            // Not yet moved
             Box::new(CommandDiv),
+            // Not yet moved
             Box::new(CommandExp),
             Box::new(CommandFree),
             Box::new(CommandFull),
@@ -492,162 +494,6 @@ impl PluginCommand for CommandMul {
         Ok(PipelineData::Value(Value::string(new_id, call.head), None))
     }
 }
-
-struct CommandDiv;
-
-impl PluginCommand for CommandDiv {
-    type Plugin = NutorchPlugin;
-
-    fn name(&self) -> &str {
-        "torch div"
-    }
-
-    fn description(&self) -> &str {
-        "Compute the element-wise quotient of two tensors with broadcasting (similar to torch.div or / operator)"
-    }
-
-    fn signature(&self) -> Signature {
-        Signature::build("torch div")
-            .input_output_types(vec![(Type::String, Type::String), (Type::Nothing, Type::String)])
-            .optional("tensor1_id", SyntaxShape::String, "ID of the first tensor (if not using pipeline input)")
-            .optional("tensor2_id", SyntaxShape::String, "ID of the second tensor")
-            .named(
-                "alpha",
-                SyntaxShape::String,
-                "ID of a tensor to use as a multiplier for the second tensor before division (default: tensor with value 1.0)",
-                None,
-            )
-            .category(Category::Custom("torch".into()))
-    }
-
-    fn examples(&self) -> Vec<Example> {
-        vec![
-            Example {
-                description: "Divide two tensors using pipeline and argument",
-                example: "let t1 = (torch full 6 2 3); let t2 = (torch full 2 2 3); $t1 | torch div $t2 | torch value",
-                result: None,
-            },
-            Example {
-                description: "Divide two tensors using arguments only",
-                example: "let t1 = (torch full 6 2 3); let t2 = (torch full 2 2 3); torch div $t1 $t2 | torch value",
-                result: None,
-            },
-            Example {
-                description: "Divide two tensors with alpha scaling tensor on the second tensor",
-                example: "let t1 = (torch full 6 2 3); let t2 = (torch full 2 2 3); let alpha = (torch full 0.5 1); $t1 | torch div $t2 --alpha $alpha | torch value",
-                result: None,
-            }
-        ]
-    }
-
-    fn run(
-        &self,
-        _plugin: &NutorchPlugin,
-        _engine: &nu_plugin::EngineInterface,
-        call: &nu_plugin::EvaluatedCall,
-        input: PipelineData,
-    ) -> Result<PipelineData, LabeledError> {
-        // Check for pipeline input
-        let pipeline_input = match input {
-            PipelineData::Empty => None,
-            PipelineData::Value(val, _) => Some(val),
-            _ => {
-                return Err(LabeledError::new("Unsupported input")
-                    .with_label("Only Empty or Value inputs are supported", call.head));
-            }
-        };
-
-        // Check for positional argument inputs
-        let arg1 = call.nth(0);
-        let arg2 = call.nth(1);
-
-        // Validate the number of tensor inputs (exactly 2 tensors required for division)
-        let pipeline_count = if pipeline_input.is_some() { 1 } else { 0 };
-        let arg_count = if arg1.is_some() { 1 } else { 0 } + if arg2.is_some() { 1 } else { 0 };
-        let total_count = pipeline_count + arg_count;
-
-        if total_count != 2 {
-            return Err(LabeledError::new("Invalid input count").with_label(
-                "Exactly two tensors must be provided via pipeline and/or arguments",
-                call.head,
-            ));
-        }
-
-        // Determine the two tensor IDs based on input sources
-        let (tensor1_id, tensor2_id) = match (pipeline_input, arg1, arg2) {
-            (Some(input_val), Some(arg_val), None) => {
-                let input_id = input_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input")
-                        .with_label("Unable to parse tensor ID from pipeline input", call.head)
-                })?;
-                let arg_id = arg_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input")
-                        .with_label("Unable to parse tensor ID from argument", call.head)
-                })?;
-                (input_id, arg_id)
-            }
-            (None, Some(arg1_val), Some(arg2_val)) => {
-                let arg1_id = arg1_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input")
-                        .with_label("Unable to parse first tensor ID from argument", call.head)
-                })?;
-                let arg2_id = arg2_val.as_str().map(|s| s.to_string()).map_err(|_| {
-                    LabeledError::new("Invalid input")
-                        .with_label("Unable to parse second tensor ID from argument", call.head)
-                })?;
-                (arg1_id, arg2_id)
-            }
-            _ => {
-                return Err(LabeledError::new("Invalid input configuration").with_label(
-                    "Must provide exactly two tensors via pipeline and/or arguments",
-                    call.head,
-                ));
-            }
-        };
-
-        // Look up tensors in registry
-        let mut registry = TENSOR_REGISTRY.lock().unwrap();
-        let tensor1 = registry
-            .get(&tensor1_id)
-            .ok_or_else(|| {
-                LabeledError::new("Tensor not found")
-                    .with_label("Invalid first tensor ID", call.head)
-            })?
-            .shallow_clone();
-        let tensor2 = registry
-            .get(&tensor2_id)
-            .ok_or_else(|| {
-                LabeledError::new("Tensor not found")
-                    .with_label("Invalid second tensor ID", call.head)
-            })?
-            .shallow_clone();
-
-        // Handle optional alpha argument (as a tensor ID)
-        let result_tensor = match call.get_flag::<String>("alpha")? {
-            Some(alpha_id) => {
-                let alpha_tensor = registry
-                    .get(&alpha_id)
-                    .ok_or_else(|| {
-                        LabeledError::new("Tensor not found")
-                            .with_label("Invalid alpha tensor ID", call.head)
-                    })?
-                    .shallow_clone();
-                tensor1 / (alpha_tensor * tensor2)
-            }
-            None => {
-                // No alpha scaling, just divide the two tensors
-                tensor1 / tensor2
-            }
-        };
-
-        // Store result in registry with new ID
-        let new_id = Uuid::new_v4().to_string();
-        registry.insert(new_id.clone(), result_tensor);
-        // Return new ID wrapped in PipelineData
-        Ok(PipelineData::Value(Value::string(new_id, call.head), None))
-    }
-}
-
 
 struct CommandSub;
 
