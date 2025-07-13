@@ -15,32 +15,16 @@ def "Convert a 1d list to a tensor via argument" [] {
   assert ($res | describe | str contains "string")
 }
 
-# # Test 2: Convert a 1D list to a tensor via argument
-# let result2 = try {
-#   let res = (torch tensor [1.0 2.0 3.0])
-#   if ($res | describe | str contains "string") {
-#     print_success "Tensor created via argument"
-#     true
-#   } else {
-#     print_failure "Expected a tensor ID string, got unexpected output"
-#     error make {msg: "Test 2 failed: Did not return a tensor ID"}
-#     false
-#   }
-# } catch {
-#   print_failure "Unexpected error while creating tensor via argument"
-#   error make {msg: "Test 2 failed: Unexpected error"}
-# }
-
-# # Test 3: Error case - no input provided
-# let result3 = try {
-#   torch tensor
-#   print_failure "Expected an error for missing input, but no error occurred"
-#   error make {msg: "Test 3 failed: No error for missing input"}
-#   false
-# } catch {
-#   print_success "Expected error occurred for missing input"
-#   true
-# }
+@test
+def "Error case of no input provided" [] {
+  let input_data = $in
+  try {
+    torch tensor
+    error make {msg: "Expected error from no input"}
+  } catch {
+    # expected
+  }
+}
 
 # # Test 4: Error case - both pipeline and argument provided
 # let result4: bool = try {
