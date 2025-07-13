@@ -7721,7 +7721,9 @@ cargo: scope commands | where { |cmd| $cmd.attributes | any { |attr| $attr.name 
 ╰───┴────────────────────────────────────┴──────────┴──────────────────┴────────────┴─────╯
 ```
 
-now, we need to update the `run-tests` command to run all commands that have that attribute. your new one-liner is the correct way to identify all such tests:
+now, we need to update the `run-tests` command to run all commands that have
+that attribute. your new one-liner is the correct way to identify all such
+tests:
 
 ```nu
 def run-tests [] {
@@ -7759,7 +7761,8 @@ def run-tests [] {
 }
 ```
 
-can you please make that update to this `run-tests` command? it should run all commands that have the attribute "test",
+can you please make that update to this `run-tests` command? it should run all
+commands that have the attribute "test",
 
 # === ASSISTANT ===
 
@@ -7799,4 +7802,257 @@ def run-tests [] {
 
 # === USER ===
 
+great, that worked! however, our tests have a problem. right now, every test
+fails, but they shouldn't be. when i run them by hand, they are passing. do you
+see the issue?
 
+```nu
+# test-maximum.nu - Test script for torch maximum command (element-wise maximum)
+use std assert
+use std/testing *
+
+def print_success [message: string] {
+  print ((ansi green) + "SUCCESS" + (ansi reset) + " - test/maximum - " + $message)
+}
+
+def print_failure [message: string] {
+  print ((ansi red) + "FAILURE" + (ansi reset) + " - test/maximum - " + $message)
+}
+
+@test
+def "Pipeline tensor + argument tensor" [] {
+  let result1 = (torch full [2 3] 1) | torch maximum (torch full [2 3] 2) | torch value | get 0 | get 0
+  if ($result1 == 2) {
+    print_success "Maximum test passed"
+  } else {
+    print_failure "Maximum test failed: Expected 2, got $result1"
+    error make {msg: "Maximum test failed: Expected 2, got $result1"}
+  }
+}
+
+@test
+def "Two arguments" [] {
+  let result2 = torch maximum (torch full [2 3] 1) (torch full [2 3] 2) | torch value | get 0 | get 0
+  if ($result2 == 2) {
+    print_success "Maximum with tensors test passed"
+  } else {
+    print_failure "Maximum with tensors test failed: Expected 2, got $result2"
+    error make {msg: "Maximum with tensors test failed: Expected 2, got $result2"}
+  }
+}
+
+@test
+def "Incompatible shapes - expect error" [] {
+  try {
+    let result3 = (torch full [2] 1) | torch maximum (torch full [2 3] 2) | torch value
+    print_failure "Maximum with incompatible shapes test failed: Expected an error, but got result: $result3"
+    error make {msg: "Expected error for incompatible shapes, but got result: $result3"}
+  } catch {
+    print_success "Maximum with incompatible shapes test passed: Caught expected error"
+  }
+}
+
+def run-tests [] {
+  print "Running tests..."
+
+  # Find all test functions (those with "test" attribute)
+  let test_commands = (
+    scope commands
+      | where { |cmd| $cmd.attributes | any { |attr| $attr.name == "test" } }
+      | get name
+  )
+
+  mut results = []
+
+  for test in $test_commands {
+    print $"Running test: ($test)"
+
+    let status = (try {
+      do $test   # run the test function
+      "pass"
+    } catch {|e|
+      "fail"
+    })
+
+    $results = ($results | append {
+      name: $test
+      status: $status
+    })
+  }
+
+  print "Tests completed"
+  $results   # return table
+}
+
+run-tests | print
+```
+
+# === ASSISTANT ===
+
+```nu
+# test-maximum.nu - Test script for torch maximum command (element-wise maximum)
+use std assert
+use std/testing *
+
+def print_success [message: string] {
+  print ((ansi green) + "SUCCESS" + (ansi reset) + " - test/maximum - " + $message)
+}
+
+def print_failure [message: string] {
+  print ((ansi red) + "FAILURE" + (ansi reset) + " - test/maximum - " + $message)
+}
+
+@test
+def "test-pipeline-tensor-argument-tensor" [] {
+  let result1 = (torch full [2 3] 1) | torch maximum (torch full [2 3] 2) | torch value | get 0 | get 0
+  if ($result1 == 2) {
+    print_success "Maximum test passed"
+  } else {
+    print_failure "Maximum test failed: Expected 2, got $result1"
+    error make {msg: "Maximum test failed: Expected 2, got $result1"}
+  }
+}
+
+@test
+def "test-two-arguments" [] {
+  let result2 = torch maximum (torch full [2 3] 1) (torch full [2 3] 2) | torch value | get 0 | get 0
+  if ($result2 == 2) {
+    print_success "Maximum with tensors test passed"
+  } else {
+    print_failure "Maximum with tensors test failed: Expected 2, got $result2"
+    error make {msg: "Maximum with tensors test failed: Expected 2, got $result2"}
+  }
+}
+
+@test
+def "test-incompatible-shapes-expect-error" [] {
+  try {
+    let result3 = (torch full [2] 1) | torch maximum (torch full [2 3] 2) | torch value
+    print_failure "Maximum with incompatible shapes test failed: Expected an error, but got result: $result3"
+    error make {msg: "Expected error for incompatible shapes, but got result: $result3"}
+  } catch {
+    print_success "Maximum with incompatible shapes test passed: Caught expected error"
+  }
+}
+
+def run-tests [] {
+  print "Running tests..."
+
+  # Find all test functions (those with "test" attribute)
+  let test_commands = (
+    scope commands
+      | where { |cmd| $cmd.attributes | any { |attr| $attr.name == "test" } }
+      | get name
+  )
+
+  mut results = []
+
+  for test in $test_commands {
+    print $"Running test: ($test)"
+
+    let status = (try {
+      do ($test)   # run the test function
+      "pass"
+    } catch {|e|
+      "fail"
+    })
+
+    $results = ($results | append {
+      name: $test
+      status: $status
+    })
+  }
+
+  print "Tests completed"
+  $results   # return table
+}
+
+run-tests | print
+```
+
+# === USER ===
+
+no, that didn't work. now we have two problems. all the tests are still failing, but also, because you renamed the tests, the old ones are still in memory, and now they are found by the "scope commands" command, so we have duplicates.
+
+we need to:
+
+1. find a way to get rid of duplicates that are still in memory
+2. fix the broken tests.
+
+let's concentrate on the simpler issue first, which is how to fix the broke tests. why are all tests listed as "failed" when they actually aren't failing?
+
+```
+Tests completed
+╭───┬───────────────────────────────────────┬────────╮
+│ # │                 name                  │ status │
+├───┼───────────────────────────────────────┼────────┤
+│ 0 │ Incompatible shapes - expect error    │ fail   │
+│ 1 │ Pipeline tensor + argument tensor     │ fail   │
+│ 2 │ Two arguments                         │ fail   │
+│ 3 │ test-incompatible-shapes-expect-error │ fail   │
+│ 4 │ test-pipeline-tensor-argument-tensor  │ fail   │
+│ 5 │ test-two-arguments                    │ fail   │
+╰───┴───────────────────────────────────────┴────────╯
+```
+
+# === ASSISTANT ===
+
+```nu
+def run-tests [] {
+  print "Running tests..."
+
+  # Find all test functions (those with "test" attribute)
+  let test_commands = (
+    scope commands
+      | where { |cmd| $cmd.attributes | any { |attr| $attr.name == "test" } }
+      | get name
+  )
+
+  mut results = []
+
+  for test in $test_commands {
+    print $"Running test: ($test)"
+
+    # Run each test in a sub-shell to avoid scope issues, capture output
+    let test_output = (nu --commands $"source ($env.CURRENT_FILE); ($test)")
+
+    # Determine status based on output (look for "SUCCESS" string)
+    let status = if ($test_output | str contains "SUCCESS") {
+      "pass"
+    } else {
+      "fail"
+    }
+
+    $results = ($results | append {
+      name: $test
+      status: $status
+      output: $test_output   # optional: include full output for debugging
+    })
+  }
+
+  print "Tests completed"
+  $results   # return table
+}
+```
+
+# === USER ===
+
+no, that doesn't work.
+
+the problem is we are trying to call a string:
+
+```
+cargo: source test/maximum.nu
+Running tests...
+Running test: Incompatible shapes - expect error
+Error: nu::shell::cant_convert
+
+  × Can't convert to Closure.
+    ╭─[/Users/ryan/dev/nutorch/cargo/test/maximum.nu:61:21]
+ 60 │
+ 61 │     let result = do ($test)
+    ·                     ───┬───
+    ·                        ╰── can't convert string to Closure
+ 62 │     # let re = (try {
+    ╰────
+```
