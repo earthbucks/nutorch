@@ -1,7 +1,7 @@
 use lazy_static::lazy_static;
 use nu_plugin::{Plugin, PluginCommand};
 use nu_protocol::{
-    Category, Example, LabeledError, PipelineData, Signature, Span, SyntaxShape, Type, Value,
+    Category, Example, LabeledError, PipelineData, Signature, Span, Value,
 };
 use std::collections::HashMap;
 use std::sync::Mutex;

@@ -1,11 +1,9 @@
 use nu_plugin::PluginCommand;
 use nu_protocol::{
-    Category, Example, LabeledError, PipelineData, Signature, SyntaxShape, Type, Value,
+    Category, Example, LabeledError, PipelineData, Signature, SyntaxShape, Type
 };
-use uuid::Uuid;
 
 use crate::NutorchPlugin;
-use crate::TENSOR_REGISTRY;
 
 pub struct CommandManualSeed;
 
