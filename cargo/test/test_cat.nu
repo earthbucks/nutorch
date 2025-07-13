@@ -25,22 +25,20 @@ def "Cat test 2" [] {
   assert ($result2 == [[1 1 1 3 3 3] [1 1 1 3 3 3]])
 }
 
-# # Test 3: Error case - incompatible shapes, expect failure as success
-# print "Running Test 3: Concatenate incompatible shapes (expect failure)"
-# let t4 = (torch full [2 2] 4) # Shape: [2, 2], filled with 4
-# let error_result = try {
-#   torch cat [$t1 $t4] --dim 0 | torch value
-#   false # If no error occurs, test fails
-# } catch {
-#   true # If an error occurs, test passes
-# }
-# if $error_result {
-#   print "Test 3: SUCCESS - Expected failure occurred due to shape mismatch"
-# } else {
-#   print "Test 3: FAILURE - Expected failure did not occur, concatenation succeeded unexpectedly"
-# }
-
-# # Test 4: take list of tensors as input and concatenate
-# print "Running Test 4: Concatenate a list of tensors"
-# let result3 = [$t1 $t3] | torch cat
-# print "Test 4: SUCCESS - Concatenation of list of tensors completed"
+@test
+def "Cat test 3" [] {
+  # Test 3: Error case - incompatible shapes, expect failure as success
+  let t1 = (torch full [2 3] 1) # Shape: [2, 3], filled with 1
+  $t1 | torch value # Should show [[1, 1, 1], [1, 1, 1]]
+  let t2 = (torch full [2 3] 2) # Shape: [2, 3], filled with 2
+  $t2 | torch value # Should show [[2, 2, 2], [2, 2, 2]]
+  let t3 = (torch full [2 3] 3) # Shape: [2, 3], filled with 3
+  $t3 | torch value # Should show [[3, 3, 3], [3, 3, 3]]
+  let t4 = (torch full [2 2] 4) # Shape: [2, 2], filled with 4
+  let error_result = try {
+    torch cat [$t1 $t4] --dim 0 | torch value
+    assert false # expected error
+  } catch {
+    # If an error occurs, test passes
+  }
+}
