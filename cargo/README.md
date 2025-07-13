@@ -7,3 +7,18 @@ like PyTorch but for Nushell instead of Python**.
 
 Please find more information about Nutorch at the
 [GitHub repository](https://github.com/nutorch/nutorch).
+
+## Testing
+
+Tests are run in nushell. First, install the test package in the test directory
+with `pnpm install`.
+
+Then run `use node_modules/test.nu`.
+
+Then run `test run-tests`.
+
+The nushell tests should then execute, and all should pass.
+
+## Conclusion
+
+Copyright (C) 2025 Ryan X. Charles
