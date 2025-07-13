@@ -3,23 +3,27 @@ use std/testing *
 
 @test
 def "Cat test 1" [] {
-# Test 1: Concatenate two 2x3 tensors along dimension 0 (rows)
+  # Test 1: Concatenate two 2x3 tensors along dimension 0 (rows)
   let t1 = (torch full [2 3] 1) # Shape: [2, 3], filled with 1
-    $t1 | torch value # Should show [[1, 1, 1], [1, 1, 1]]
-    let t2 = (torch full [2 3] 2) # Shape: [2, 3], filled with 2
-    $t2 | torch value # Should show [[2, 2, 2], [2, 2, 2]]
-    let result1 = (torch cat [$t1 $t2] --dim 0 | torch value)
-# $result1 # Expected shape [4, 3]: [[1, 1, 1], [1, 1, 1], [2, 2, 2], [2, 2, 2]]
-    assert ($result1 == [[1, 1, 1], [1, 1, 1], [2, 2, 2], [2, 2, 2]])
+  $t1 | torch value # Should show [[1, 1, 1], [1, 1, 1]]
+  let t2 = (torch full [2 3] 2) # Shape: [2, 3], filled with 2
+  $t2 | torch value # Should show [[2, 2, 2], [2, 2, 2]]
+  let result1 = (torch cat [$t1 $t2] --dim 0 | torch value)
+  assert ($result1 == [[1 1 1] [1 1 1] [2 2 2] [2 2 2]])
 }
 
-# # Test 2: Concatenate two 2x3 tensors along dimension 1 (columns)
-# print "Running Test 2: Concatenate two 2x3 tensors along dimension 1 (columns)"
-# let t3 = (torch full [2 3] 3) # Shape: [2, 3], filled with 3
-# $t3 | torch value # Should show [[3, 3, 3], [3, 3, 3]]
-# let result2 = (torch cat [$t1 $t3] --dim 1 | torch value)
-# $result2 # Expected shape [2, 6]: [[1, 1, 1, 3, 3, 3], [1, 1, 1, 3, 3, 3]]
-# print "Test 2: SUCCESS - Concatenation along dim 1 completed (manual check required for values)"
+@test
+def "Cat test 2" [] {
+  # Test 2: Concatenate two 2x3 tensors along dimension 1 (columns)
+  let t1 = (torch full [2 3] 1) # Shape: [2, 3], filled with 1
+  $t1 | torch value # Should show [[1, 1, 1], [1, 1, 1]]
+  let t2 = (torch full [2 3] 2) # Shape: [2, 3], filled with 2
+  $t2 | torch value # Should show [[2, 2, 2], [2, 2, 2]]
+  let t3 = (torch full [2 3] 3) # Shape: [2, 3], filled with 3
+  $t3 | torch value # Should show [[3, 3, 3], [3, 3, 3]]
+  let result2 = (torch cat [$t1 $t3] --dim 1 | torch value)
+  assert ($result2 == [[1 1 1 3 3 3] [1 1 1 3 3 3]])
+}
 
 # # Test 3: Error case - incompatible shapes, expect failure as success
 # print "Running Test 3: Concatenate incompatible shapes (expect failure)"
