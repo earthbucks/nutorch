@@ -11,6 +11,6 @@
   "license": "ISC",
   "packageManager": "pnpm@10.12.4",
   "dependencies": {
-    "@nutorch/nutest": "^0.0.1"
+    "test.nu": "^1.0.0"
   }
 }
