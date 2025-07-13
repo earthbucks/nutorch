@@ -3,25 +3,17 @@ use std/testing *
 
 @test
 def "Test tensor creation" [] {
+  let input_data = $in
   let res = ([1.0 2.0 3.0] | torch tensor)
   assert ($res | describe | str contains "string")
 }
 
-# # Test 1: Convert a 1D list to a tensor via pipeline
-# let result1 = try {
-#   let res = ([1.0 2.0 3.0] | torch tensor)
-#   if ($res | describe | str contains "string") {
-#     print_success "Tensor created via pipeline"
-#     true
-#   } else {
-#     print_failure "Expected a tensor ID string, got unexpected output"
-#     error make {msg: "Test 1 failed: Did not return a tensor ID"}
-#     false
-#   }
-# } catch {
-#   print_failure "Unexpected error while creating tensor via pipeline"
-#   error make {msg: "Test 1 failed: Unexpected error"}
-# }
+@test
+def "Convert a 1d list to a tensor via argument" [] {
+  let input_data = $in
+  let res = (torch tensor [1.0 2.0 3.0])
+  assert ($res | describe | str contains "string")
+}
 
 # # Test 2: Convert a 1D list to a tensor via argument
 # let result2 = try {
