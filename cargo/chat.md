@@ -8526,4 +8526,48 @@ your comment is not correct. i am getting an error when i use a mixture of ints 
 
 # === USER ===
 
+no, the following code is what i want.
 
+however, my code is not idiomatic. how do i convert my working code here to idiomatic rust?
+
+```rs
+            if all_ints {
+                let data: Result<Vec<i64>, LabeledError> = vals
+                    .iter()
+                    .map(|v| {
+                        v.as_int().map_err(|_| {
+                            LabeledError::new("Invalid input")
+                                .with_label("Expected integer value", span)
+                        })
+                    })
+                    .collect();
+                let data = data?;
+                // Create 1D tensor from integer data
+                Ok(Tensor::from_slice(&data).to_kind(kind).to_device(device))
+            } else {
+                let data: Result<Vec<f64>, LabeledError> = vals
+                    .iter()
+                    .map(|v| {
+                        let res = v.as_float();
+                        if res.is_err() {
+                            let res2 = v.as_int();
+                            if res2.is_ok() {
+                                // If it's an int, convert to float
+                                Ok(res2.unwrap() as f64)
+                            } else {
+                                Err(LabeledError::new("Invalid input")
+                                    .with_label("Expected numeric value", span))
+                            }
+                        } else {
+                            v.as_float().map_err(|_| {
+                                LabeledError::new("Invalid input")
+                                    .with_label("Expected numeric value", span)
+                            })
+                        }
+                    })
+                    .collect();
+                let data = data?;
+                // Create 1D tensor from float data
+                Ok(Tensor::from_slice(&data).to_kind(kind).to_device(device))
+            }
+```
