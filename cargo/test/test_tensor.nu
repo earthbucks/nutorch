@@ -36,3 +36,10 @@ def "Expect an error if pipeline and argument both provided" [] {
     # expected
   }
 }
+
+@test
+def "Convert a mixed list to a tensor" [] {
+  let input_data = $in
+  let res = ([1.0 2 3] | torch tensor | torch value)
+  assert ($res == [1.0 2.0 3.0])
+}
