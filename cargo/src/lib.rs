@@ -304,10 +304,22 @@ pub fn value_to_tensor(
                 let data: Result<Vec<f64>, LabeledError> = vals
                     .iter()
                     .map(|v| {
-                        v.as_float().map_err(|_| {
-                            LabeledError::new("Invalid input")
-                                .with_label("Expected numeric value", span)
-                        })
+                        let res = v.as_float();
+                        if res.is_err() {
+                            let res2 = v.as_int();
+                            if res2.is_ok() {
+                                // If it's an int, convert to float
+                                Ok(res2.unwrap() as f64)
+                            } else {
+                                Err(LabeledError::new("Invalid input")
+                                    .with_label("Expected numeric value", span))
+                            }
+                        } else {
+                            v.as_float().map_err(|_| {
+                                LabeledError::new("Invalid input")
+                                    .with_label("Expected numeric value", span)
+                            })
+                        }
                     })
                     .collect();
                 let data = data?;
