@@ -1,4 +1,4 @@
-use nu_plugin::{serve_plugin};
+use nu_plugin::serve_plugin;
 pub use nutorch::NutorchPlugin;
 
 fn main() {
