@@ -207,6 +207,7 @@ export def "beautiful add lines" [
       color: $brightColor
     }
   } | merge deep $data
+
   if ((not ('colorscale' in $data.marker)) and ($data.marker.color | describe -d | get type) == "list") {
     $data.marker.colorscale = beautiful colorscale 14
   }
