@@ -187,11 +187,36 @@ appropriate, make powerful one-liners possible.
 
 ## TODO
 
-Nutorch is an alpha-quality project. Currently, the existing set of commands
-are technically adequate to train neural networks. However, the vast majority
-of the PyTorch API is not yet implemented. The following is a list of commands
-that are currently implemented, and those that are planned for future
-implementation.
+Nutorch is an alpha-quality project. Currently, the existing set of commands are
+technically adequate to train neural networks. However, the vast majority of the
+PyTorch API is not yet implemented. The following is a list of commands that are
+currently implemented, and those that are planned for future implementation.
+
+### Command Attributes
+
+For MVP:
+
+- [x] First pass: Make neural network work
+- [ ] Second pass: Update all tensor methods and test them
+- [ ] Third pass: Look for any issues with tensor methods.
+
+For manipulating tensors:
+
+- [ ] Always check dimensionality makes sense if necessary
+- [ ] Always take a tensor as input if possible
+- [ ] Always take a list of tensors as input if PyTorch takes a list or var args
+      for arguments
+- [ ] Always take a tensor as argument if possible
+- [ ] Always take a list of tensors as argument if PyTorch takes a list or var
+      args for arguments
+
+For creating tensors:
+
+- [ ] Always take `dtype` as an argument if possible
+- [ ] Always take `device` as an argument if possible
+- [ ] Always take `requires_grad` as an argument if possible
+
+### Commands
 
 - [x] manual_seed
 - [x] linspace
@@ -220,7 +245,6 @@ implementation.
 - [x] add autograd setting to torch.mm
 - [x] add autograd setting to torch.linspace
 
-## License
+## Copyright
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file
-for details.
+Copyright (C) 2025 EarthBucks Inc.
