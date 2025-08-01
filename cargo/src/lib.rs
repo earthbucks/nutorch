@@ -34,6 +34,7 @@ mod command_reshape;
 mod command_sgd_step;
 mod command_shape;
 mod command_sin;
+mod command_softmax;
 mod command_squeeze;
 mod command_stack;
 mod command_sub;
@@ -73,6 +74,7 @@ pub use command_reshape::CommandReshape;
 pub use command_sgd_step::CommandSgdStep;
 pub use command_shape::CommandShape;
 pub use command_sin::CommandSin;
+pub use command_softmax::CommandSoftmax;
 pub use command_squeeze::CommandSqueeze;
 pub use command_stack::CommandStack;
 pub use command_sub::CommandSub;
@@ -122,6 +124,7 @@ impl Plugin for NutorchPlugin {
             Box::new(CommandSgdStep),
             Box::new(CommandShape),
             Box::new(CommandSin),
+            Box::new(CommandSoftmax),
             Box::new(CommandSqueeze),
             Box::new(CommandStack),
             Box::new(CommandSub),
